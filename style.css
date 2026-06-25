@@ -1,0 +1,115 @@
+:root {
+    --bg-main: #05070B;
+    --bg-panel: #0C0F16;
+    --bg-deep: #070A0F;
+    --border-main: #1A2232;
+    --accent-blue: #3B82F6;
+    --accent-green: #10B981;
+    --accent-amber: #F59E0B;
+    --accent-rose: #f43f5e;
+}
+
+body {
+    font-family: 'Inter', sans-serif;
+    background-color: var(--bg-main);
+    color: #EAECEF;
+}
+
+.mono { font-family: 'JetBrains Mono', monospace; }
+
+/* Scrollbars */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-deep); }
+::-webkit-scrollbar-thumb { background: #1C212E; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--accent-blue); }
+
+/* Flash animations for price ticks */
+@keyframes flash-green {
+    0% { background-color: rgba(16, 185, 129, 0.4); box-shadow: 0 0 15px rgba(16, 185, 129, 0.4); }
+    100% { background-color: transparent; box-shadow: none; }
+}
+@keyframes flash-red {
+    0% { background-color: rgba(244, 63, 94, 0.4); box-shadow: 0 0 15px rgba(244, 63, 94, 0.4); }
+    100% { background-color: transparent; box-shadow: none; }
+}
+.flash-up { animation: flash-green 0.7s ease-out; }
+.flash-down { animation: flash-red 0.7s ease-out; }
+
+.neon-glow-red { box-shadow: 0 0 24px rgba(244, 63, 94, 0.25); border-color: rgba(244, 63, 94, 0.5); }
+.neon-glow-amber { box-shadow: 0 0 24px rgba(245, 158, 11, 0.25); border-color: rgba(245, 158, 11, 0.5); }
+.neon-glow-green { box-shadow: 0 0 24px rgba(16, 185, 129, 0.25); border-color: rgba(16, 185, 129, 0.5); }
+
+/* Pool card APY flicker */
+@keyframes apy-flicker {
+    0% { opacity: 0.4; }
+    100% { opacity: 1; }
+}
+.apy-flicker { animation: apy-flicker 0.25s ease-out; }
+
+/* Range slider thumb styling (cross-browser) */
+input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--bg-deep);
+    outline: none;
+}
+input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--accent-rose);
+    cursor: pointer;
+    border: 2px solid #0C0F16;
+    box-shadow: 0 0 8px rgba(244, 63, 94, 0.6);
+}
+input[type="range"]::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--accent-rose);
+    cursor: pointer;
+    border: 2px solid #0C0F16;
+    box-shadow: 0 0 8px rgba(244, 63, 94, 0.6);
+}
+
+/* Pool card */
+.pool-card {
+    background: var(--bg-deep);
+    border: 1px solid var(--border-main);
+    border-radius: 0.75rem;
+    padding: 1rem;
+    cursor: pointer;
+    transition: border-color 0.15s ease, transform 0.1s ease;
+}
+.pool-card:hover { transform: translateY(-2px); }
+.pool-card.selected {
+    border-color: var(--accent-amber);
+    box-shadow: 0 0 16px rgba(245, 158, 11, 0.2);
+}
+
+/* Perk row */
+.perk-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    background: var(--bg-deep);
+    border: 1px solid var(--border-main);
+    border-radius: 0.5rem;
+    padding: 0.6rem 0.75rem;
+}
+.perk-row.owned { opacity: 0.55; }
+
+/* Reduced motion respect */
+@media (prefers-reduced-motion: reduce) {
+    * { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
+}
+
+/* Visible keyboard focus */
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+    outline: 2px solid var(--accent-blue);
+    outline-offset: 2px;
+}

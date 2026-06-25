@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shitcore (USDSHT) — The Ultimate L1 for Absolute Rugs</title>
+    <meta name="description" content="A satirical idle-tycoon game about meme-coin rug pulls. 100% fake money, 100% fake blockchain, 100% real bad decisions.">
+
+    <!-- Tailwind CSS (CDN, no build step needed) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Local styles -->
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="overflow-x-hidden min-h-screen flex flex-col justify-between">
+
+    <!-- ============================================================ -->
+    <!-- HEADER -->
+    <!-- ============================================================ -->
+    <header class="bg-[#090C12] border-b border-[#1A2232] px-4 py-3 sticky top-0 z-50 shadow-md">
+        <div class="max-w-7xl mx-auto flex items-center justify-between gap-3 flex-wrap">
+            <div class="flex items-center space-x-3">
+                <div class="bg-gradient-to-tr from-amber-600 to-amber-950 p-2 rounded-lg shadow-lg hidden sm:flex">
+                    <i class="fa-solid fa-toilet-paper text-white text-lg"></i>
+                </div>
+                <div>
+                    <div class="flex items-center space-x-2">
+                        <span class="text-white font-extrabold text-base md:text-lg uppercase flex items-center gap-1.5">
+                            USDSHT <span class="text-[10px] bg-[#1B2130] text-amber-500 px-1.5 py-0.5 rounded font-bold normal-case">Layer 1 Tycoon ▾</span>
+                        </span>
+                    </div>
+                    <div id="levelBadge" class="text-[11px] text-amber-400 font-mono mt-0.5">LVL 1 — The Basement Dev</div>
+                </div>
+            </div>
+
+            <!-- Core stats -->
+            <div class="flex items-center gap-3 flex-wrap text-xs md:text-sm">
+                <span class="bg-[#121926] border border-[#1E293B] text-green-400 font-mono px-2.5 py-1.5 rounded flex items-center gap-1.5">
+                    <i class="fa-solid fa-wallet text-[10px]"></i> $<span id="cashDisplay">1,000.00</span>
+                </span>
+                <div class="hidden md:flex flex-col w-32">
+                    <div class="flex justify-between text-[9px] text-gray-400 font-mono">
+                        <span>HEAT</span><span id="heatPct">0%</span>
+                    </div>
+                    <div class="w-full bg-[#10141D] h-1.5 rounded-full overflow-hidden border border-[#1A2232]">
+                        <div id="heatBarFill" class="bg-gradient-to-r from-amber-500 to-rose-600 h-full w-0 transition-all duration-500"></div>
+                    </div>
+                </div>
+                <button id="resetGameBtn" title="Wipe save and start over" class="text-gray-500 hover:text-rose-400 transition text-xs border border-[#1A2232] rounded px-2 py-1.5">
+                    <i class="fa-solid fa-rotate-left"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- ============================================================ -->
+    <!-- NAV -->
+    <!-- ============================================================ -->
+    <nav class="bg-[#070A0F] border-b border-[#121721] sticky top-[70px] z-40 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 flex space-x-5 overflow-x-auto">
+            <button onclick="switchTab('markets')" id="tab-markets" class="py-3 text-sm font-medium border-b-2 border-blue-500 text-white whitespace-nowrap transition-all">
+                Markets
+            </button>
+            <button onclick="switchTab('ai')" id="tab-ai" class="py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-white whitespace-nowrap flex items-center gap-1.5 transition-all">
+                AI Solidity Auditor <span class="bg-[#1C212E] text-[9px] text-blue-400 px-1.5 py-0.5 rounded font-bold">LOCAL</span>
+            </button>
+            <button onclick="switchTab('deployer')" id="tab-deployer" class="py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-white whitespace-nowrap flex items-center gap-1.5 transition-all">
+                Rug Creator <i class="fa-solid fa-rocket text-xs text-amber-500 animate-pulse"></i>
+            </button>
+            <button onclick="switchTab('staking')" id="tab-staking" class="py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-white whitespace-nowrap flex items-center gap-1.5 transition-all">
+                Ponzi Yield Pools <i id="stakingLockIcon" class="fa-solid fa-lock text-[10px] text-gray-500"></i>
+            </button>
+            <button onclick="switchTab('info')" id="tab-info" class="py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-white whitespace-nowrap transition-all">
+                Lore / How to Play
+            </button>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto px-4 py-6 flex-grow w-full">
+
+        <!-- ================= LORE / INFO TAB ================= -->
+        <section id="content-info" class="hidden space-y-6">
+            <div class="bg-[#0C0F16] rounded-xl p-6 border border-[#1A2232] shadow-2xl relative overflow-hidden">
+                <div class="absolute right-6 bottom-6 text-[150px] font-black text-[#1C212E]/5 select-none pointer-events-none uppercase">RUG</div>
+                <div class="flex items-center space-x-3 mb-6">
+                    <div class="bg-gradient-to-tr from-amber-600 to-amber-950 p-2.5 rounded-lg flex items-center justify-center shadow-lg">
+                        <i class="fa-solid fa-toilet-paper text-white text-xl"></i>
+                    </div>
+                    <span class="text-white font-extrabold text-2xl tracking-tight">Shitcore</span>
+                </div>
+                <div class="space-y-4 text-gray-300 text-sm md:text-base leading-relaxed tracking-wide font-light max-w-5xl">
+                    <p class="font-bold text-white text-base md:text-lg mb-2">
+                        Shitcore is a satirical Layer 1 for Meme 3.0 — a fictional universe where every meme coin is a ticking time bomb and you, the player, are the one holding the detonator.
+                    </p>
+                    <p>
+                        This is a 100% fake, 100% client-side idle game. There is no real blockchain, no real wallet, and no real money anywhere in this code. Every number you see is generated by <code class="text-amber-400">Math.random()</code> running in your own browser. It exists to satirize rug-pull culture, not to teach or enable it.
+                    </p>
+                </div>
+            </div>
+
+            <!-- HOW TO PLAY -->
+            <div class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-6 shadow-lg">
+                <h3 class="text-white font-bold text-lg mb-4 flex items-center gap-2"><i class="fa-solid fa-gamepad text-blue-400"></i> How To Play</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-300 font-light leading-relaxed">
+                    <div class="bg-[#070A0F] p-4 rounded-lg border border-[#131924]">
+                        <h4 class="text-amber-400 font-bold text-xs uppercase mb-1.5">1. Deploy</h4>
+                        <p>Go to <strong class="text-white">Rug Creator</strong>, name your token, set an initial liquidity pool, and hit Launch Protocol. Watch suckers (sorry, "investors") pour money in.</p>
+                    </div>
+                    <div class="bg-[#070A0F] p-4 rounded-lg border border-[#131924]">
+                        <h4 class="text-amber-400 font-bold text-xs uppercase mb-1.5">2. Hype It</h4>
+                        <p>Higher Hype = faster capital inflow. Pay influencers, run campaigns, or buy a Telegram Bot perk to automate it.</p>
+                    </div>
+                    <div class="bg-[#070A0F] p-4 rounded-lg border border-[#131924]">
+                        <h4 class="text-amber-400 font-bold text-xs uppercase mb-1.5">3. Balance Greed vs. Heat</h4>
+                        <p>Cranking the Toxicity Tax extracts cash faster but builds Audit Threat. Let it hit 100% and the feds show up — for that token AND your account-wide Regulatory Heat.</p>
+                    </div>
+                    <div class="bg-[#070A0F] p-4 rounded-lg border border-[#131924]">
+                        <h4 class="text-amber-400 font-bold text-xs uppercase mb-1.5">4. Pull The Rug</h4>
+                        <p>Cash out before the meter explodes. Stolen liquidity becomes real wallet cash and pushes you toward your fake Lambo and the next Degen Level.</p>
+                    </div>
+                </div>
+                <div class="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                    <div class="bg-[#070A0F] p-3 rounded-lg border border-[#131924] text-center">
+                        <p class="text-gray-400 mb-1">LVL 1</p><p class="text-white font-bold">The Basement Dev</p>
+                    </div>
+                    <div class="bg-[#070A0F] p-3 rounded-lg border border-[#131924] text-center">
+                        <p class="text-gray-400 mb-1">LVL 2</p><p class="text-white font-bold">The Shiller</p>
+                    </div>
+                    <div class="bg-[#070A0F] p-3 rounded-lg border border-[#131924] text-center">
+                        <p class="text-gray-400 mb-1">LVL 3</p><p class="text-white font-bold">The Shadow Validator</p>
+                    </div>
+                    <div class="bg-[#070A0F] p-3 rounded-lg border border-[#131924] text-center">
+                        <p class="text-gray-400 mb-1">LVL 4</p><p class="text-white font-bold">The Institutional Rugger</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-[#1C0D0D] border border-[#441818] rounded-xl p-5 flex items-start space-x-3 shadow-md">
+                <i class="fa-solid fa-triangle-exclamation text-rose-500 text-lg mt-0.5"></i>
+                <div>
+                    <h4 class="text-rose-400 font-bold text-sm">Real-World Risk Warning</h4>
+                    <p class="text-gray-300 text-xs mt-1 leading-normal font-light">
+                        This is satire. In real life, rug pulls and honeypot tokens steal real money from real people and are illegal in most jurisdictions. Never invest in anything you don't understand, and never trust a token whose entire pitch is "trust me."
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= MARKETS TAB ================= -->
+        <section id="content-markets" class="space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="lg:col-span-2 bg-[#0C0F16] border border-[#1A2232] rounded-xl p-5 flex flex-col justify-between shadow-lg">
+                    <div>
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-2">
+                            <div class="flex items-center space-x-3">
+                                <span class="font-extrabold text-lg text-white">USDSHT / USDT Ambient Chart</span>
+                                <span class="bg-red-500/10 text-rose-400 px-2 py-0.5 rounded text-xs animate-pulse font-semibold">LIVE DRAIN</span>
+                            </div>
+                            <div class="flex items-center space-x-1.5 flex-wrap">
+                                <button onclick="forcePump()" class="px-2.5 py-1 bg-green-500 hover:bg-green-600 text-black font-bold rounded text-xs shadow-lg flex items-center gap-1">
+                                    <i class="fa-solid fa-arrow-trend-up"></i> PUMP IT
+                                </button>
+                                <button onclick="forceDump()" class="px-2.5 py-1 bg-red-500 hover:bg-red-600 text-white font-bold rounded text-xs shadow-lg flex items-center gap-1">
+                                    <i class="fa-solid fa-arrow-trend-down"></i> DUMP IT
+                                </button>
+                            </div>
+                        </div>
+                        <div class="relative w-full h-[300px] bg-[#040609] rounded-lg border border-[#1A2232] overflow-hidden">
+                            <canvas id="tradingCanvas" class="w-full h-full block"></canvas>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2 mt-4 pt-3 border-t border-[#1A2232] text-center">
+                        <div><span class="text-[10px] text-gray-400 block">24h High</span><span id="statHigh" class="text-green-400 text-xs font-semibold">0.02450000</span></div>
+                        <div><span class="text-[10px] text-gray-400 block">24h Low</span><span id="statLow" class="text-rose-400 text-xs font-semibold">0.00000012</span></div>
+                        <div><span class="text-[10px] text-gray-400 block">24h Vol</span><span id="statVol" class="text-gray-200 text-xs font-semibold">9.81B</span></div>
+                    </div>
+                </div>
+
+                <div class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-5 flex flex-col justify-between shadow-lg space-y-4">
+                    <div>
+                        <div class="border-b border-[#1A2232] pb-3 mb-3 flex items-center justify-between">
+                            <h3 class="font-bold text-sm text-gray-200">Live Orderbook</h3>
+                            <span class="text-[10px] bg-amber-500/10 text-amber-500 px-1.5 py-0.5 rounded font-mono">Sim</span>
+                        </div>
+                        <div class="space-y-1 text-[11px] mono">
+                            <div class="space-y-0.5" id="orderBookAsks"></div>
+                            <div class="border-y border-[#1C212E] py-1 text-center my-2 bg-[#10141D] rounded">
+                                <span class="text-gray-400">Spread:</span> <span id="liveSpread" class="text-amber-500 font-bold ml-1">99.8% (Danger)</span>
+                            </div>
+                            <div class="space-y-0.5" id="orderBookBids"></div>
+                        </div>
+                    </div>
+
+                    <!-- MEV Frontrun: unlocked at Level 3 -->
+                    <div id="mevPanel" class="hidden pt-4 border-t border-[#1A2232] space-y-2">
+                        <h4 class="text-xs font-bold text-rose-400 uppercase flex items-center gap-1.5"><i class="fa-solid fa-bolt"></i> Shadow Validator Tools</h4>
+                        <p class="text-[10px] text-gray-400 font-light leading-relaxed">Sandwich your own community's swaps straight from the mempool. Free cash, guaranteed trust damage and Regulatory Heat.</p>
+                        <button id="mevFrontrunBtn" onclick="runMevFrontrun()" class="w-full py-2.5 bg-gradient-to-r from-purple-600 to-fuchsia-700 hover:from-purple-500 hover:to-fuchsia-600 text-white font-bold rounded-lg text-xs shadow-lg transition uppercase">
+                            <i class="fa-solid fa-robot mr-1"></i> Frontrun The Mempool
+                        </button>
+                    </div>
+                    <div id="mevLockedNotice" class="pt-4 border-t border-[#1A2232] text-center text-[11px] text-gray-500 font-light">
+                        <i class="fa-solid fa-lock mr-1"></i> Reach Level 3: The Shadow Validator to unlock MEV frontrunning.
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-4 shadow-lg">
+                <div class="flex items-center justify-between mb-3">
+                    <h4 class="text-sm font-semibold flex items-center gap-2">
+                        <span>Live Shitcore Chain Feed</span>
+                        <span class="w-2.5 h-2.5 bg-green-500 rounded-full animate-ping"></span>
+                    </h4>
+                    <span class="text-[10px] text-gray-500 font-mono" id="simulatedBlockNum">BLOCK #942,012</span>
+                </div>
+                <div class="space-y-2 text-xs mono max-h-[220px] overflow-y-auto" id="blockchainLogs"></div>
+            </div>
+        </section>
+
+        <!-- ================= AI AUDITOR TAB ================= -->
+        <section id="content-ai" class="hidden space-y-6">
+            <div class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-6 shadow-lg">
+                <div class="flex items-center space-x-3 border-b border-[#1A2232] pb-4 mb-4">
+                    <div class="bg-blue-500/20 p-2.5 rounded-lg text-blue-400">
+                        <i class="fa-solid fa-robot text-xl animate-bounce"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-lg font-bold text-white">Shit-GPT Smart Auditor</h2>
+                        <p class="text-xs text-gray-400">Paste a toy contract (or just type anything) and get a fully local, procedurally-generated roast. No network calls, no API keys.</p>
+                    </div>
+                </div>
+                <div class="space-y-4">
+                    <div class="flex justify-between items-center flex-wrap gap-2">
+                        <label class="block text-xs text-gray-400 uppercase tracking-wider font-semibold">Code / Address / Vibe:</label>
+                        <div class="flex gap-1.5 flex-wrap">
+                            <button onclick="loadTemplate('safemoon')" class="bg-[#1C212E] hover:bg-[#252E3E] text-[11px] text-gray-300 px-2 py-1 rounded border border-[#1A2232]">SafePlunge.sol</button>
+                            <button onclick="loadTemplate('infinite')" class="bg-[#1C212E] hover:bg-[#252E3E] text-[11px] text-gray-300 px-2 py-1 rounded border border-[#1A2232]">LamboSqueeze.sol</button>
+                            <button onclick="loadTemplate('gigapump')" class="bg-[#1C212E] hover:bg-[#252E3E] text-[11px] text-gray-300 px-2 py-1 rounded border border-[#1A2232]">GigaPumpPresale.sol</button>
+                            <button onclick="loadTemplate('taxrug')" class="bg-[#1C212E] hover:bg-[#252E3E] text-[11px] text-gray-300 px-2 py-1 rounded border border-[#1A2232]">TaxRugBooster.sol</button>
+                        </div>
+                    </div>
+                    <textarea id="contractInput" rows="7" class="w-full bg-[#10141D] text-white font-mono px-4 py-3 rounded-lg border border-[#1A2232] focus:outline-none focus:border-blue-500 text-xs" placeholder="Paste toy Solidity, a fake address, or just a token name to roast..."></textarea>
+                    <button onclick="auditContract()" class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white py-3 rounded-lg font-bold text-sm tracking-wide shadow-lg transition">
+                        Compile &amp; Audit Bytecode
+                    </button>
+
+                    <div id="auditResults" class="hidden bg-[#10141D] rounded-lg p-5 border border-dashed border-[#1A2232] space-y-4">
+                        <div class="flex items-center justify-between border-b border-[#1A2232] pb-3 mb-1">
+                            <span class="font-bold text-sm tracking-wider uppercase text-gray-300">Risk Vector Analysis</span>
+                            <span id="auditSafetyBadge" class="px-2.5 py-1 text-[11px] rounded-full font-bold"></span>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                            <div class="bg-[#070A0F] p-3 rounded-md">
+                                <span class="text-gray-400 block mb-1">Probability of Instant Dev Exit:</span>
+                                <span id="auditProb" class="text-xl font-bold"></span>
+                            </div>
+                            <div class="bg-[#070A0F] p-3 rounded-md">
+                                <span class="text-gray-400 block mb-1">Detected Bytecode Signature:</span>
+                                <span id="auditDevSentiment" class="text-xl font-bold text-amber-500"></span>
+                            </div>
+                            <div class="bg-[#070A0F] p-3 rounded-md">
+                                <span class="text-gray-400 block mb-1">Liquidity Lock Status:</span>
+                                <span id="auditLiqStatus" class="text-xl font-bold"></span>
+                            </div>
+                        </div>
+                        <div class="bg-[#070A0F] p-4 rounded-md">
+                            <span class="text-xs text-gray-400 font-semibold block mb-2"><i class="fa-solid fa-comment-dots mr-1"></i> Auditor Verdict:</span>
+                            <p id="auditParagraph" class="text-sm italic text-gray-200 leading-relaxed font-light"></p>
+                        </div>
+                        <div class="bg-[#040609] p-3 rounded-md border border-[#1E293B]">
+                            <span class="text-[10px] text-rose-400 uppercase font-bold tracking-wider block mb-1.5"><i class="fa-solid fa-bug mr-1"></i> Line-by-Line Roast Console:</span>
+                            <div id="lineRoastLogs" class="space-y-1.5 text-[11px] font-mono text-gray-400 max-h-[140px] overflow-y-auto"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= RUG DEPLOYER ================= -->
+        <section id="content-deployer" class="hidden space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Config panel -->
+                <div class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-6 flex flex-col justify-between shadow-lg space-y-4">
+                    <div class="space-y-3.5 text-xs">
+                        <div class="border-b border-[#1A2232] pb-3 mb-1 flex justify-between items-center">
+                            <h3 class="font-bold text-base flex items-center gap-1.5 text-amber-500"><i class="fa-solid fa-rocket animate-pulse"></i> Token Creator</h3>
+                        </div>
+                        <div>
+                            <label class="block text-gray-400 mb-1.5 uppercase font-semibold">Token Name</label>
+                            <input type="text" id="deployName" value="Golden Toilet Elon" class="w-full bg-[#10141D] text-white px-3 py-2 rounded border border-[#1A2232] focus:outline-none focus:border-amber-500">
+                        </div>
+                        <div>
+                            <label class="block text-gray-400 mb-1.5 uppercase font-semibold">Token Ticker</label>
+                            <input type="text" id="deployTicker" value="GTE" class="w-full bg-[#10141D] text-white px-3 py-2 rounded border border-[#1A2232] focus:outline-none focus:border-amber-500 uppercase">
+                        </div>
+                        <div>
+                            <label class="block text-gray-400 mb-1.5 uppercase font-semibold">Initial Liquidity Pool (USDT)</label>
+                            <input type="number" id="deployLiquidity" value="200" min="50" class="w-full bg-[#10141D] text-white px-3 py-2 rounded border border-[#1A2232] focus:outline-none focus:border-amber-500">
+                            <p class="text-[10px] text-gray-500 mt-1">Spent from your wallet. Seeds the pool so it looks legit.</p>
+                        </div>
+
+                        <!-- Toxicity Tax slider -->
+                        <div>
+                            <div class="flex justify-between mb-1">
+                                <label class="text-gray-400 uppercase font-semibold">Contract Toxicity Tax</label>
+                                <span id="toxicityTaxVal" class="text-rose-400 font-bold font-mono">10%</span>
+                            </div>
+                            <input type="range" id="toxicityTaxSlider" min="0" max="99" value="10" class="w-full accent-rose-500 bg-[#10141D] rounded h-2">
+                            <p class="text-[10px] text-rose-400/70 mt-1 leading-normal">Higher tax = faster cash extraction, faster Audit Threat growth.</p>
+                        </div>
+
+                        <!-- Marketing -->
+                        <div>
+                            <label class="block text-gray-400 mb-1.5 uppercase font-semibold">Manual Marketing</label>
+                            <button onclick="manualShill()" id="manualShillBtn" class="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded text-xs transition">
+                                📱 Pay TikTok Influencer ($50 → +Hype)
+                            </button>
+                        </div>
+                        <div id="campaignPanel" class="hidden">
+                            <label class="block text-gray-400 mb-1.5 uppercase font-semibold">Marketing Campaign <span class="text-[9px] text-blue-400">(Lvl 2+)</span></label>
+                            <select id="campaignSelect" class="w-full bg-[#10141D] text-white px-3 py-2 rounded border border-[#1A2232] focus:outline-none focus:border-amber-500 mb-2"></select>
+                            <button onclick="runCampaign()" class="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded text-xs transition">
+                                🚀 Run Campaign
+                            </button>
+                        </div>
+
+                        <!-- Honeypot toggle: Level 4 -->
+                        <div id="honeypotPanel" class="hidden bg-[#1C0D0D] border border-[#441818] rounded-lg p-3">
+                            <label class="flex items-center justify-between cursor-pointer">
+                                <span class="text-rose-400 font-bold text-[11px] uppercase">🍯 Honeypot Backdoor</span>
+                                <input type="checkbox" id="honeypotToggle" onchange="toggleHoneypot()" class="accent-rose-500 w-4 h-4">
+                            </label>
+                            <p class="text-[9px] text-gray-400 mt-1 leading-normal">Locks all sells on this token. Guarantees you keep every dollar raised — and guarantees a faster Audit Threat climb.</p>
+                        </div>
+                    </div>
+
+                    <div class="space-y-2">
+                        <button onclick="launchToken()" id="launchBtn" class="w-full py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-extrabold rounded-lg text-sm tracking-wide shadow-lg transition">
+                            Deploy Toxic Contract
+                        </button>
+                        <button onclick="pullTheRug()" id="pullRugBtn" disabled class="w-full py-3 bg-gradient-to-r from-red-600 to-rose-700 text-white font-extrabold rounded-lg text-xs shadow-lg transition uppercase opacity-40 cursor-not-allowed">
+                            <i class="fa-solid fa-skull-crossbones mr-1"></i> Pull The Rug (Exit Scam)
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Live monitor -->
+                <div class="lg:col-span-2 bg-[#0C0F16] border border-[#1A2232] rounded-xl p-6 flex flex-col justify-between relative overflow-hidden shadow-lg min-h-[560px]">
+                    <div id="deployerPlaceholder" class="absolute inset-0 bg-[#0C0F16]/95 z-30 flex flex-col items-center justify-center text-center p-6">
+                        <i class="fa-solid fa-toilet-paper text-6xl text-gray-600 mb-4 animate-bounce"></i>
+                        <h4 class="font-bold text-lg text-gray-300">No Active Deployment</h4>
+                        <p class="text-xs text-gray-400 max-w-sm mt-1 leading-relaxed font-light">Configure parameters on the left, then hit "Deploy Toxic Contract" to start collecting victims.</p>
+                    </div>
+
+                    <div class="z-10 space-y-4 flex-grow flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between border-b border-[#1A2232] pb-3 mb-3">
+                                <div>
+                                    <h3 id="monitorTokenName" class="font-extrabold text-xl tracking-wide text-white">TOKEN_NAME</h3>
+                                    <p id="monitorTokenTicker" class="text-xs text-amber-500 font-mono">TICKER</p>
+                                </div>
+                                <span id="monitorStatus" class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-green-500/10 text-green-400">NO DEPLOYMENT</span>
+                            </div>
+
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-center mb-4">
+                                <div class="bg-[#070A0F] p-2 rounded border border-[#131924]"><span class="text-gray-400 text-[10px] block">Capital Raised</span><span id="monitorRaised" class="text-green-400 font-bold text-sm font-mono">$0</span></div>
+                                <div class="bg-[#070A0F] p-2 rounded border border-[#131924]"><span class="text-gray-400 text-[10px] block">Suckers</span><span id="monitorSuckers" class="text-white font-bold text-sm font-mono">0</span></div>
+                                <div class="bg-[#070A0F] p-2 rounded border border-[#131924]"><span class="text-gray-400 text-[10px] block">Price</span><span id="monitorPrice" class="text-amber-400 font-bold text-sm font-mono">$0.0001</span></div>
+                                <div class="bg-[#070A0F] p-2 rounded border border-[#131924]"><span class="text-gray-400 text-[10px] block">Honeypot</span><span id="monitorHoneypot" class="text-gray-500 font-bold text-sm font-mono">OFF</span></div>
+                            </div>
+
+                            <!-- Hype meter -->
+                            <div class="space-y-1 mb-3">
+                                <div class="flex justify-between text-[11px] font-semibold"><span class="text-gray-400 uppercase">Hype Meter</span><span id="hypePct" class="text-blue-400">0%</span></div>
+                                <div class="w-full bg-[#10141D] h-2.5 rounded-full overflow-hidden border border-[#1A2232]">
+                                    <div id="hypeBar" class="bg-gradient-to-r from-blue-500 to-cyan-400 h-full w-0 transition-all duration-300"></div>
+                                </div>
+                            </div>
+
+                            <!-- Audit Threat meter -->
+                            <div class="space-y-1">
+                                <div class="flex justify-between text-[11px] font-semibold"><span class="text-gray-400 uppercase">Audit Threat</span><span id="auditThreatPct" class="text-rose-400">0%</span></div>
+                                <div class="w-full bg-[#10141D] h-2.5 rounded-full overflow-hidden border border-[#1A2232]">
+                                    <div id="auditThreatBar" class="bg-gradient-to-r from-amber-500 to-rose-600 h-full w-0 transition-all duration-300"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Chat Feed -->
+                        <div class="p-3 bg-[#10141D] rounded-lg border border-[#1A2232]">
+                            <span class="text-[10px] text-gray-400 font-bold block mb-1.5"><i class="fa-solid fa-comments mr-1"></i> Degen Chat Feed:</span>
+                            <div id="chatFeed" class="space-y-1 h-28 overflow-y-auto text-[11px] mono text-gray-300"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= PONZI YIELD FARM ================= -->
+        <section id="content-staking" class="hidden space-y-6">
+            <div id="stakingLocked" class="hidden bg-[#0C0F16] border border-[#1A2232] rounded-xl p-10 text-center shadow-lg">
+                <i class="fa-solid fa-lock text-5xl text-gray-600 mb-4"></i>
+                <h3 class="text-white font-bold text-lg">Ponzi Yield Pools Locked</h3>
+                <p class="text-gray-400 text-sm mt-2">Reach <strong class="text-amber-400">Degen Level 2: The Shiller</strong> to unlock yield farming.</p>
+            </div>
+
+            <div id="stakingUnlocked" class="hidden space-y-6">
+                <div class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-6 shadow-lg">
+                    <div class="flex flex-col md:flex-row md:items-center justify-between border-b border-[#1A2232] pb-4 mb-6 gap-4">
+                        <div class="flex items-center space-x-3">
+                            <div class="bg-amber-500/10 text-amber-500 p-2.5 rounded-lg"><i class="fa-solid fa-tractor text-xl"></i></div>
+                            <div>
+                                <h2 class="text-lg font-bold text-white">Shit-Staking Yield Vaults</h2>
+                                <p class="text-xs text-gray-400 font-light">Lock funds into unstable yield traps. APY is fully unhinged. Harvesting is risky.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="poolCardsContainer" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6"></div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="bg-[#10141D] p-5 rounded-lg border border-[#1A2232] space-y-3">
+                            <h4 class="font-bold text-sm text-gray-300 uppercase tracking-wider">Deposit Funds</h4>
+                            <div class="bg-[#070A0F] p-2.5 rounded border border-[#1A2232] flex justify-between items-center">
+                                <input type="number" id="stakeAmount" value="200" class="bg-transparent text-white font-bold font-mono focus:outline-none w-2/3 text-sm" placeholder="Amount">
+                                <span class="text-xs font-semibold text-amber-500">CASH</span>
+                            </div>
+                            <button onclick="stakeTokens()" class="w-full py-3 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-black font-extrabold text-xs rounded-lg transition shadow-md uppercase tracking-wider">
+                                Deposit Into Selected Pool
+                            </button>
+                            <div class="text-[11px] font-mono space-y-1.5 pt-2 border-t border-[#1A2232]">
+                                <div class="flex justify-between"><span class="text-gray-400">Currently Staked:</span><span id="stakedLocked" class="text-white font-bold">$0.00</span></div>
+                                <div class="flex justify-between"><span class="text-gray-400">Active Pool:</span><span id="stakedPoolType" class="text-amber-500 font-bold">—</span></div>
+                            </div>
+                        </div>
+
+                        <div class="bg-[#10141D] p-5 rounded-lg border border-[#1A2232] space-y-3">
+                            <h4 class="font-bold text-sm text-gray-300 uppercase tracking-wider">Rewards Vault</h4>
+                            <div class="bg-[#070A0F] p-3 rounded-md text-center">
+                                <span class="text-gray-400 text-[10px] block">Unclaimed Shitcoins</span>
+                                <span id="unclaimedShitcoins" class="text-green-400 font-extrabold text-2xl font-mono">0.00</span>
+                            </div>
+                            <button onclick="harvestRewards()" class="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-lg transition shadow uppercase">
+                                Harvest Rewards
+                            </button>
+                            <p class="text-[9px] text-rose-400/80 text-center leading-relaxed">⚠️ 15% chance of a "Protocol Exploit" on every harvest — liquidates 100% of your staked principal.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-5 shadow-lg">
+                    <h4 class="font-bold text-sm text-gray-300 border-b border-[#1A2232] pb-2 mb-3 uppercase tracking-wider">Live Yield Logs</h4>
+                    <div class="space-y-2 h-[160px] overflow-y-auto text-[10px] mono text-gray-400" id="stakingEventLog">
+                        <div class="text-gray-500 italic">[System] Pool modules initialized.</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- ============================================================ -->
+    <!-- COMMAND CENTER (always visible) -->
+    <!-- ============================================================ -->
+    <section class="max-w-7xl mx-auto px-4 pb-6 w-full">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+            <!-- Lambo + Level progress -->
+            <div class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-5 shadow-lg space-y-5">
+                <div>
+                    <h4 class="font-bold text-xs uppercase text-amber-500 tracking-widest mb-2"><i class="fa-solid fa-car"></i> Lambo Target Tracker</h4>
+                    <div class="bg-[#10141D] p-4 rounded-lg border border-[#1A2232] space-y-3">
+                        <div class="flex justify-between items-center text-xs">
+                            <span class="text-gray-400">Lifetime Stolen:</span>
+                            <span class="text-green-400 font-bold font-mono">$<span id="lifetimeEarnedDisplay">0.00</span> / $1,000,000</span>
+                        </div>
+                        <div class="flex justify-between items-center text-xs">
+                            <span class="text-gray-400">Current Lambo Tier:</span>
+                            <span id="lamboTierDisplay" class="text-amber-500 font-extrabold uppercase">Hot Wheels Lambo</span>
+                        </div>
+                        <div class="w-full bg-[#070A0F] h-2 rounded-full overflow-hidden border border-[#1A2232]">
+                            <div id="lamboProgressBar" class="bg-gradient-to-r from-amber-500 to-yellow-400 h-full w-0 transition-all duration-300"></div>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <h4 class="font-bold text-xs uppercase text-blue-400 tracking-widest mb-2"><i class="fa-solid fa-ranking-star"></i> Degen Level Progress</h4>
+                    <div class="bg-[#10141D] p-4 rounded-lg border border-[#1A2232] space-y-2">
+                        <div class="flex justify-between text-xs"><span id="levelProgressLabel" class="text-gray-300 font-semibold">LVL 1 — The Basement Dev</span><span id="levelProgressNext" class="text-gray-500">Next: $3,000</span></div>
+                        <div class="w-full bg-[#070A0F] h-2 rounded-full overflow-hidden border border-[#1A2232]">
+                            <div id="levelProgressBar" class="bg-gradient-to-r from-blue-500 to-indigo-400 h-full w-0 transition-all duration-300"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Perk shop -->
+            <div class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-5 shadow-lg">
+                <h4 class="font-bold text-xs uppercase text-emerald-400 tracking-widest mb-3"><i class="fa-solid fa-cart-shopping"></i> Perk Shop (Permanent Upgrades)</h4>
+                <div id="perkShopContainer" class="space-y-2.5"></div>
+            </div>
+        </div>
+
+        <!-- Victim leaderboard -->
+        <div class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-5 shadow-lg mt-6">
+            <h4 class="font-bold text-xs uppercase text-rose-500 tracking-widest mb-3"><i class="fa-solid fa-skull"></i> Live Degen Victim Hall of Fame</h4>
+            <div id="victimLeaderboard" class="bg-[#10141D] p-4 rounded-lg border border-[#1A2232] space-y-2 max-h-[160px] overflow-y-auto text-xs mono">
+                <div class="text-gray-500 italic text-[11px]">No rugs pulled yet. Get to work.</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Toast -->
+    <div id="toast" class="fixed bottom-6 right-6 z-50 bg-[#0C0F16] border-l-4 border-blue-500 px-5 py-3.5 rounded-lg shadow-2xl flex items-center space-x-3 text-sm text-gray-100 hidden max-w-sm">
+        <span id="toastIcon" class="text-blue-400"><i class="fa-solid fa-info-circle text-lg"></i></span>
+        <span id="toastMessage">Default Alert State</span>
+    </div>
+
+    <!-- Generic alert modal -->
+    <div id="customAlertModal" class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 hidden p-4">
+        <div class="bg-[#0C0F16] border border-rose-500/40 max-w-md w-full p-6 rounded-xl shadow-2xl text-center space-y-4">
+            <div class="w-16 h-16 bg-red-500/10 text-rose-500 rounded-full flex items-center justify-center mx-auto text-3xl animate-pulse"><i class="fa-solid fa-biohazard"></i></div>
+            <h3 class="text-rose-500 font-black text-xl tracking-tight">NOTICE</h3>
+            <p id="alertModalMessage" class="text-gray-300 text-sm leading-relaxed font-light"></p>
+            <button onclick="closeAlertModal()" class="px-6 py-2 bg-rose-500 text-white hover:bg-rose-600 rounded-lg text-xs font-bold uppercase transition">I accept and wash my hands</button>
+        </div>
+    </div>
+
+    <!-- WIN modal -->
+    <div id="winModal" class="fixed inset-0 bg-black/85 flex items-center justify-center z-50 hidden p-4">
+        <div class="bg-[#0C0F16] border-2 border-emerald-500/60 neon-glow-green max-w-md w-full p-7 rounded-xl shadow-2xl text-center space-y-4">
+            <div class="w-20 h-20 bg-emerald-500/10 text-emerald-400 rounded-full flex items-center justify-center mx-auto text-4xl"><i class="fa-solid fa-car"></i></div>
+            <h3 class="text-emerald-400 font-black text-2xl tracking-tight">YOU BOUGHT A REAL LAMBO! 🎉</h3>
+            <p class="text-gray-300 text-sm leading-relaxed font-light">One million fake dollars later, you've made it. Somewhere, a regulator is crying. Want to do it all again?</p>
+            <button onclick="restartGame()" class="px-6 py-2.5 bg-emerald-500 text-black hover:bg-emerald-400 rounded-lg text-xs font-bold uppercase transition">Play Again From Zero</button>
+        </div>
+    </div>
+
+    <!-- LOSS modal -->
+    <div id="lossModal" class="fixed inset-0 bg-black/85 flex items-center justify-center z-50 hidden p-4">
+        <div class="bg-[#0C0F16] border-2 border-rose-500/60 neon-glow-red max-w-md w-full p-7 rounded-xl shadow-2xl text-center space-y-4">
+            <div class="w-20 h-20 bg-rose-500/10 text-rose-500 rounded-full flex items-center justify-center mx-auto text-4xl"><i class="fa-solid fa-handcuffs"></i></div>
+            <h3 id="lossTitle" class="text-rose-500 font-black text-2xl tracking-tight">GAME OVER</h3>
+            <p id="lossMessage" class="text-gray-300 text-sm leading-relaxed font-light"></p>
+            <button onclick="restartGame()" class="px-6 py-2.5 bg-rose-500 text-white hover:bg-rose-600 rounded-lg text-xs font-bold uppercase transition">Start A New Scam</button>
+        </div>
+    </div>
+
+    <footer class="bg-[#090C12] border-t border-[#1A2232] py-3 px-4 text-center text-[10px] text-gray-500 font-mono flex flex-col md:flex-row justify-between items-center max-w-7xl mx-auto w-full gap-2">
+        <div class="flex items-center space-x-3">
+            <span>NETWORK: <span class="text-green-400 font-bold">SHITCORE_MAINNET-3.0 (FAKE)</span></span>
+            <span class="text-gray-700">|</span>
+            <span>GAS: <span class="text-amber-500">4,206 GWEI</span></span>
+        </div>
+        <div>
+            <span>Satire. No real funds, blockchain, or smart contracts involved. <a href="https://github.com/" class="underline hover:text-gray-300">View source</a></span>
+        </div>
+    </footer>
+
+    <!-- ============================================================ -->
+    <!-- SCRIPTS -->
+    <!-- ============================================================ -->
+    <script src="js/audio.js"></script>
+    <script src="js/state.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/markets.js"></script>
+    <script src="js/auditor.js"></script>
+    <script src="js/deployer.js"></script>
+    <script src="js/staking.js"></script>
+    <script src="js/perks.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>
