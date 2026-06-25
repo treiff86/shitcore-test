@@ -4,7 +4,8 @@
 
 function switchTab(tabId) {
     playSound('click');
-    const tabs = ['markets', 'ai', 'deployer', 'staking', 'info'];
+    // FIXED: Added 'mempool' to the array so it clears and toggles correctly
+    const tabs = ['markets', 'ai', 'deployer', 'staking', 'info', 'mempool'];
     tabs.forEach(t => {
         const contentEl = document.getElementById(`content-${t}`);
         const tabEl = document.getElementById(`tab-${t}`);
@@ -28,8 +29,11 @@ function updateUI() {
     // Formatted Core Stats
     document.getElementById('cashDisplay').innerText = state.cash.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     document.getElementById('lifetimeEarnedDisplay').innerText = state.lifetimeEarned.toLocaleString('en-US', { minimumFractionDigits: 2 });
-    document.getElementById('heatPct').innerText = `${state.globalHeat}%`;
-    document.getElementById('heatBarFill').style.width = `${state.globalHeat}%`;
+    
+    // Safety check for dynamic state keys (handles state.globalHeat or state.heat fallback configurations)
+    const currentHeat = state.globalHeat !== undefined ? state.globalHeat : (state.heat || 0);
+    document.getElementById('heatPct').innerText = `${currentHeat}%`;
+    document.getElementById('heatBarFill').style.width = `${currentHeat}%`;
 
     // Progression Renders
     const currentLevelInfo = DEGEN_LEVELS[state.degenLevel];
