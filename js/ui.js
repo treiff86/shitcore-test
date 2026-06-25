@@ -4,11 +4,17 @@
 
 function switchTab(tabId) {
     playSound('click');
-    // FIXED: Added 'mempool' to the array so it clears and toggles correctly
+    
+    // UPDATED: Added 'mempool' to this array. 
+    // This allows the script to find and hide the content-mempool section 
+    // when you click any other tab.
     const tabs = ['markets', 'ai', 'deployer', 'staking', 'info', 'mempool'];
+    
     tabs.forEach(t => {
         const contentEl = document.getElementById(`content-${t}`);
         const tabEl = document.getElementById(`tab-${t}`);
+        
+        // Hide content and reset tab styling
         if (contentEl) contentEl.classList.add('hidden');
         if (tabEl) {
             tabEl.classList.remove('border-blue-500', 'text-white');
@@ -16,8 +22,10 @@ function switchTab(tabId) {
         }
     });
 
+    // Show the specific content requested
     const activeContent = document.getElementById(`content-${tabId}`);
     const activeTab = document.getElementById(`tab-${tabId}`);
+    
     if (activeContent) activeContent.classList.remove('hidden');
     if (activeTab) {
         activeTab.classList.remove('border-transparent', 'text-gray-400');
@@ -30,7 +38,7 @@ function updateUI() {
     document.getElementById('cashDisplay').innerText = state.cash.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     document.getElementById('lifetimeEarnedDisplay').innerText = state.lifetimeEarned.toLocaleString('en-US', { minimumFractionDigits: 2 });
     
-    // Safety check for dynamic state keys (handles state.globalHeat or state.heat fallback configurations)
+    // Safety check for dynamic state keys
     const currentHeat = state.globalHeat !== undefined ? state.globalHeat : (state.heat || 0);
     document.getElementById('heatPct').innerText = `${currentHeat}%`;
     document.getElementById('heatBarFill').style.width = `${currentHeat}%`;
