@@ -13,6 +13,15 @@ In the real world, rug pulls, honeypots, and exit scams steal real money from re
 
 ---
 
+## 💥 New Mechanics: The Risk of Ruin
+The market is no longer just a chart—it's a battlefield.
+* **Wager Selection:** Choose your risk tolerance with 10%, 50%, or Custom wager buttons before entering a position.
+* **⚠️ Rugged (1% chance):** A sudden liquidity pull wipes your position and taxes an additional 10% of your total wallet.
+* **💀 Drained (0.01% chance):** The "Dev" strikes. Your entire wallet balance is reduced to zero. Start over, anon.
+* **Live Chain Feed:** Watch the chaos in real-time as the SHITCORE/USDSHT feed reports global activity, including snipes, dumps, and wallet drains.
+
+---
+
 ## 🎮 Game Features
 
 ### 🚀 1. Rug Creator (Token Deployer)
