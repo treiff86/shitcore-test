@@ -1,14 +1,135 @@
 /* ============================================================
    TOKEN DEPLOYER ENGINE & COMMUNITY LOOPS
+   ============================================================
+   New in this version:
+   - Fixed: dragging the Toxicity Tax slider now live-updates
+     the % readout (and the active deployment's rate)
+   - DRAINED on deploy: 0.01% chance the act of deploying itself
+     wipes your wallet to $0
+   - Manual Marketing is now 90/10: 90% it just works, 10% the
+     "influencer" takes your $50 AND hacks 10%-50% of what's left
+   - QUANTUM AUDIT: a rare instant-seizure event (separate from
+     the normal slow Audit Threat climb) that maxes the meter
+     and forfeits the deployment on the spot
+   - Bigger, more varied Degen Chat Feed flavor text throughout
    ============================================================ */
 
 let deployerInterval = null;
+
+/* ---- tunable odds, all easy to find in one place ---- */
+const DEPLOY_DRAIN_CHANCE = 0.0001;     // 0.01% — rolled once, on launch
+const SHILL_SCAM_CHANCE = 0.10;          // 10% — rolled each manual shill
+const QUANTUM_AUDIT_CHANCE = 0.0005;     // 0.05% per second of live deployment
+
+/* ---- flavor text pools ---- */
+
+const LAUNCH_LINES = [
+    "[Dev] Contract deployed. Generating TG hype channel groups...",
+    "[Dev] Bytecode live. Recruiting bots to simulate organic growth...",
+    "[Dev] Liquidity seeded. Whitepaper still loading (it's one paragraph)...",
+    "[Dev] Token minted. Legal team (a Fiverr freelancer) says we're fine.",
+    "[Dev] Deployment successful. Roadmap pending — probably just emojis.",
+];
+
+const AMBIENT_CHAT_LINES = [
+    "Is this safe?", "Dev doxed?", "Gonna fly 100x!", "Rug imminent?", "Bought the dip!", "LFG!!!",
+    "My wife's boyfriend told me to buy this.", "Just sold my car for more bags.",
+    "Chart looks like a staircase to heaven.", "Dev said 'trust me' and I believed him.",
+    "Is the liquidity locked or is that a joke too?", "Whale just bought, WAGMI!",
+    "This is literally the next Bitcoin (it is not).", "Telegram mod muted me for asking questions. Bullish.",
+    "I have a good feeling about this one (I always say that).", "Just refinanced my house. YOLO.",
+    "Someone said the dev's wallet moved. Probably nothing.", "Diamond hands until the FBI gets here.",
+    "Audit report says 9/10. Suspiciously specific number.", "If this rugs I'm legally changing my name.",
+];
+
+const SUSPICIOUS_CHAT_LINES = [
+    "Wait, why isn't the sell button working...", "Dev hasn't replied in 10 minutes, RED FLAG.",
+    "The Telegram admin just left the group. Silently.", "Anyone else notice the contract owner address changed?",
+    "Why does the liquidity pool keep shrinking??", "I'm starting to think 'trust me bro' wasn't an audit.",
+    "Is it normal for the price chart to look like a cliff?", "The website just 404'd. Cool, cool, cool.",
+];
+
+const SHILL_SUCCESS_LINES = [
+    "[SYSTEM] Influencer posted. 40,000 bots liked it within a second.",
+    "[SYSTEM] TikTok influencer called it 'the future of finance' between ad reads for protein powder.",
+    "[SYSTEM] Sponsored post live. Engagement is 90% bots, 10% regret.",
+    "[SYSTEM] Influencer's caption says 'NOT SPONSORED' (it was extremely sponsored). Hype rising.",
+];
+
+const SHILL_SCAM_LINES = [
+    (pct, amt) => `[SYSTEM] The "influencer" took your $50, deleted his TikTok, and hacked ${pct}% of your wallet ($${amt}) on the way out.`,
+    (pct, amt) => `[SYSTEM] Turns out @ToiletAlpha was three guys in a trench coat. They grabbed the $50, drained ${pct}% of your wallet ($${amt}), and vanished.`,
+    (pct, amt) => `[SYSTEM] Your influencer's "marketing agency" was a Discord server with one member. He's gone — and so is ${pct}% of your wallet ($${amt}).`,
+    (pct, amt) => `[SYSTEM] The influencer's manager (his mom) confirms he's "off the grid now." Also, your wallet is down ${pct}% ($${amt}).`,
+];
+
+const QUANTUM_AUDIT_LINES = [
+    (ticker) => `🌀 QUANTUM AUDIT! A regulator from a parallel timeline audited $${ticker} before the ink on the contract dried. Everything riding on it is gone.`,
+    (ticker) => `🌀 QUANTUM AUDIT! Schrödinger's compliance officer collapsed the waveform on $${ticker} — turns out it was illegal the whole time.`,
+    (ticker) => `🌀 QUANTUM AUDIT! The audit happened yesterday, tomorrow, and right now, simultaneously. $${ticker} didn't stand a chance.`,
+];
+
+const DEPLOY_DRAINED_LINES = [
+    "☠️ DRAINED! The instant you hit deploy, an unknown exploit swept every dollar out of your wallet. Starting over from $0.",
+    "☠️ DRAINED! Congratulations — you found the one contract that rugs its own deployer. Wallet: $0.",
+];
+
+/* ---- small helpers ---- */
+
+function randomFrom(arr) {
+    return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function pushChatLine(html) {
+    const feed = document.getElementById('chatFeed');
+    if (!feed) return;
+    feed.innerHTML += `<div>${html}</div>`;
+    feed.scrollTop = feed.scrollHeight;
+}
+
+function maybePushAmbientChat(t) {
+    if (Math.random() >= 0.4) return;
+    const pool = (t.auditThreat > 50 && Math.random() < 0.5) ? SUSPICIOUS_CHAT_LINES : AMBIENT_CHAT_LINES;
+    const line = randomFrom(pool);
+    pushChatLine(`<span class="text-amber-500">Anon_${Math.floor(Math.random() * 9000)}:</span> ${line}`);
+}
+
+/** Shared seizure handling for both the normal Audit Threat climb and Quantum Audit. */
+function seizeContract(t, message) {
+    clearInterval(deployerInterval);
+    state.globalHeat = Math.min(100, state.globalHeat + 25);
+    playSound('liquidated');
+    showAlertModal(message);
+    state.activeToken = null;
+
+    if (state.globalHeat >= 100) {
+        triggerLossGameOver();
+    }
+}
+
+/* ---- Toxicity Tax slider wiring (this was missing — the bug) ---- */
+
+document.addEventListener('DOMContentLoaded', () => {
+    const slider = document.getElementById('toxicityTaxSlider');
+    if (!slider) return;
+    slider.addEventListener('input', (e) => {
+        const val = parseInt(e.target.value, 10) || 0;
+        const label = document.getElementById('toxicityTaxVal');
+        if (label) label.innerText = `${val}%`;
+        // Live deployments can have their tax rate adjusted on the fly
+        if (state.activeToken) state.activeToken.toxicity = val;
+    });
+});
+
+/* ============================================================
+   CORE LOOP
+   ============================================================ */
 
 function updateDeployerUI() {
     const placeholder = document.getElementById('deployerPlaceholder');
     const active = state.activeToken;
 
-    if(!active) {
+    if (!active) {
         placeholder.classList.remove('hidden');
         document.getElementById('pullRugBtn').disabled = true;
         document.getElementById('pullRugBtn').className = "w-full py-3 bg-gradient-to-r from-red-600 to-rose-700 text-white font-extrabold rounded-lg text-xs shadow-lg uppercase opacity-40 cursor-not-allowed";
@@ -19,8 +140,8 @@ function updateDeployerUI() {
     document.getElementById('monitorTokenName').innerText = active.name;
     document.getElementById('monitorTokenTicker').innerText = `$${active.ticker}`;
     document.getElementById('monitorStatus').innerText = active.auditThreat >= 100 ? "UNDER INVESTIGATION" : "LIVE ACCUMULATION";
-    
-    document.getElementById('monitorRaised').innerText = `$${active.raised.toLocaleString('en-US', {maximumFractionDigits:2})}`;
+
+    document.getElementById('monitorRaised').innerText = `$${active.raised.toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
     document.getElementById('monitorSuckers').innerText = Math.floor(active.suckers).toLocaleString();
     document.getElementById('monitorPrice').innerText = `$${active.price.toFixed(6)}`;
     document.getElementById('monitorHoneypot').innerText = active.honeypot ? "ON (BACKDOOR BLOCKED)" : "OFF";
@@ -32,19 +153,24 @@ function updateDeployerUI() {
     document.getElementById('auditThreatPct').innerText = `${Math.floor(active.auditThreat)}%`;
     document.getElementById('auditThreatBar').style.width = `${Math.floor(active.auditThreat)}%`;
 
-    // Activate pulling interaction elements
     document.getElementById('pullRugBtn').disabled = false;
     document.getElementById('pullRugBtn').className = "w-full py-3 bg-gradient-to-r from-red-600 to-rose-700 text-white font-extrabold rounded-lg text-xs shadow-lg uppercase hover:from-red-500 hover:to-rose-600 cursor-pointer transition";
 }
 
 function launchToken() {
-    if(state.activeToken) {
+    if (state.activeToken) {
         showToast("You already have an active deployment draining funds!", "error");
         return;
     }
 
+    // Rare catastrophic event: the act of deploying can itself get you drained
+    if (Math.random() < DEPLOY_DRAIN_CHANCE) {
+        triggerDeployDrainEvent();
+        return;
+    }
+
     const cost = parseFloat(document.getElementById('deployLiquidity').value) || 200;
-    if(state.cash < cost) {
+    if (state.cash < cost) {
         showToast("Insufficient cash reserves to seed structural liquidity!", "error");
         return;
     }
@@ -65,91 +191,115 @@ function launchToken() {
         honeypot: document.getElementById('honeypotToggle') ? document.getElementById('honeypotToggle').checked : false
     };
 
-    document.getElementById('chatFeed').innerHTML = `<div class="text-green-400">[Dev] Contract deployed. Generating TG hype channel groups...</div>`;
-    
-    if(deployerInterval) clearInterval(deployerInterval);
+    document.getElementById('chatFeed').innerHTML = `<div class="text-green-400">${randomFrom(LAUNCH_LINES)}</div>`;
+
+    if (deployerInterval) clearInterval(deployerInterval);
     deployerInterval = setInterval(processTokenLifecycle, 1000);
-    
+
     showToast("🚀 Toxic deployment live on-chain!", "success");
+    updateUI();
+}
+
+function triggerDeployDrainEvent() {
+    state.cash = 0;
+    playSound('liquidated');
+    showAlertModal(randomFrom(DEPLOY_DRAINED_LINES));
+    showToast("☠️ DRAINED! Your wallet got wiped the instant you hit deploy.", "error");
     updateUI();
 }
 
 function processTokenLifecycle() {
     const t = state.activeToken;
-    if(!t) return;
+    if (!t) return;
+
+    // QUANTUM AUDIT: vanishingly rare instant seizure, independent of the normal threat climb
+    if (Math.random() < QUANTUM_AUDIT_CHANCE) {
+        t.auditThreat = 100;
+        updateDeployerUI();
+        seizeContract(t, randomFrom(QUANTUM_AUDIT_LINES)(t.ticker));
+        updateUI();
+        return;
+    }
 
     // Upgrades modifiers
     let botOwned = state.ownedPerks.includes('tg_bot');
     let influencerOwned = state.ownedPerks.includes('shill_army');
 
     let hypeDecay = 2.5;
-    if(botOwned) hypeDecay -= 1.0; 
+    if (botOwned) hypeDecay -= 1.0;
     t.hype = Math.max(0, t.hype - hypeDecay);
 
     // Inflow calculation engine logic
     let entryRate = (t.hype / 10) * (1 + (t.liquidity / 1000));
-    if(influencerOwned) entryRate *= 1.40;
+    if (influencerOwned) entryRate *= 1.40;
 
     let newSuckers = Math.random() * entryRate;
     t.suckers += newSuckers;
-    
+
     let fundsInflow = newSuckers * (Math.random() * 45 + 5);
     t.raised += fundsInflow;
     t.price = 0.0001 * (1 + (t.raised / t.liquidity));
 
     // Audit Accumulation Calculation Matrix
     let threatGrowth = (t.toxicity * 0.12) + 1.2;
-    if(t.honeypot) threatGrowth *= 2.0;
+    if (t.honeypot) threatGrowth *= 2.0;
     t.auditThreat += threatGrowth;
 
-    // Feed dynamic context statements to simulation panels
-    if (Math.random() < 0.4) {
-        const lines = ["Is this safe?", "Dev doxed?", "Gonna fly 100x!", "Rug imminent?", "Bought the dip!", "LFG!!!"];
-        const feed = document.getElementById('chatFeed');
-        if(feed) {
-            feed.innerHTML += `<div><span class="text-amber-500">Anon_${Math.floor(Math.random()*9000)}:</span> ${lines[Math.floor(Math.random()*lines.length)]}</div>`;
-            feed.scrollTop = feed.scrollHeight;
-        }
-    }
+    // Feed varied, dynamic context statements to the chat panel
+    maybePushAmbientChat(t);
 
     // Checking legal systemic compliance barriers
-    if(t.auditThreat >= 100) {
-        clearInterval(deployerInterval);
-        state.globalHeat = Math.min(100, state.globalHeat + 25);
-        showAlertModal(`🚨 CONTRACT SEIZED! The authorities audited $${t.ticker}. Your pool liquidity and raised assets were frozen instantly.`);
-        state.activeToken = null;
-        
-        if(state.globalHeat >= 100) {
-            triggerLossGameOver();
-        }
+    if (t.auditThreat >= 100) {
+        seizeContract(t, `🚨 CONTRACT SEIZED! The authorities audited $${t.ticker}. Your pool liquidity and raised assets were frozen instantly.`);
     }
     updateUI();
 }
 
 function manualShill() {
-    if(!state.activeToken) return;
-    if(state.cash < 50) { showToast("Not enough cash for promotion campaigns!"); return; }
+    if (!state.activeToken) {
+        showToast("Deploy a token first.", "error");
+        return;
+    }
+    if (state.cash < 50) {
+        showToast("Not enough cash for promotion campaigns!", "error");
+        return;
+    }
+
     state.cash -= 50;
-    state.activeToken.hype = Math.min(100, state.activeToken.hype + 25);
-    playSound('click');
+
+    if (Math.random() < SHILL_SCAM_CHANCE) {
+        const hackPct = 0.10 + Math.random() * 0.40; // 10%-50% of whatever's left after the $50
+        const hacked = state.cash * hackPct;
+        state.cash = Math.max(0, state.cash - hacked);
+        const pctLabel = Math.round(hackPct * 100);
+
+        playSound('rug');
+        showToast(`😱 SCAMMED! Lost the $50 fee + ${pctLabel}% of your wallet ($${hacked.toFixed(2)}).`, "error");
+        pushChatLine(`<span class="text-rose-500 font-bold">${randomFrom(SHILL_SCAM_LINES)(pctLabel, hacked.toFixed(2))}</span>`);
+    } else {
+        state.activeToken.hype = Math.min(100, state.activeToken.hype + 25);
+        playSound('click');
+        pushChatLine(`<span class="text-green-400">${randomFrom(SHILL_SUCCESS_LINES)}</span>`);
+    }
+
     updateUI();
 }
 
 function toggleHoneypot() {
-    if(state.activeToken) {
+    if (state.activeToken) {
         state.activeToken.honeypot = document.getElementById('honeypotToggle').checked;
     }
 }
 
 function pullTheRug() {
     const t = state.activeToken;
-    if(!t) return;
+    if (!t) return;
 
     clearInterval(deployerInterval);
     playSound('rug');
 
     let stolenCash = t.raised * (t.toxicity / 100) + t.liquidity;
-    if(t.honeypot) stolenCash = t.raised + t.liquidity; // Take it all
+    if (t.honeypot) stolenCash = t.raised + t.liquidity; // Take it all
 
     state.cash += stolenCash;
     state.lifetimeEarned += stolenCash;
@@ -162,12 +312,12 @@ function pullTheRug() {
     state.globalHeat = Math.min(100, state.globalHeat + Math.floor(t.toxicity / 4));
     state.activeToken = null;
 
-    showToast(`💀 RUG PULLED! Siphoned +$${stolenCash.toLocaleString('en-US',{maximumFractionDigits:2})} into private wallets.`, "success");
+    showToast(`💀 RUG PULLED! Siphoned +$${stolenCash.toLocaleString('en-US', { maximumFractionDigits: 2 })} into private wallets.`, "success");
     checkProgressions();
     updateUI();
 
-    if(state.globalHeat >= 100) {
-         triggerLossGameOver();
+    if (state.globalHeat >= 100) {
+        triggerLossGameOver();
     }
 }
 
