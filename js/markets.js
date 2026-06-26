@@ -1,95 +1,111 @@
 /* ============================================================
-   GAMIFIED MARKET SYSTEM - LEVERAGE SCALPING MINI-GAME
+   UI RENDERING & ROUTING INTERFACES
    ============================================================ */
 
-let priceHistory = Array(60).fill(0.0125);
-let blockNumber = 942012;
+function switchTab(tabId) {
+    playSound('click');
+    
+    // UPDATED: Added 'mempool' to this array. 
+    // This allows the script to find and hide the content-mempool section 
+    // when you click any other tab.
+    const tabs = ['markets', 'ai', 'deployer', 'staking', 'info', 'mempool'];
+    
+    tabs.forEach(t => {
+        const contentEl = document.getElementById(`content-${t}`);
+        const tabEl = document.getElementById(`tab-${t}`);
+        
+        // Hide content and reset tab styling
+        if (contentEl) contentEl.classList.add('hidden');
+        if (tabEl) {
+            tabEl.classList.remove('border-blue-500', 'text-white');
+            tabEl.classList.add('border-transparent', 'text-gray-400');
+        }
+    });
 
-// Gamification State Variables
-let activeTrade = null; 
-const LEVERAGE = 50;    
-
-function initMarkets() {
-    setInterval(updateMarketTick, 1000);
+    // Show the specific content requested
+    const activeContent = document.getElementById(`content-${tabId}`);
+    const activeTab = document.getElementById(`tab-${tabId}`);
+    
+    if (activeContent) activeContent.classList.remove('hidden');
+    if (activeTab) {
+        activeTab.classList.remove('border-transparent', 'text-gray-400');
+        activeTab.classList.add('border-blue-500', 'text-white');
+    }
 }
 
-function updateMarketTick() {
-    blockNumber += Math.floor(Math.random() * 2) + 1;
-    const blockEl = document.getElementById('simulatedBlockNum');
-    if (blockEl) blockEl.innerText = `BLOCK #${blockNumber.toLocaleString()}`;
-
-    let lastPrice = priceHistory[priceHistory.length - 1];
+function updateUI() {
+    // Formatted Core Stats
+    document.getElementById('cashDisplay').innerText = state.cash.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    document.getElementById('lifetimeEarnedDisplay').innerText = state.lifetimeEarned.toLocaleString('en-US', { minimumFractionDigits: 2 });
     
-    let bias = 0;
-    if (activeTrade) {
-        // --- 🎲 NEW DEGEN RISK LOGIC ---
-        
-        // 1. RUGGED CHECK (1% chance per tick)
-        if (Math.random() < 0.01) {
-            triggerRugged();
-            return; 
-        }
+    // Safety check for dynamic state keys
+    const currentHeat = state.globalHeat !== undefined ? state.globalHeat : (state.heat || 0);
+    document.getElementById('heatPct').innerText = `${currentHeat}%`;
+    document.getElementById('heatBarFill').style.width = `${currentHeat}%`;
 
-        // 2. DRAINED CHECK (0.01% chance per tick)
-        if (Math.random() < 0.0001) {
-            triggerDrained();
-            return;
-        }
-        
-        // --- END RISK LOGIC ---
+    // Progression Renders
+    const currentLevelInfo = DEGEN_LEVELS[state.degenLevel];
+    document.getElementById('levelBadge').innerText = `LVL ${state.degenLevel} — ${currentLevelInfo.name}`;
+    document.getElementById('levelProgressLabel').innerText = `LVL ${state.degenLevel} — ${currentLevelInfo.name}`;
+    
+    const nextTarget = currentLevelInfo.target;
+    document.getElementById('levelProgressNext').innerText = state.degenLevel >= 4 ? "MAX LEVEL" : `Next: $${nextTarget.toLocaleString()}`;
+    const levelPct = Math.min(100, (state.lifetimeEarned / nextTarget) * 100);
+    document.getElementById('levelProgressBar').style.width = `${levelPct}%`;
 
-        // 15% chance per tick that a market whale hunts your stop loss
-        if (Math.random() < 0.15) {
-            bias = activeTrade.type === 'LONG' ? -0.08 : 0.08; 
-        } else {
-            bias = (Math.random() - 0.48) * 0.04;
+    // Lambo Tier Tracking
+    let currentLambo = LAMBO_TIERS[0].name;
+    for (let i = 0; i < LAMBO_TIERS.length; i++) {
+        if (state.lifetimeEarned >= LAMBO_TIERS[i].cost) {
+            currentLambo = LAMBO_TIERS[i].name;
         }
+    }
+    document.getElementById('lamboTierDisplay').innerText = currentLambo;
+    const lamboPct = Math.min(100, (state.lifetimeEarned / 1000000) * 100);
+    document.getElementById('lamboProgressBar').style.width = `${lamboPct}%`;
+
+    // Unlocking mechanics via permissions
+    if (state.degenLevel >= 2) {
+        document.getElementById('stakingLocked').classList.add('hidden');
+        document.getElementById('stakingUnlocked').classList.remove('hidden');
+        document.getElementById('stakingLockIcon').classList.remove('fa-lock');
+        document.getElementById('stakingLockIcon').classList.add('fa-wheat-awn', 'text-green-400');
+        document.getElementById('campaignPanel').classList.remove('hidden');
     } else {
-        bias = (Math.random() - 0.495) * 0.03;
+        document.getElementById('stakingLocked').classList.remove('hidden');
+        document.getElementById('stakingUnlocked').classList.add('hidden');
     }
 
-    let newPrice = Math.max(0.00000010, lastPrice * (1 + bias));
+    if (state.degenLevel >= 3) {
+        document.getElementById('mevPanel').classList.remove('hidden');
+        document.getElementById('mevLockedNotice').classList.add('hidden');
+    }
     
-    priceHistory.shift();
-    priceHistory.push(newPrice);
-
-    if (activeTrade) {
-        processActiveTrade(newPrice);
+    if (state.degenLevel >= 4) {
+        document.getElementById('honeypotPanel').classList.remove('hidden');
     }
 
-    renderChart();
-    renderOrderbook(newPrice);
-    generateChainLog();
+    // Call sub-module panels
+    renderPerkShop();
+    renderLeaderboard();
+    updateDeployerUI();
 }
 
-/* ============================================================
-   RISK EVENTS (RUGGED / DRAINED)
-   ============================================================ */
-
-function triggerRugged() {
-    activeTrade = null;
-    playSound('liquidated');
-    showToast("⚠️ RUGGED! Liquidity pulled. Position liquidated.", "error");
-    resetTradeButtonsUI();
-    updateUI();
+function showToast(message, type = "info") {
+    const toast = document.getElementById('toast');
+    const msgEl = document.getElementById('toastMessage');
+    msgEl.innerText = message;
+    
+    toast.classList.remove('hidden');
+    setTimeout(() => { toast.classList.add('hidden'); }, 4000);
 }
 
-function triggerDrained() {
-    let drainPercent = 0.25 + (Math.random() * 0.25); // 25-50%
-    let drainAmount = state.lifetimeEarned * drainPercent;
-    
-    state.lifetimeEarned -= drainAmount;
-    state.cash = 0; 
-    activeTrade = null;
-    
+function showAlertModal(message) {
+    document.getElementById('alertModalMessage').innerText = message;
+    document.getElementById('customAlertModal').classList.remove('hidden');
     playSound('alarm');
-    showToast(`💀 DRAINED! Wallet wiped and ${ (drainPercent * 100).toFixed(0) }% lifetime gains stolen!`, "error");
-    
-    resetTradeButtonsUI();
-    updateUI();
 }
 
-/* ============================================================
-   TRADING ENGINE CORE LOGIC (Rest of your functions remain same)
-   ============================================================ */
-// [Keep handleMarketAction, processActiveTrade, closePosition, etc. here]
+function closeAlertModal() {
+    document.getElementById('customAlertModal').classList.add('hidden');
+}
