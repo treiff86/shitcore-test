@@ -126,10 +126,15 @@ function getPlayerLevel() {
     return state.degenLevel || 1;
 }
 
+/** Offshore Cayman Layering Loop perk: heat-generating events produce ~50% less Heat. */
+function applyCaymanDiscount(heatGain) {
+    return state.ownedPerks.includes('cayman_vault') ? heatGain * 0.5 : heatGain;
+}
+
 /** Shared seizure handling for both the normal Audit Threat climb and Quantum Audit. */
 function seizeContract(t, message) {
     clearInterval(deployerInterval);
-    state.globalHeat = Math.min(100, state.globalHeat + 25);
+    state.globalHeat = Math.min(100, state.globalHeat + applyCaymanDiscount(25));
     playSound('liquidated');
     showAlertModal(message);
     state.activeToken = null;
@@ -139,29 +144,35 @@ function seizeContract(t, message) {
     }
 }
 
-/** Keeps the campaign <select> in sync with the player's level without
- *  fighting their current selection — only rewrites it when the set of
- *  available campaigns actually changes (e.g. on a level-up). */
+let lastRenderedCampaignSignature = null;
+
+/** Keeps the campaign <select> in sync with the player's level AND the
+ *  Coordination Network discount, without fighting their current
+ *  selection — only rewrites it when something relevant actually changed. */
 function populateCampaignSelect() {
     const select = document.getElementById('campaignSelect');
     if (!select) return;
 
     const lvl = getPlayerLevel();
     const available = CAMPAIGNS.filter(c => lvl >= c.minLevel);
+    const discount = state.ownedPerks.includes('shill_army') ? 0.75 : 1;
 
     if (available.length === 0) {
-        if (select.options.length !== 1 || !select.disabled) {
+        if (lastRenderedCampaignSignature !== 'locked') {
             select.innerHTML = `<option value="">Reach Level 2 to unlock campaigns</option>`;
             select.disabled = true;
+            lastRenderedCampaignSignature = 'locked';
         }
         return;
     }
 
-    if (select.disabled || select.options.length !== available.length) {
+    const signature = `${available.map(c => c.id).join(',')}|${discount}`;
+    if (lastRenderedCampaignSignature !== signature) {
         const previousValue = select.value;
         select.disabled = false;
-        select.innerHTML = available.map(c => `<option value="${c.id}">${c.name} ($${c.cost.toLocaleString()})</option>`).join('');
+        select.innerHTML = available.map(c => `<option value="${c.id}">${c.name} ($${Math.round(c.cost * discount).toLocaleString()})</option>`).join('');
         if (available.some(c => c.id === previousValue)) select.value = previousValue;
+        lastRenderedCampaignSignature = signature;
     }
 }
 
@@ -306,8 +317,9 @@ function processTokenLifecycle() {
     let influencerOwned = state.ownedPerks.includes('shill_army');
 
     let hypeDecay = 2.5;
-    if (botOwned) hypeDecay -= 1.0;
+    if (botOwned) hypeDecay -= 1.0; // -40% decay
     t.hype = Math.max(0, t.hype - hypeDecay);
+    if (botOwned) t.hype = Math.min(100, t.hype + 1); // passive +1%/sec generation on top
 
     // Inflow calculation engine logic
     let entryRate = (t.hype / 10) * (1 + (t.liquidity / 1000));
@@ -315,7 +327,12 @@ function processTokenLifecycle() {
     entryRate *= (t.campaignCapitalMult || 1); // Marketing Campaigns permanently speed this up
 
     let newSuckers = Math.random() * entryRate;
-    t.suckers += newSuckers;
+
+    // Coordination Network: extra "reach" inflates the tracked victim count
+    // without proportionally inflating cash — cash stays keyed off newSuckers.
+    let trackedSuckers = newSuckers;
+    if (influencerOwned) trackedSuckers *= 1.5;
+    t.suckers += trackedSuckers;
 
     let fundsInflow = newSuckers * (Math.random() * 45 + 5);
     t.raised += fundsInflow;
@@ -383,12 +400,14 @@ function runCampaign() {
         showToast(`Reach Level ${campaign.minLevel} to run this campaign.`, "error");
         return;
     }
-    if (state.cash < campaign.cost) {
-        showToast(`Not enough cash. Need $${campaign.cost.toLocaleString()}.`, "error");
+    const discount = state.ownedPerks.includes('shill_army') ? 0.75 : 1;
+    const finalCost = Math.round(campaign.cost * discount);
+    if (state.cash < finalCost) {
+        showToast(`Not enough cash. Need $${finalCost.toLocaleString()}.`, "error");
         return;
     }
 
-    state.cash -= campaign.cost;
+    state.cash -= finalCost;
 
     const t = state.activeToken;
     t.campaignCapitalMult = (t.campaignCapitalMult || 1) + campaign.capitalSpeedBoost;
@@ -425,7 +444,7 @@ function pullTheRug() {
         name: t.name, ticker: t.ticker, cash: stolenCash, suckers: Math.floor(t.suckers)
     });
 
-    state.globalHeat = Math.min(100, state.globalHeat + Math.floor(t.toxicity / 4));
+    state.globalHeat = Math.min(100, state.globalHeat + applyCaymanDiscount(Math.floor(t.toxicity / 4)));
     state.activeToken = null;
 
     showToast(`💀 RUG PULLED! Siphoned +$${stolenCash.toLocaleString('en-US', { maximumFractionDigits: 2 })} into private wallets.`, "success");
