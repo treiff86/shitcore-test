@@ -121,9 +121,9 @@ function maybePushAmbientChat(t) {
     pushChatLine(`<span class="text-amber-500">Anon_${Math.floor(Math.random() * 9000)}:</span> ${line}`);
 }
 
-/** Best-guess read of the player's Degen Level. Falls back to 1 if the field isn't there. */
+/** Reads the player's Degen Level from state.js's degenLevel field. Falls back to 1 if missing. */
 function getPlayerLevel() {
-    return state.level || 1;
+    return state.degenLevel || 1;
 }
 
 /** Shared seizure handling for both the normal Audit Threat climb and Quantum Audit. */
