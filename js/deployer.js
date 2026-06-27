@@ -1,7 +1,7 @@
 /* ============================================================
    TOKEN DEPLOYER ENGINE & COMMUNITY LOOPS
    ============================================================
-   New in this version:
+   What's in this version:
    - Fixed: dragging the Toxicity Tax slider now live-updates
      the % readout (and the active deployment's rate)
    - DRAINED on deploy: 0.01% chance the act of deploying itself
@@ -11,15 +11,36 @@
    - QUANTUM AUDIT: a rare instant-seizure event (separate from
      the normal slow Audit Threat climb) that maxes the meter
      and forfeits the deployment on the spot
+   - 4-tier Marketing Campaign system (Lvl 2+ unlocks 2, Lvl 4+
+     unlocks 2 more). Each campaign PERMANENTLY speeds up both
+     capital inflow and Audit Threat growth for that deployment.
+     Effects stack freely if you run more than one.
+   - Binance Pump & Dump easter egg: deploying under a custom
+     (non-default) token name has a 1% shot at a $10,000 windfall
    - Bigger, more varied Degen Chat Feed flavor text throughout
    ============================================================ */
 
 let deployerInterval = null;
 
 /* ---- tunable odds, all easy to find in one place ---- */
-const DEPLOY_DRAIN_CHANCE = 0.0001;     // 0.01% — rolled once, on launch
-const SHILL_SCAM_CHANCE = 0.10;          // 10% — rolled each manual shill
-const QUANTUM_AUDIT_CHANCE = 0.0005;     // 0.05% per second of live deployment
+const DEPLOY_DRAIN_CHANCE = 0.0001;      // 0.01% — rolled once, on launch
+const SHILL_SCAM_CHANCE = 0.10;           // 10% — rolled each manual shill
+const QUANTUM_AUDIT_CHANCE = 0.0005;      // 0.05% per second of live deployment
+const DEFAULT_TOKEN_NAME = 'Golden Toilet Elon';
+const BINANCE_PUMP_CHANCE = 0.01;         // 1% — rolled on deploy, only if name was changed
+const BINANCE_PUMP_BONUS = 10000;
+
+/* ---- Marketing Campaigns ----
+   capitalSpeedBoost / auditSpeedBoost are PERMANENT, STACKING
+   multipliers added to the deployment's ongoing rates the
+   moment you run the campaign (not a one-time lump sum). Run
+   the same or different campaigns again and they keep stacking. */
+const CAMPAIGNS = [
+    { id: 'press', name: '📋 Fake Press Release', minLevel: 2, cost: 150, capitalSpeedBoost: 0.25, auditSpeedBoost: 0.15 },
+    { id: 'airdrop', name: '🐶 Sketchy Influencer Airdrop', minLevel: 2, cost: 400, capitalSpeedBoost: 0.50, auditSpeedBoost: 0.30 },
+    { id: 'raid', name: '🎙️ Coordinated Twitter Raid', minLevel: 4, cost: 900, capitalSpeedBoost: 0.85, auditSpeedBoost: 0.45 },
+    { id: 'tv', name: '📺 Bought a Crypto TV Segment', minLevel: 4, cost: 1800, capitalSpeedBoost: 1.30, auditSpeedBoost: 0.60 },
+];
 
 /* ---- flavor text pools ---- */
 
@@ -74,6 +95,12 @@ const DEPLOY_DRAINED_LINES = [
     "☠️ DRAINED! Congratulations — you found the one contract that rugs its own deployer. Wallet: $0.",
 ];
 
+const CAMPAIGN_CHAT_LINES = [
+    (name) => `[MARKETING] ${name} is live. Both the hype and the heat just got a permanent turbo boost.`,
+    (name) => `[MARKETING] ${name} launched. Money's coming in faster now — so is regulatory attention.`,
+    (name) => `[MARKETING] ${name} dropped. Bots are typing "🚀🚀🚀" in unison while a compliance officer Googles your contract address.`,
+];
+
 /* ---- small helpers ---- */
 
 function randomFrom(arr) {
@@ -94,6 +121,11 @@ function maybePushAmbientChat(t) {
     pushChatLine(`<span class="text-amber-500">Anon_${Math.floor(Math.random() * 9000)}:</span> ${line}`);
 }
 
+/** Best-guess read of the player's Degen Level. Falls back to 1 if the field isn't there. */
+function getPlayerLevel() {
+    return state.level || 1;
+}
+
 /** Shared seizure handling for both the normal Audit Threat climb and Quantum Audit. */
 function seizeContract(t, message) {
     clearInterval(deployerInterval);
@@ -107,18 +139,46 @@ function seizeContract(t, message) {
     }
 }
 
-/* ---- Toxicity Tax slider wiring (this was missing — the bug) ---- */
+/** Keeps the campaign <select> in sync with the player's level without
+ *  fighting their current selection — only rewrites it when the set of
+ *  available campaigns actually changes (e.g. on a level-up). */
+function populateCampaignSelect() {
+    const select = document.getElementById('campaignSelect');
+    if (!select) return;
+
+    const lvl = getPlayerLevel();
+    const available = CAMPAIGNS.filter(c => lvl >= c.minLevel);
+
+    if (available.length === 0) {
+        if (select.options.length !== 1 || !select.disabled) {
+            select.innerHTML = `<option value="">Reach Level 2 to unlock campaigns</option>`;
+            select.disabled = true;
+        }
+        return;
+    }
+
+    if (select.disabled || select.options.length !== available.length) {
+        const previousValue = select.value;
+        select.disabled = false;
+        select.innerHTML = available.map(c => `<option value="${c.id}">${c.name} ($${c.cost.toLocaleString()})</option>`).join('');
+        if (available.some(c => c.id === previousValue)) select.value = previousValue;
+    }
+}
+
+/* ---- Toxicity Tax slider wiring (this was missing — the original bug) ---- */
 
 document.addEventListener('DOMContentLoaded', () => {
     const slider = document.getElementById('toxicityTaxSlider');
-    if (!slider) return;
-    slider.addEventListener('input', (e) => {
-        const val = parseInt(e.target.value, 10) || 0;
-        const label = document.getElementById('toxicityTaxVal');
-        if (label) label.innerText = `${val}%`;
-        // Live deployments can have their tax rate adjusted on the fly
-        if (state.activeToken) state.activeToken.toxicity = val;
-    });
+    if (slider) {
+        slider.addEventListener('input', (e) => {
+            const val = parseInt(e.target.value, 10) || 0;
+            const label = document.getElementById('toxicityTaxVal');
+            if (label) label.innerText = `${val}%`;
+            // Live deployments can have their tax rate adjusted on the fly
+            if (state.activeToken) state.activeToken.toxicity = val;
+        });
+    }
+    populateCampaignSelect();
 });
 
 /* ============================================================
@@ -126,6 +186,8 @@ document.addEventListener('DOMContentLoaded', () => {
    ============================================================ */
 
 function updateDeployerUI() {
+    populateCampaignSelect();
+
     const placeholder = document.getElementById('deployerPlaceholder');
     const active = state.activeToken;
 
@@ -169,6 +231,13 @@ function launchToken() {
         return;
     }
 
+    const tokenName = (document.getElementById('deployName').value || "ScamCoin").trim();
+
+    // Easter egg: deploying under a custom (non-default) name has a tiny shot at a windfall
+    if (tokenName !== DEFAULT_TOKEN_NAME && Math.random() < BINANCE_PUMP_CHANCE) {
+        triggerBinancePumpBonus();
+    }
+
     const cost = parseFloat(document.getElementById('deployLiquidity').value) || 200;
     if (state.cash < cost) {
         showToast("Insufficient cash reserves to seed structural liquidity!", "error");
@@ -179,7 +248,7 @@ function launchToken() {
     playSound('launch');
 
     state.activeToken = {
-        name: document.getElementById('deployName').value || "ScamCoin",
+        name: tokenName || "ScamCoin",
         ticker: (document.getElementById('deployTicker').value || "SCAM").toUpperCase(),
         liquidity: cost,
         raised: 0,
@@ -188,7 +257,10 @@ function launchToken() {
         toxicity: parseInt(document.getElementById('toxicityTaxSlider').value) || 10,
         hype: 30,
         auditThreat: 0,
-        honeypot: document.getElementById('honeypotToggle') ? document.getElementById('honeypotToggle').checked : false
+        honeypot: document.getElementById('honeypotToggle') ? document.getElementById('honeypotToggle').checked : false,
+        // Permanent, stacking multipliers built up by running Marketing Campaigns
+        campaignCapitalMult: 1,
+        campaignAuditMult: 1
     };
 
     document.getElementById('chatFeed').innerHTML = `<div class="text-green-400">${randomFrom(LAUNCH_LINES)}</div>`;
@@ -206,6 +278,14 @@ function triggerDeployDrainEvent() {
     showAlertModal(randomFrom(DEPLOY_DRAINED_LINES));
     showToast("☠️ DRAINED! Your wallet got wiped the instant you hit deploy.", "error");
     updateUI();
+}
+
+function triggerBinancePumpBonus() {
+    state.cash += BINANCE_PUMP_BONUS;
+    state.lifetimeEarned += BINANCE_PUMP_BONUS;
+    playSound('lambo');
+    showAlertModal(`🚀 BINANCE PUMP & DUMP! Your custom-named token briefly caught a real exchange listing bot's attention. +$${BINANCE_PUMP_BONUS.toLocaleString()} toward your Lambo goal before anyone noticed the mistake.`);
+    showToast(`🚀 JACKPOT! +$${BINANCE_PUMP_BONUS.toLocaleString()} from a freak listing glitch.`, "success");
 }
 
 function processTokenLifecycle() {
@@ -232,6 +312,7 @@ function processTokenLifecycle() {
     // Inflow calculation engine logic
     let entryRate = (t.hype / 10) * (1 + (t.liquidity / 1000));
     if (influencerOwned) entryRate *= 1.40;
+    entryRate *= (t.campaignCapitalMult || 1); // Marketing Campaigns permanently speed this up
 
     let newSuckers = Math.random() * entryRate;
     t.suckers += newSuckers;
@@ -243,6 +324,7 @@ function processTokenLifecycle() {
     // Audit Accumulation Calculation Matrix
     let threatGrowth = (t.toxicity * 0.12) + 1.2;
     if (t.honeypot) threatGrowth *= 2.0;
+    threatGrowth *= (t.campaignAuditMult || 1); // Marketing Campaigns permanently speed this up too
     t.auditThreat += threatGrowth;
 
     // Feed varied, dynamic context statements to the chat panel
@@ -281,6 +363,40 @@ function manualShill() {
         playSound('click');
         pushChatLine(`<span class="text-green-400">${randomFrom(SHILL_SUCCESS_LINES)}</span>`);
     }
+
+    updateUI();
+}
+
+function runCampaign() {
+    if (!state.activeToken) {
+        showToast("Deploy a token first.", "error");
+        return;
+    }
+
+    const select = document.getElementById('campaignSelect');
+    const campaign = CAMPAIGNS.find(c => c.id === (select && select.value));
+    if (!campaign) {
+        showToast("Pick a campaign first.", "error");
+        return;
+    }
+    if (getPlayerLevel() < campaign.minLevel) {
+        showToast(`Reach Level ${campaign.minLevel} to run this campaign.`, "error");
+        return;
+    }
+    if (state.cash < campaign.cost) {
+        showToast(`Not enough cash. Need $${campaign.cost.toLocaleString()}.`, "error");
+        return;
+    }
+
+    state.cash -= campaign.cost;
+
+    const t = state.activeToken;
+    t.campaignCapitalMult = (t.campaignCapitalMult || 1) + campaign.capitalSpeedBoost;
+    t.campaignAuditMult = (t.campaignAuditMult || 1) + campaign.auditSpeedBoost;
+
+    playSound('buy');
+    showToast(`${campaign.name} is live! Capital speed now ${t.campaignCapitalMult.toFixed(2)}x, Audit Threat speed now ${t.campaignAuditMult.toFixed(2)}x for this deployment.`, "success");
+    pushChatLine(`<span class="text-indigo-400 font-bold">${randomFrom(CAMPAIGN_CHAT_LINES)(campaign.name)}</span>`);
 
     updateUI();
 }
