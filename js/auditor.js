@@ -12,8 +12,10 @@
      (same severity tier as the other mini-games).
    - Every legitimate compile (not the catastrophic drain) chips
      a random 4-10% off Regulatory Heat — the only way to bring
-     Heat back down in this build. Short cooldown on the Compile
-     button so this can't be macro'd into an instant Heat reset.
+     Heat back down in this build. That's no longer risk-free:
+     10% chance it docks 10% of your wallet, 0.01% chance it
+     docks 35%. Short cooldown on the Compile button so this
+     can't be macro'd into a free Heat reset.
    - Bigger, more varied badge / signature / liquidity / verdict
      / line-roast pools for a much less repetitive feel.
    ============================================================ */
@@ -36,6 +38,10 @@ const JACKPOT_DRAIN_MAX = 10000;
 const HEAT_REDUCTION_MIN = 4;
 const HEAT_REDUCTION_MAX = 10;
 const COMPILE_COOLDOWN_MS = 3000;
+const EARNINGS_PENALTY_SEVERE_CHANCE = 0.0001; // 0.01% — docks 35%
+const EARNINGS_PENALTY_SEVERE_PCT = 0.35;
+const EARNINGS_PENALTY_MINOR_CHANCE = 0.10;    // 10% — docks 10%
+const EARNINGS_PENALTY_MINOR_PCT = 0.10;
 
 let compileOnCooldown = false;
 
@@ -193,8 +199,27 @@ function auditContract() {
 function reduceRegulatoryHeat() {
     const reduction = HEAT_REDUCTION_MIN + Math.random() * (HEAT_REDUCTION_MAX - HEAT_REDUCTION_MIN);
     state.globalHeat = Math.max(0, state.globalHeat - reduction);
-    showToast(`✅ Audit complete. Regulatory Heat -${reduction.toFixed(1)}%.`, "success");
+
+    const penaltyRoll = Math.random();
+    if (penaltyRoll < EARNINGS_PENALTY_SEVERE_CHANCE) {
+        applyEarningsPenalty(EARNINGS_PENALTY_SEVERE_PCT, reduction, 'SEVERE');
+    } else if (penaltyRoll < EARNINGS_PENALTY_SEVERE_CHANCE + EARNINGS_PENALTY_MINOR_CHANCE) {
+        applyEarningsPenalty(EARNINGS_PENALTY_MINOR_PCT, reduction, 'MINOR');
+    } else {
+        showToast(`✅ Audit complete. Regulatory Heat -${reduction.toFixed(1)}%.`, "success");
+    }
+
     updateUI();
+}
+
+function applyEarningsPenalty(pct, heatReduction, severity) {
+    const penalty = state.cash * pct;
+    state.cash = Math.max(0, state.cash - penalty);
+    playSound('alarm');
+    showToast(`⚠️ ${severity} AUDIT BACKFIRE! Heat -${heatReduction.toFixed(1)}%, but it cost you $${penalty.toFixed(2)} (${Math.round(pct * 100)}% of your wallet) in "compliance fees."`, "error");
+    if (typeof pushChainLog === 'function') {
+        pushChainLog('AUDIT', `An "independent auditor" found something and billed ${Math.round(pct * 100)}% of someone's wallet for the privilege.`, 'text-amber-400');
+    }
 }
 
 function insertDrainButton() {
