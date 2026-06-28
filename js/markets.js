@@ -3,21 +3,27 @@
    Pair: SHITCORE / USDSHT
    ============================================================
    New in this version:
+   - Trades now ALWAYS open the instant you click Pump/Dump.
+     Catastrophe odds (DRAINED/RUGGED/BUST) are still rolled at
+     that moment, but the outcome is held and resolved on the
+     very next tick instead of pre-empting the trade — so you
+     always see your position open, entry line and all, and it
+     "rides" for at least a second before anything bad happens.
+   - Closing the position early via Panic Sell can't dodge a
+     pending catastrophe either — it resolves the same way.
    - Leverage bar: 25x / 50x / 75x / 100x. Picks both the real
-     PnL multiplier AND the instant-bust odds (13/25/38/50%),
-     rolled the moment you open a trade.
-   - Trade buttons are forced into an even 50/50 split (no more
-     wrapping onto two stacked lines). While a trade is open they
-     collapse into a single "PANIC SELL" button — no PnL text on
-     the button anymore.
+     PnL multiplier AND the instant-bust odds (13/25/38/50%).
+   - Trade buttons are forced into an even 50/50 split. While a
+     trade is open they collapse into a single "PANIC SELL"
+     button — no PnL text on the button, that lives in the
+     orderbook now.
    - Your live order (direction, entry price, leverage) and its
-     running PnL now render as a highlighted row inside the Live
-     Orderbook instead of on the button.
+     running PnL render as a highlighted row inside the Live
+     Orderbook.
    - The chart draws a dashed red line at your entry price while
-     a trade is open, auto-scaled into view, so you can actually
-     see whether you're above or below it.
+     a trade is open, auto-scaled into view.
    - Wager selector (10% / 50% / custom $) still gates Pump/Dump.
-   - RUGGED event: 1% chance per trade, lose the wager + 10% of
+   - RUGGED: 1% chance per trade, lose the wager + 10% of
      remaining wallet. DRAINED: 0.01% chance, wallet goes to $0.
    All fake money, 100% client-side, no real funds involved.
    ============================================================ */
@@ -116,28 +122,24 @@ function handleMarketAction(actionType) {
     const committedWager = wagerAmount;
     const committedLeverage = selectedLeverage;
 
-    // Catastrophic event rolls happen the instant the wager is committed
+    // Roll the catastrophic outcome now, but DON'T act on it yet — the
+    // trade always opens and rides for at least one tick first, instead
+    // of being pre-empted before it's ever visible on screen.
+    let pendingCatastrophe = null;
     const roll = Math.random();
-    let threshold = 0.0001;                      // 0.01% — DRAINED
+    let threshold = 0.0001;                       // 0.01% — DRAINED
     if (roll < threshold) {
-        triggerDrainedEvent();
-        syncWagerUI();
-        updateUI();
-        return;
-    }
-    threshold += 0.01;                            // +1% — RUGGED
-    if (roll < threshold) {
-        triggerRuggedEvent(committedWager);
-        syncWagerUI();
-        updateUI();
-        return;
-    }
-    threshold += (BUST_CHANCE_MAP[committedLeverage] || 0); // +leverage-scaled bust odds
-    if (roll < threshold) {
-        triggerInstantBust(committedLeverage, committedWager);
-        syncWagerUI();
-        updateUI();
-        return;
+        pendingCatastrophe = 'DRAINED';
+    } else {
+        threshold += 0.01;                         // +1% — RUGGED
+        if (roll < threshold) {
+            pendingCatastrophe = 'RUGGED';
+        } else {
+            threshold += (BUST_CHANCE_MAP[committedLeverage] || 0); // +leverage-scaled bust odds
+            if (roll < threshold) {
+                pendingCatastrophe = 'BUST';
+            }
+        }
     }
 
     let currentPrice = priceHistory[priceHistory.length - 1];
@@ -147,7 +149,8 @@ function handleMarketAction(actionType) {
         entryPrice: currentPrice,
         margin: committedWager,
         leverage: committedLeverage,
-        pnl: 0
+        pnl: 0,
+        pendingCatastrophe
     };
 
     playSound('buy');
@@ -159,7 +162,31 @@ function handleMarketAction(actionType) {
 function forcePump() { handleMarketAction('LONG'); }
 function forceDump() { handleMarketAction('SHORT'); }
 
+/** Shared resolution for a pre-rolled catastrophe, used by both the
+ *  natural next-tick path AND an early manual Panic Sell — so there's
+ *  no way to dodge a rolled catastrophe by closing before the tick fires. */
+function resolvePendingCatastrophe() {
+    const catastrophe = activeTrade.pendingCatastrophe;
+    const wager = activeTrade.margin;
+    const leverage = activeTrade.leverage;
+
+    activeTrade = null;
+    resetTradeButtonsUI();
+    syncWagerUI();
+
+    if (catastrophe === 'DRAINED') triggerDrainedEvent();
+    else if (catastrophe === 'RUGGED') triggerRuggedEvent(wager);
+    else if (catastrophe === 'BUST') triggerInstantBust(leverage, wager);
+
+    updateUI();
+}
+
 function processActiveTrade(currentPrice) {
+    if (activeTrade.pendingCatastrophe) {
+        resolvePendingCatastrophe();
+        return;
+    }
+
     let priceDiffPct = (currentPrice - activeTrade.entryPrice) / activeTrade.entryPrice;
     if (activeTrade.type === 'SHORT') priceDiffPct = -priceDiffPct;
 
@@ -178,6 +205,13 @@ function processActiveTrade(currentPrice) {
 
 function closePosition() {
     if (!activeTrade) return;
+
+    if (activeTrade.pendingCatastrophe) {
+        resolvePendingCatastrophe();
+        checkProgressions();
+        return;
+    }
+
     state.cash += (activeTrade.margin + activeTrade.pnl);
 
     if (activeTrade.pnl > 0) {
@@ -199,7 +233,9 @@ function closePosition() {
 /* ============================================================
    RARE CATASTROPHIC EVENTS — DRAINED (0.01%) / RUGGED (1%) /
    instant BUST (13-50%, scaled by chosen leverage)
-   Rolled the instant a wager is committed via Pump/Dump.
+   Rolled the instant a wager is committed, resolved on the
+   following tick (or an early Panic Sell) so the trade always
+   visibly opens first.
    ============================================================ */
 
 function triggerRuggedEvent(lostWager) {
@@ -220,8 +256,8 @@ function triggerDrainedEvent() {
 
 function triggerInstantBust(leverage, lostWager) {
     playSound('liquidated');
-    showToast(`💥 BUSTED! Your ${leverage}x leveraged position liquidated before it even opened. Lost your $${lostWager.toFixed(2)} wager.`, "error");
-    pushChainLog('LIQ', `A ${leverage}x leveraged position got busted instantly. $${lostWager.toFixed(2)} gone before block confirmation.`, 'text-red-500 font-extrabold');
+    showToast(`💥 BUSTED! Your ${leverage}x leveraged position got liquidated almost instantly. Lost your $${lostWager.toFixed(2)} wager.`, "error");
+    pushChainLog('LIQ', `A ${leverage}x leveraged position got busted seconds after opening. $${lostWager.toFixed(2)} gone.`, 'text-red-500 font-extrabold');
 }
 
 /* ============================================================
@@ -486,7 +522,7 @@ function generateChainLog() {
 }
 
 /* ============================================================
-   LEVEL 3: MEV SANDWICH (formerly the dead "Frontrun The Mempool" button)
+   LEVEL 3: MEV SANDWICH
    Always-on skim with a short cooldown. Heat ALWAYS goes up,
    no matter which of the three outcomes below fires.
    ============================================================ */
