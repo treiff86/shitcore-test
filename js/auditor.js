@@ -186,7 +186,7 @@ function auditContract() {
         liqStatusEl.className = "text-xl font-bold text-rose-400";
     }
 
-    document.getElementById('auditParagraph').innerText = `Auditor Verdict: ${randomFrom(VERDICT_POOL)}`;
+    document.getElementById('auditParagraph').innerText = randomFrom(VERDICT_POOL);
 
     const logs = document.getElementById('lineRoastLogs');
     logs.innerHTML = pickN(LINE_ROAST_POOL, 4)
