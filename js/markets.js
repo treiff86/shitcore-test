@@ -235,7 +235,8 @@ function setupWagerControls() {
 
     const pumpBtn = document.querySelector("button[onclick='forcePump()']");
     const dumpBtn = document.querySelector("button[onclick='forceDump()']");
-    if (!pumpBtn || !dumpBtn) {
+    const anchor = document.getElementById('marketWagerAnchor');
+    if (!pumpBtn || !dumpBtn || !anchor) {
         setTimeout(setupWagerControls, 200); // DOM not ready yet, retry shortly
         return;
     }
@@ -243,17 +244,12 @@ function setupWagerControls() {
     pumpBtnEl = pumpBtn;
     dumpBtnEl = dumpBtn;
 
-    // Force the two trade buttons into an even, side-by-side split instead
-    // of letting the surrounding layout wrap them onto separate lines.
-    const tradeButtonsContainer = pumpBtn.parentElement;
-    if (tradeButtonsContainer) {
-        tradeButtonsContainer.className = "flex items-center gap-2 w-full min-w-[170px]";
-    }
-    pumpBtnEl.className = "flex-1 py-2 bg-green-600 hover:bg-green-500 text-white font-bold rounded text-xs font-mono transition";
-    dumpBtnEl.className = "flex-1 py-2 bg-red-600 hover:bg-red-500 text-white font-bold rounded text-xs font-mono transition";
+    // Keep the trade buttons big and even, matching the static markup
+    pumpBtnEl.className = "flex-1 py-3 bg-green-600 hover:bg-green-500 text-white font-bold rounded-lg text-sm font-mono transition";
+    dumpBtnEl.className = "flex-1 py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg text-sm font-mono transition";
 
     const panelHtml = `
-        <div id="wagerControlPanel" class="bg-[#10141D] border border-[#1A2232] rounded-lg p-3 mb-3 space-y-2">
+        <div id="wagerControlPanel" class="bg-[#10141D] border border-[#1A2232] rounded-lg p-3 space-y-2">
             <div class="flex items-center justify-between text-[11px]">
                 <span class="text-gray-400 uppercase font-semibold">Wager Amount</span>
                 <span id="wagerDisplay" class="text-amber-400 font-bold font-mono">$0.00</span>
@@ -277,8 +273,7 @@ function setupWagerControls() {
             <p class="text-[9px] text-gray-500 leading-snug">Pick a wager before you can Pump or Dump. 1% chance of getting RUGGED (wager + 10% of wallet). 0.01% chance of a total DRAIN.</p>
         </div>`;
 
-    const anchor = pumpBtn.closest('div') || pumpBtn.parentElement || pumpBtn;
-    anchor.insertAdjacentHTML('beforebegin', panelHtml);
+    anchor.insertAdjacentHTML('beforeend', panelHtml);
 
     syncWagerUI();
 }
@@ -340,7 +335,7 @@ function syncWagerUI() {
 function updateTradeButtonsUI() {
     if (!pumpBtnEl || !dumpBtnEl) return;
     pumpBtnEl.innerHTML = `🚨 PANIC SELL`;
-    pumpBtnEl.className = "flex-1 py-2 bg-rose-700 hover:bg-rose-600 text-white font-extrabold rounded text-xs text-center cursor-pointer transition animate-pulse";
+    pumpBtnEl.className = "flex-1 py-3 bg-rose-700 hover:bg-rose-600 text-white font-extrabold rounded-lg text-sm text-center cursor-pointer transition animate-pulse";
     pumpBtnEl.setAttribute("onclick", "closePosition()");
     dumpBtnEl.classList.add('hidden');
 }
@@ -348,12 +343,12 @@ function updateTradeButtonsUI() {
 function resetTradeButtonsUI() {
     if (!pumpBtnEl || !dumpBtnEl) return;
     pumpBtnEl.innerHTML = `📈 PUMP IT`;
-    pumpBtnEl.className = "flex-1 py-2 bg-green-600 hover:bg-green-500 text-white font-bold rounded text-xs font-mono transition";
+    pumpBtnEl.className = "flex-1 py-3 bg-green-600 hover:bg-green-500 text-white font-bold rounded-lg text-sm font-mono transition";
     pumpBtnEl.setAttribute("onclick", "forcePump()");
 
     dumpBtnEl.classList.remove('hidden');
     dumpBtnEl.innerHTML = `📉 DUMP IT`;
-    dumpBtnEl.className = "flex-1 py-2 bg-red-600 hover:bg-red-500 text-white font-bold rounded text-xs font-mono transition";
+    dumpBtnEl.className = "flex-1 py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg text-sm font-mono transition";
     dumpBtnEl.setAttribute("onclick", "forceDump()");
 }
 
