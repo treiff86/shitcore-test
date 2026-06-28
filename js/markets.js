@@ -48,6 +48,7 @@ function randomFrom(arr) {
 
 function initMarkets() {
     setupWagerControls();
+    setupMevButton();
     setInterval(updateMarketTick, 1000);
 }
 
@@ -487,4 +488,127 @@ function pushChainLog(tag, text, colorClass) {
 function generateChainLog() {
     const t = randomFrom(CHAIN_LOG_TEMPLATES);
     pushChainLog(t.tag, t.text(), t.color);
+}
+
+/* ============================================================
+   LEVEL 3: MEV SANDWICH (formerly the dead "Frontrun The Mempool" button)
+   Always-on skim with a short cooldown. Heat ALWAYS goes up,
+   no matter which of the three outcomes below fires.
+   ============================================================ */
+
+const MEV_COOLDOWN_MS = 12000;
+let mevCooldownActive = false;
+
+const FAKE_WHALE_NAMES = [
+    'a wallet that owns more leveraged BTC than is medically advisable',
+    "a guy whose entire bio is just 'orange coin good'",
+    'a self-proclaimed crypto prophet with a blue checkmark and zero humility',
+    'an exchange founder who definitely reads his own subpoenas for fun',
+    'a wallet linked to someone who only tweets in all caps about Bitcoin',
+    "a hedge fund manager who refers to his followers as 'the army'",
+];
+
+const MEV_SANDWICH_LINES = [
+    (cash) => `Your bot sandwiched 3 community swaps in one block, skimming $${cash}. Mayo optional.`,
+    (cash) => `MEV bot front-ran, back-ran, and middle-ran a single transaction. Extracted $${cash}. Galaxy brain.`,
+    (cash) => `Sandwich executed: buy before, sell after, regret never. +$${cash}.`,
+    (cash) => `Your bot inserted itself into someone's swap like an uninvited guest at dinner. +$${cash}.`,
+    (cash) => `Gas war won. Sandwich assembled. $${cash} extracted from your own community, lettuce wept.`,
+    (cash) => `Bot sniped the slippage tolerance of a wallet that trusted you. +$${cash}.`,
+];
+
+const MEV_NOTICED_LINES = [
+    (cash) => `🚨 Your bot accidentally sandwiched ${randomFrom(FAKE_WHALE_NAMES)}. Extracted $${cash} before anyone noticed. Then everyone noticed.`,
+    (cash) => `🚨 Turns out that swap belonged to ${randomFrom(FAKE_WHALE_NAMES)}. $${cash} richer, several subpoenas poorer.`,
+    (cash) => `🚨 Sandwiched ${randomFrom(FAKE_WHALE_NAMES)} by accident. $${cash} extracted. Screenshots are already circulating.`,
+];
+
+const MEV_COUNTER_LINES = [
+    (loss) => `Plot twist: a BIGGER bot sandwiched YOUR sandwich bot. Lost $${loss}. The food chain is real.`,
+    (loss) => `Your sandwich bot got front-run by a sandwich bot's sandwich bot. -$${loss}. Inception fee.`,
+    (loss) => `A rival MEV bot ate your lunch — literally your sandwich trade. -$${loss}.`,
+    (loss) => `You tried to sandwich the mempool. The mempool sandwiched back. -$${loss}.`,
+];
+
+function setupMevButton() {
+    const btn = document.getElementById('mevFrontrunBtn');
+    if (!btn) {
+        setTimeout(setupMevButton, 200); // DOM not ready yet, retry shortly
+        return;
+    }
+    btn.innerHTML = '🥪 MEV SANDWICH';
+    btn.onclick = runMevSandwich;
+}
+
+function runMevSandwich() {
+    if (mevCooldownActive) return;
+    if ((state.degenLevel || 1) < 3) {
+        showToast("Reach Level 3: The Shadow Validator to unlock this.", "error");
+        return;
+    }
+
+    // Heat always goes up, regardless of which outcome fires below
+    let heatGain = 5 + Math.random() * 4; // 5-9%
+
+    const roll = Math.random();
+    if (roll < 0.01) {
+        // 1% — noticed: rare bonus, but a much bigger Heat spike on top
+        const baseCash = 100 + Math.random() * 900;
+        const bonus = 5000;
+        const total = baseCash + bonus;
+        heatGain += 15 + Math.random() * 10; // +15 to +25 extra
+
+        addCash(total);
+        playSound('lambo');
+        showToast(`🚨 CAUGHT ON CHAIN! +$${total.toFixed(2)} payout, but Heat spiked hard.`, "success");
+        pushChainLog('MEV', randomFrom(MEV_NOTICED_LINES)(total.toFixed(2)), 'text-fuchsia-400 font-extrabold');
+    } else if (roll < 0.01 + 0.10) {
+        // 10% — counter-sandwiched: lose money instead of gaining it
+        const loss = 100 + Math.random() * 900;
+        state.cash = Math.max(0, state.cash - loss);
+
+        playSound('rug');
+        showToast(`🥪 Got sandwiched back! Lost $${loss.toFixed(2)}.`, "error");
+        pushChainLog('MEV', randomFrom(MEV_COUNTER_LINES)(loss.toFixed(2)), 'text-purple-400');
+    } else {
+        // ~89% — the normal guaranteed skim
+        const cash = 100 + Math.random() * 900;
+        addCash(cash);
+
+        playSound('buy');
+        showToast(`🥪 MEV Sandwich executed. +$${cash.toFixed(2)}, Heat +${heatGain.toFixed(1)}%.`, "success");
+        pushChainLog('MEV', randomFrom(MEV_SANDWICH_LINES)(cash.toFixed(2)), 'text-purple-400');
+    }
+
+    state.globalHeat = Math.min(100, state.globalHeat + heatGain);
+    updateUI();
+    startMevCooldown();
+}
+
+function startMevCooldown() {
+    mevCooldownActive = true;
+    const btn = document.getElementById('mevFrontrunBtn');
+    if (!btn) {
+        setTimeout(() => { mevCooldownActive = false; }, MEV_COOLDOWN_MS);
+        return;
+    }
+
+    const original = btn.innerHTML;
+    let secondsLeft = Math.ceil(MEV_COOLDOWN_MS / 1000);
+    btn.disabled = true;
+    btn.classList.add('opacity-50', 'cursor-not-allowed');
+    btn.innerText = `Cooling down (${secondsLeft}s)...`;
+
+    const interval = setInterval(() => {
+        secondsLeft--;
+        if (secondsLeft <= 0) {
+            clearInterval(interval);
+            btn.disabled = false;
+            btn.classList.remove('opacity-50', 'cursor-not-allowed');
+            btn.innerHTML = original;
+            mevCooldownActive = false;
+        } else {
+            btn.innerText = `Cooling down (${secondsLeft}s)...`;
+        }
+    }, 1000);
 }
