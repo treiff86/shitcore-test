@@ -29,7 +29,7 @@
                 <div>
                     <div class="flex items-center space-x-2">
                         <span class="text-white font-extrabold text-base md:text-lg uppercase flex items-center gap-1.5">
-                            USDSHT <span class="text-[10px] bg-[#1B2130] text-amber-500 px-1.5 py-0.5 rounded font-bold normal-case">Layer 1 Tycoon ▾</span>
+                            USDSHT <span class="text-[10px] bg-[#1B2130] text-amber-500 px-1.5 py-0.5 rounded font-bold normal-case">Layer 1 Shitcoin Tycoon ▾</span>
                         </span>
                     </div>
                     <div id="levelBadge" class="text-[11px] text-amber-400 font-mono mt-0.5">LVL 1 — The Basement Dev</div>
@@ -62,10 +62,10 @@
     <nav class="bg-[#070A0F] border-b border-[#121721] sticky top-[70px] z-40 shadow-sm">
         <div class="max-w-7xl mx-auto px-4 flex space-x-5 overflow-x-auto">
             <button onclick="switchTab('markets')" id="tab-markets" class="py-3 text-sm font-medium border-b-2 border-blue-500 text-white whitespace-nowrap transition-all">
-                Markets
+                Markets 📊
             </button>
             <button onclick="switchTab('ai')" id="tab-ai" class="py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-white whitespace-nowrap flex items-center gap-1.5 transition-all">
-                AI Solidity Auditor <span class="bg-[#1C212E] text-[9px] text-blue-400 px-1.5 py-0.5 rounded font-bold">LOCAL</span>
+                AI Solidity Auditor 🤖 <span class="bg-[#1C212E] text-[9px] text-blue-400 px-1.5 py-0.5 rounded font-bold">LOCAL</span>
             </button>
             <button onclick="switchTab('deployer')" id="tab-deployer" class="py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-white whitespace-nowrap flex items-center gap-1.5 transition-all">
                 Rug Creator <i class="fa-solid fa-rocket text-xs text-amber-500 animate-pulse"></i>
@@ -76,9 +76,10 @@
             <!-- NEW MEMPOOL TAB BUTTON -->
             <button onclick="switchTab('mempool')" id="tab-mempool" class="py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-white whitespace-nowrap flex items-center gap-1.5 transition-all">
                 Mempool Roulette <i class="fa-solid fa-dice text-xs text-cyan-400 animate-pulse"></i>
+                <span class="bg-rose-500/20 text-rose-400 text-[8px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wide">Soon</span>
             </button>
             <button onclick="switchTab('info')" id="tab-info" class="py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-white whitespace-nowrap transition-all">
-                Lore / How to Play
+                How to Play 📖
             </button>
         </div>
     </nav>
@@ -115,14 +116,18 @@
                     </div>
                     <div class="bg-[#070A0F] p-4 rounded-lg border border-[#131924]">
                         <h4 class="text-amber-400 font-bold text-xs uppercase mb-1.5">2. Hype It</h4>
-                        <p>Higher Hype = faster capital inflow. Pay influencers, run campaigns, or buy a Telegram Bot perk to automate it.</p>
+                        <p>Higher Hype = faster capital inflow. Manually pay a TikTok influencer (90% it works, 10% he scams you), or buy the Telegram Bot perk to automate it passively.</p>
                     </div>
                     <div class="bg-[#070A0F] p-4 rounded-lg border border-[#131924]">
-                        <h4 class="text-amber-400 font-bold text-xs uppercase mb-1.5">3. Balance Greed vs. Heat</h4>
+                        <h4 class="text-amber-400 font-bold text-xs uppercase mb-1.5">3. Run A Campaign</h4>
+                        <p>2 Marketing Campaigns unlock at Level 2, 2 more at Level 4. Each one <strong class="text-white">permanently</strong> speeds up both capital inflow and Audit Threat growth for that deployment — and they stack if you run more than one.</p>
+                    </div>
+                    <div class="bg-[#070A0F] p-4 rounded-lg border border-[#131924]">
+                        <h4 class="text-amber-400 font-bold text-xs uppercase mb-1.5">4. Balance Greed vs. Heat</h4>
                         <p>Cranking the Toxicity Tax extracts cash faster but builds Audit Threat. Let it hit 100% and the feds show up — for that token AND your account-wide Regulatory Heat.</p>
                     </div>
-                    <div class="bg-[#070A0F] p-4 rounded-lg border border-[#131924]">
-                        <h4 class="text-amber-400 font-bold text-xs uppercase mb-1.5">4. Pull The Rug</h4>
+                    <div class="bg-[#070A0F] p-4 rounded-lg border border-[#131924] md:col-span-2">
+                        <h4 class="text-amber-400 font-bold text-xs uppercase mb-1.5">5. Pull The Rug</h4>
                         <p>Cash out before the meter explodes. Stolen liquidity becomes real wallet cash and pushes you toward your fake Lambo and the next Degen Level.</p>
                     </div>
                 </div>
@@ -142,6 +147,69 @@
                 </div>
             </div>
 
+            <!-- WAYS TO EARN -->
+            <div class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-6 shadow-lg">
+                <h3 class="text-white font-bold text-lg mb-4 flex items-center gap-2"><i class="fa-solid fa-sack-dollar text-emerald-400"></i> Ways To Earn Money</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-300 font-light leading-relaxed">
+                    <div class="bg-[#070A0F] p-4 rounded-lg border border-[#131924]">
+                        <h4 class="text-emerald-400 font-bold text-xs uppercase mb-1.5">Pull The Rug</h4>
+                        <p>Rug Creator's main loop. Whatever's sitting in the pool when you exit-scam goes straight into your wallet.</p>
+                    </div>
+                    <div class="bg-[#070A0F] p-4 rounded-lg border border-[#131924]">
+                        <h4 class="text-emerald-400 font-bold text-xs uppercase mb-1.5">Leveraged Wagers</h4>
+                        <p>Markets tab: pick a wager and a leverage tier (25x-100x), then Pump or Dump. Higher leverage means bigger swings — and a bigger chance of an instant bust.</p>
+                    </div>
+                    <div class="bg-[#070A0F] p-4 rounded-lg border border-[#131924]">
+                        <h4 class="text-emerald-400 font-bold text-xs uppercase mb-1.5">MEV Sandwich</h4>
+                        <p>Unlocked at Level 3. An always-on skim with a short cooldown — guaranteed cash almost every time, but it always costs you Regulatory Heat too.</p>
+                    </div>
+                    <div class="bg-[#070A0F] p-4 rounded-lg border border-[#131924]">
+                        <h4 class="text-emerald-400 font-bold text-xs uppercase mb-1.5">Ponzi Yield Pools</h4>
+                        <p>Stake cash into a pool, then Harvest the yield or Withdraw your principal back out any time. Both hit your wallet directly — they don't count toward your Lambo goal.</p>
+                    </div>
+                    <div class="bg-[#070A0F] p-4 rounded-lg border border-[#131924]">
+                        <h4 class="text-emerald-400 font-bold text-xs uppercase mb-1.5">AI Auditor Jackpot</h4>
+                        <p>Paste 50+ characters with real variety (no key-mashing) and hit Compile. 1% chance the liquidity comes back "100% UNLOCKED" — hit DRAIN for a free $1,000-$10,000.</p>
+                    </div>
+                    <div class="bg-[#070A0F] p-4 rounded-lg border border-[#131924]">
+                        <h4 class="text-emerald-400 font-bold text-xs uppercase mb-1.5">🍀 Hidden: Binance Pump &amp; Dump</h4>
+                        <p>Deploy a token under any name other than the default and there's a 1% chance a "real exchange listing bot" notices it — an instant $10,000 toward your Lambo goal.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- REGULATORY HEAT -->
+            <div class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-6 shadow-lg">
+                <h3 class="text-white font-bold text-lg mb-2 flex items-center gap-2"><i class="fa-solid fa-temperature-high text-amber-400"></i> Regulatory Heat</h3>
+                <p class="text-sm text-gray-300 font-light leading-relaxed mb-4">Heat is account-wide and separate from any single token's Audit Threat. Hit 100% and it's instant game over — every asset you have gets seized.</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-300 font-light leading-relaxed">
+                    <div class="bg-[#070A0F] p-4 rounded-lg border border-rose-900/40">
+                        <h4 class="text-rose-400 font-bold text-xs uppercase mb-1.5">What raises it</h4>
+                        <p>A token getting seized for hitting 100% Audit Threat, pulling the rug on a high-Toxicity-Tax token, or running an MEV Sandwich (it always costs Heat, every single time).</p>
+                    </div>
+                    <div class="bg-[#070A0F] p-4 rounded-lg border border-emerald-900/40">
+                        <h4 class="text-emerald-400 font-bold text-xs uppercase mb-1.5">What lowers it</h4>
+                        <p>Only one thing: running the AI Solidity Auditor. Every successful compile chips 4-10% off Heat — but that's no longer free, see The Risks below.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- THE RISKS -->
+            <div class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-6 shadow-lg">
+                <h3 class="text-white font-bold text-lg mb-2 flex items-center gap-2"><i class="fa-solid fa-skull-crossbones text-rose-500"></i> The Risks</h3>
+                <p class="text-sm text-gray-300 font-light leading-relaxed mb-4">Almost every button in this game has a small chance of going badly — much like real degen life. Here's everywhere that can bite you:</p>
+                <ul class="space-y-2.5 text-sm text-gray-300 font-light leading-relaxed list-disc list-inside marker:text-rose-500">
+                    <li><strong class="text-white">Deploying a token:</strong> 0.01% chance the act of deploying itself drains your whole wallet.</li>
+                    <li><strong class="text-white">Paying a TikTok influencer:</strong> 10% chance he takes your $50 and hacks an extra 10%-50% of whatever's left.</li>
+                    <li><strong class="text-white">Quantum Audit:</strong> a rare, instant seizure of your active deployment that can strike at any moment, regardless of your Audit Threat.</li>
+                    <li><strong class="text-white">Placing a Markets wager:</strong> 1% chance of getting RUGGED (wager + 10% of wallet), 0.01% chance of a total DRAIN, plus a leverage-scaled instant bust chance (13%/25%/38%/50% for 25x/50x/75x/100x).</li>
+                    <li><strong class="text-white">Running an MEV Sandwich:</strong> 10% chance you get sandwiched right back and lose money instead of gaining it.</li>
+                    <li><strong class="text-white">Compiling in the AI Auditor:</strong> 0.01% chance of a full wallet wipe, plus a 10% chance it docks 10% of your wallet and a 0.01% chance it docks 35% — every single time you reduce Heat.</li>
+                    <li><strong class="text-white">Harvesting Ponzi Yield rewards:</strong> 15% chance a "Protocol Exploit" liquidates 100% of your staked principal.</li>
+                    <li><strong class="text-white">Withdrawing Ponzi Yield principal:</strong> 0.01% chance it gets rugged on the way out.</li>
+                </ul>
+                <p class="text-xs text-gray-500 font-light mt-4">Every "DRAINED" outcome above resets your wallet to $0. Your Degen Level and lifetime earnings stay put — you just have to claw your way back up.</p>
+            </div>
             <div class="bg-[#1C0D0D] border border-[#441818] rounded-xl p-5 flex items-start space-x-3 shadow-md">
                 <i class="fa-solid fa-triangle-exclamation text-rose-500 text-lg mt-0.5"></i>
                 <div>
@@ -469,6 +537,13 @@
 
         <!-- ================= MEMPOOL ROULETTE TAB ================= -->
         <section id="content-mempool" class="hidden space-y-6">
+            <div class="relative">
+                <div class="absolute inset-0 z-20 bg-black/70 backdrop-blur-sm rounded-xl flex items-center justify-center pointer-events-auto">
+                    <span class="text-3xl md:text-5xl font-black uppercase text-rose-500 border-4 border-rose-500 px-6 py-3 rounded-lg -rotate-6 shadow-2xl tracking-widest" style="text-shadow: 0 0 20px rgba(244,63,94,0.6);">
+                        Coming Soon
+                    </span>
+                </div>
+                <div class="pointer-events-none opacity-50 space-y-6">
             <!-- Header Metrics -->
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div class="bg-[#0b0f19] border border-cyan-500/30 p-4 rounded shadow-[0_0_15px_rgba(6,182,212,0.15)] text-center">
@@ -583,6 +658,8 @@
                 <div id="mempool-log-feed" class="text-xs space-y-1.5 max-h-32 overflow-y-auto pr-2 text-slate-400">
                     <div class="border-b border-slate-900 pb-1"><span class="text-slate-500">[02:14:11]</span> Block #910,250 → Mined by <span class="text-amber-400 font-bold">[AntPool]</span> → Global Pot: 180k $ALK → <span class="text-emerald-400 font-bold">Paid out to winners!</span></div>
                     <div class="border-b border-slate-900 pb-1"><span class="text-slate-500">[02:01:45]</span> Block #910,249 → Mined by <span class="text-cyan-400 font-bold">[Foundry USA]</span> → Global Pot: 95k $ALK → <span class="text-emerald-400 font-bold">Paid out to winners!</span></div>
+                </div>
+            </div>
                 </div>
             </div>
         </section>
