@@ -4,7 +4,7 @@
 
 function switchTab(tabId) {
     playSound('click');
-    const tabs = ['markets', 'ai', 'deployer', 'staking', 'info'];
+    const tabs = ['markets', 'ai', 'deployer', 'staking', 'mempool', 'info'];
     tabs.forEach(t => {
         const contentEl = document.getElementById(`content-${t}`);
         const tabEl = document.getElementById(`tab-${t}`);
