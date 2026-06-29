@@ -44,6 +44,7 @@ const EARNINGS_PENALTY_MINOR_CHANCE = 0.10;    // 10% — docks 10%
 const EARNINGS_PENALTY_MINOR_PCT = 0.10;
 
 let compileOnCooldown = false;
+let lastCompiledCode = null;
 
 /* ---- flavor pools ---- */
 
@@ -147,9 +148,14 @@ function auditContract() {
         showToast(validationError, "error");
         return;
     }
+    if (rawCode === lastCompiledCode) {
+        showToast("Change the code before compiling again — no resubmitting the exact same input.", "error");
+        return;
+    }
 
     playSound('click');
     const isTemplate = isExactTemplateMatch(rawCode);
+    lastCompiledCode = rawCode;
 
     const container = document.getElementById('auditResults');
     container.classList.remove('hidden');
