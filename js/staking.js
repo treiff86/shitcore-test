@@ -230,6 +230,9 @@ function harvestRewards() {
     state.unclaimedRewards = 0;
     state.cash += harvested; // wallet cash only — does not count toward lifetimeEarned/Lambo
 
+    const unclaimedEl = document.getElementById('unclaimedShitcoins');
+    if (unclaimedEl) unclaimedEl.innerText = "0.0000";
+
     showToast(`🌾 Harvested +$${harvested.toFixed(2)} in generated yield derivatives!`, "success");
     pushYieldLog('HARVEST', randomFromYield(STAKE_HARVEST_LINES)(harvested.toFixed(2)), 'text-emerald-400');
     playSound('buy');
