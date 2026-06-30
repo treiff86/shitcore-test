@@ -44,30 +44,80 @@ const STAKE_DEPOSIT_LINES = [
     (amt, pool) => `You deposited $${amt} into ${pool}. The pool says "thank you for your sacrifice."`,
     (amt, pool) => `$${amt} locked into ${pool}. Definitely not a pyramid scheme (it is).`,
     (amt, pool) => `Fresh $${amt} liquidity added to ${pool}. Somewhere, an early depositor smiles.`,
+    (amt, pool) => `$${amt} just entered ${pool}. The smart contract says "more."`,
+    (amt, pool) => `You handed ${pool} $${amt}. The pool doesn't say thank you. It never does.`,
+    (amt, pool) => `$${amt} deposited into ${pool}. Your wallet cries, your hopium soars.`,
+    (amt, pool) => `${pool} received $${amt}. APY is not a promise. APY is a suggestion.`,
+    (amt, pool) => `$${amt} successfully laundered into ${pool}. Totally normal financial activity.`,
+    (amt, pool) => `You deposited $${amt}. The whitepaper said this was "risk-free." The whitepaper lied.`,
+    (amt, pool) => `$${amt} into ${pool}. The dev's rent is covered for another month.`,
+    (amt, pool) => `You voluntarily gave ${pool} $${amt}. No refunds. Also no audit. Also no team.`,
+    (amt, pool) => `${pool} is now holding $${amt} of yours. "Holding" is doing a lot of work in that sentence.`,
+    (amt, pool) => `$${amt} entered the ${pool} vault. The vault has very thin walls.`,
+    (amt, pool) => `Deposited $${amt} into ${pool}. The router said "confirmed." The dev said "nice."`,
+    (amt, pool) => `You are now staking $${amt} in ${pool}. This is either genius or a cautionary tale.`,
 ];
 
 const STAKE_WITHDRAW_LINES = [
     (amt, pool) => `You pulled $${amt} out of ${pool} clean. Smart move, or a lucky one.`,
     (amt, pool) => `$${amt} successfully extracted from ${pool} before anyone noticed.`,
     (amt, pool) => `Principal of $${amt} returned from ${pool}. The vault sheds a single tear.`,
+    (amt, pool) => `$${amt} back in your wallet. ${pool} has trust issues now.`,
+    (amt, pool) => `Clean exit: $${amt} from ${pool}. Congratulations on your continued existence.`,
+    (amt, pool) => `You withdrew $${amt}. The Discord mod called it "fud." You called it "financial sanity."`,
+    (amt, pool) => `$${amt} pulled from ${pool}. Somewhere a bagholder is being told to "zoom out."`,
+    (amt, pool) => `Withdrawal complete: $${amt}. ${pool} remains. Your survival instincts are intact.`,
+    (amt, pool) => `$${amt} extracted from ${pool} without incident. An increasingly rare outcome.`,
+    (amt, pool) => `You took $${amt} back from ${pool}. Paper hands? More like "hands attached to a functioning brain."`,
+    (amt, pool) => `$${amt} landed safely. ${pool} waves goodbye. The wave looks suspicious.`,
+    (amt, pool) => `Funds returned: $${amt}. The Telegram group is calling you a traitor. You don't care.`,
+    (amt, pool) => `$${amt} out of ${pool}. Profit? Maybe. Alive? Yes. That's something.`,
+    (amt, pool) => `Your $${amt} principal is home. ${pool} has already found a replacement.`,
+    (amt, pool) => `$${amt} withdrawal processed. The protocol logged it as "unexpected user rationality."`,
 ];
 
 const STAKE_WITHDRAW_RUGGED_LINES = [
     (amt) => `Your withdrawal request for $${amt} got "processed" by a contract that no longer exists.... DRAIN.`,
     (amt) => `The withdrawal queue was actually just a funnel to the dev wallet. $${amt} gone.`,
     (amt) => `A "routine maintenance" event ate your $${amt} withdrawal mid-transaction. Routine, apparently.`,
+    (amt) => `$${amt} withdrawal initiated... routed to offshore mixer... marked as complete. It was not complete.`,
+    (amt) => `The "emergency timelock" activated during your $${amt} withdrawal. Permanently.`,
+    (amt) => `Your $${amt} triggered an "anti-bot protection" clause on the way out. You were not a bot.`,
+    (amt) => `Withdrawal of $${amt} failed with error code 0x5C4M. Dev is "looking into it."`,
+    (amt) => `$${amt} withdrawal entered the queue. The queue had exactly one exit: the dev's Coinbase.`,
+    (amt) => `An MEV bot front-ran your $${amt} withdrawal with a better withdrawal. Yours was cancelled.`,
+    (amt) => `The protocol detected your $${amt} and reclassified it as "protocol-owned liquidity." Goodbye.`,
 ];
 
 const STAKE_HARVEST_LINES = [
     (amt) => `You harvested $${amt} in yield. The printer go brrr, briefly.`,
     (amt) => `$${amt} in "generated yield derivatives" successfully laundered into your wallet.`,
     (amt) => `$${amt} claimed. Definitely real money, not just numbers going up.`,
+    (amt) => `Harvest complete: $${amt}. The APY was real for exactly this long.`,
+    (amt) => `$${amt} harvested. The pool is slightly less ponzi-shaped than a moment ago.`,
+    (amt) => `You claimed $${amt}. Technically "yield." Technically "printed from nothing." Both true.`,
+    (amt) => `Yield harvested: $${amt}. The math didn't add up but the button worked.`,
+    (amt) => `$${amt} successfully extracted from the yield module. Spend it before the protocol reconsiders.`,
+    (amt) => `Rewards claimed: $${amt}. Origin of funds: vibes. Destination: your wallet.`,
+    (amt) => `$${amt} harvested from the void. Economics professors across the world felt something.`,
+    (amt) => `You pressed harvest. $${amt} appeared. No one is entirely sure why, but here we are.`,
+    (amt) => `Harvest: $${amt}. That's the power of 42069% APY, baby. Sustainable? No. Delicious? Yes.`,
+    (amt) => `$${amt} collected from the yield trap. The trap remains set for the next person.`,
+    (amt) => `Rewards unlocked: $${amt}. The protocol's accountant filed a complaint. No one read it.`,
+    (amt) => `$${amt} harvested clean. The early depositor in you would be proud.`,
 ];
 
 const STAKE_EXPLOIT_LINES = [
     `Flash loan structural liquidation drained your principal.... DRAIN.`,
     `An anonymous dev forked the vault mid-harvest, removed the withdraw function, and vanished. Classic.`,
     `The audit said "low risk." The audit was written by the dev. Principal: gone.`,
+    `A governance vote passed while you were sleeping: "transfer all funds to treasury." You weren't on the committee.`,
+    `The "insurance fund" that was supposed to cover this? It was also in this pool.`,
+    `Someone found a reentrancy bug and found it before you found your money.`,
+    `A 0-day exploit in the reward-distribution function redistributed your funds to the explorer.`,
+    `The protocol "upgraded" mid-harvest. The new version doesn't have a withdrawal function. Noted.`,
+    `A flash loan attack drained the pool in 3 transactions. Transaction 1 was your harvest request.`,
+    `The multisig wallet executed a "strategic reallocation." You were not a signer.`,
 ];
 
 const AMBIENT_YIELD_TEMPLATES = [
