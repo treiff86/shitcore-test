@@ -1,244 +1,189 @@
 /* ============================================================
    PONZI POOLS & LIQUIDATION ALGORITHMS
-   ============================================================
-   New in this version:
-   - Blackhole Liquidity Devourer APY bumped to 42069%.
-   - Withdrawing principal now carries a tiny 0.01% rug risk,
-     same severity tier as every other "you're starting over"
-     event elsewhere in the game.
-   - Live Yield Logs is now actually alive: an ambient ticker
-     posts fake third-party deposits/withdrawals/harvests/drains
-     constantly (same energy as the Markets chain feed), PLUS
-     real reactive lines whenever the player deposits, withdraws,
-     or harvests.
-   - Harvesting and withdrawing both still add straight to
-     wallet cash only — neither counts toward lifetimeEarned.
    ============================================================ */
 
 const POOLS = [
-    { id: 'toilet', name: "Porcelain Yield Slip", apy: 420 },
-    { id: 'nuclear', name: "Plutonium Compound Core", apy: 6900 },
-    { id: 'singularity', name: "Blackhole Liquidity Devourer", apy: 42069 }
+    { id: 'toilet',      name: "Porcelain Yield Slip",          apy: 420    },
+    { id: 'nuclear',     name: "Plutonium Compound Core",        apy: 6900   },
+    { id: 'singularity', name: "Blackhole Liquidity Devourer",   apy: 42069  }
 ];
 
-const WITHDRAW_RUG_CHANCE = 0.0001; // 0.01%
-const AMBIENT_YIELD_LOG_INTERVAL_MS = 1800;
+const WITHDRAW_RUG_CHANCE         = 0.0001;  // 0.01%
+const AMBIENT_YIELD_LOG_INTERVAL  = 1800;    // ms
+let   ambientYieldTimer           = null;    // guard against double-start
 
-/* ---- small, self-contained helpers (duplicated on purpose so this
-   file never depends on markets.js having loaded first) ---- */
-
-function randomFromYield(arr) {
-    return arr[Math.floor(Math.random() * arr.length)];
-}
+/* ---- helpers ---- */
+function randomFromYield(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 function randomYieldWallet() {
-    const hex = '0123456789abcdef';
+    const h = '0123456789abcdef';
     let s = '0x';
-    for (let i = 0; i < 4; i++) s += hex[Math.floor(Math.random() * 16)];
+    for (let i = 0; i < 4; i++) s += h[Math.floor(Math.random() * 16)];
     return s + '...' + Math.floor(Math.random() * 900 + 100);
 }
 function randomYieldAmt() { return (Math.random() * 9000 + 50).toFixed(2); }
 
-/* ---- flavor pools ---- */
+function getStakedAmount()    { return parseFloat(state.stakedAmount)    || 0; }
+function getUnclaimedRewards(){ return parseFloat(state.unclaimedRewards)|| 0; }
+
+/* ============================================================
+   FLAVOR POOLS
+   ============================================================ */
 
 const STAKE_DEPOSIT_LINES = [
-    (amt, pool) => `You deposited $${amt} into ${pool}. The pool says "thank you for your sacrifice."`,
-    (amt, pool) => `$${amt} locked into ${pool}. Definitely not a pyramid scheme (it is).`,
-    (amt, pool) => `Fresh $${amt} liquidity added to ${pool}. Somewhere, an early depositor smiles.`,
-    (amt, pool) => `$${amt} just entered ${pool}. The smart contract says "more."`,
-    (amt, pool) => `You handed ${pool} $${amt}. The pool doesn't say thank you. It never does.`,
-    (amt, pool) => `$${amt} deposited into ${pool}. Your wallet cries, your hopium soars.`,
-    (amt, pool) => `${pool} received $${amt}. APY is not a promise. APY is a suggestion.`,
-    (amt, pool) => `$${amt} successfully laundered into ${pool}. Totally normal financial activity.`,
-    (amt, pool) => `You deposited $${amt}. The whitepaper said this was "risk-free." The whitepaper lied.`,
-    (amt, pool) => `$${amt} into ${pool}. The dev's rent is covered for another month.`,
-    (amt, pool) => `You voluntarily gave ${pool} $${amt}. No refunds. Also no audit. Also no team.`,
-    (amt, pool) => `${pool} is now holding $${amt} of yours. "Holding" is doing a lot of work in that sentence.`,
-    (amt, pool) => `$${amt} entered the ${pool} vault. The vault has very thin walls.`,
-    (amt, pool) => `Deposited $${amt} into ${pool}. The router said "confirmed." The dev said "nice."`,
-    (amt, pool) => `You are now staking $${amt} in ${pool}. This is either genius or a cautionary tale.`,
-    (amt, pool) => `You committed $${amt} to ${pool}. The smart contract committed to nothing in return.`,
-    (amt, pool) => `$${amt} added to ${pool}. The TVL chart goes up. So does the dev's confidence.`,
-    (amt, pool) => `Deposit confirmed: $${amt} into ${pool}. The lockup period was mentioned. You didn't read it.`,
-    (amt, pool) => `$${amt} flows into ${pool}. Somewhere, a smart contract giggles.`,
-    (amt, pool) => `You staked $${amt} in ${pool}. The vault's TVL graph now has a small, hopeful bump.`,
-    (amt, pool) => `${pool} absorbed $${amt} like it was nothing. To the protocol, it was nothing.`,
-    (amt, pool) => `$${amt} deposited. ${pool}'s smart contract has 0 comments and 1 owner-only function. Cool.`,
-    (amt, pool) => `You sent $${amt} to ${pool}. The blockchain says "transaction confirmed." Your gut says "uh oh."`,
-    (amt, pool) => `${pool} now has your $${amt}. You now have a number on a screen that goes up sometimes.`,
-    (amt, pool) => `$${amt} into ${pool}. The yield farm just got a little more fertile, or a little more cursed.`,
-    (amt, pool) => `You committed $${amt} of life savings (or lunch money) to ${pool}. Either way, brave.`,
-    (amt, pool) => `${pool} accepted your $${amt} without so much as a receipt. Trust the process.`,
-    (amt, pool) => `$${amt} deposited into ${pool}. Risk disclosure: there was no risk disclosure.`,
-    (amt, pool) => `You're in. $${amt} locked into ${pool}. The exit door is theoretical.`,
-    (amt, pool) => `${pool} just got $${amt} richer. You just got $${amt} more invested in a number going up.`,
-    (amt, pool) => `$${amt} staked. ${pool}'s tokenomics PDF has a typo in the word "tokenomics."`,
-    (amt, pool) => `You deposited $${amt} into ${pool}. The dev's Lambo fund says thank you.`,
-    (amt, pool) => `${pool} swallowed $${amt} whole. It has done this before. It will do this again.`,
-    (amt, pool) => `$${amt} added to ${pool}. The smart contract was audited by a Discord bot named "AuditBot9000."`,
-    (amt, pool) => `Deposit successful: $${amt}. ${pool} promises returns. ${pool} does not promise anything else.`,
-    (amt, pool) => `$${amt} entered ${pool}. The vault's only security feature is optimism.`,
-    (amt, pool) => `You gave ${pool} $${amt} on the strength of a Telegram sticker pack alone.`,
-    (amt, pool) => `${pool} received $${amt}. The smart contract's only test was "does it deploy." It deployed.`,
-    (amt, pool) => `$${amt} into ${pool}. Somewhere, an APY counter just got a little more unhinged.`,
-    (amt, pool) => `You staked $${amt}. ${pool}'s roadmap is a single PNG with a rocket on it.`,
-    (amt, pool) => `${pool} now holds $${amt} more of other people's money, which is the entire business model.`,
-    (amt, pool) => `$${amt} deposited. The "team" behind ${pool} is one guy and a logo he made in Canva.`,
-    (amt, pool) => `You committed $${amt} to ${pool}, a decision your future self will have feelings about.`,
-    (amt, pool) => `${pool} accepted $${amt}. No KYC, no questions, no guarantees, no problem (probably).`,
-    (amt, pool) => `$${amt} added to the pile. ${pool}'s pile is now slightly more concerning.`,
-    (amt, pool) => `You deposited $${amt} into ${pool} based on a 280-character thread and a gut feeling.`,
-    (amt, pool) => `${pool} just locked in $${amt} of yours. The lock has no key. There was never a key.`,
-    (amt, pool) => `$${amt} staked. ${pool}'s smart contract source code is "coming soon," same as the audit.`,
-    (amt, pool) => `You sent ${pool} $${amt} and received a warm feeling and absolutely no other guarantees.`,
-    (amt, pool) => `${pool} grew by $${amt}. So did the gap between you and your money.`,
+    (a,p)=>`You deposited $${a} into ${p}. The pool says "thank you for your sacrifice."`,
+    (a,p)=>`$${a} locked into ${p}. Definitely not a pyramid scheme (it is).`,
+    (a,p)=>`Fresh $${a} liquidity added to ${p}. Somewhere, an early depositor smiles.`,
+    (a,p)=>`$${a} just entered ${p}. The smart contract says "more."`,
+    (a,p)=>`You handed ${p} $${a}. The pool doesn't say thank you. It never does.`,
+    (a,p)=>`$${a} deposited into ${p}. Your wallet cries, your hopium soars.`,
+    (a,p)=>`${p} received $${a}. APY is not a promise. APY is a suggestion.`,
+    (a,p)=>`$${a} successfully laundered into ${p}. Totally normal financial activity.`,
+    (a,p)=>`You deposited $${a}. The whitepaper said this was "risk-free." The whitepaper lied.`,
+    (a,p)=>`$${a} into ${p}. The dev's rent is covered for another month.`,
+    (a,p)=>`You voluntarily gave ${p} $${a}. No refunds. Also no audit. Also no team.`,
+    (a,p)=>`${p} is now holding $${a} of yours. "Holding" is doing a lot of work in that sentence.`,
+    (a,p)=>`$${a} entered the ${p} vault. The vault has very thin walls.`,
+    (a,p)=>`Deposited $${a} into ${p}. The router said "confirmed." The dev said "nice."`,
+    (a,p)=>`You are now staking $${a} in ${p}. This is either genius or a cautionary tale.`,
+    (a,p)=>`$${a} added to ${p}. The TVL chart goes up. So does the dev's confidence.`,
+    (a,p)=>`You committed $${a} to ${p}. The smart contract committed to nothing in return.`,
+    (a,p)=>`$${a} into ${p}. The dev's Lambo fund says thank you.`,
+    (a,p)=>`${p} swallowed $${a} whole. It has done this before. It will do this again.`,
+    (a,p)=>`$${a} added to ${p}. The smart contract was audited by a Discord bot named "AuditBot9000."`,
+    (a,p)=>`You sent ${p} $${a} and received a warm feeling and absolutely no other guarantees.`,
+    (a,p)=>`${p} just locked in $${a} of yours. The lock has no key. There was never a key.`,
+    (a,p)=>`$${a} staked. ${p}'s smart contract source code is "coming soon," same as the audit.`,
+    (a,p)=>`${p} absorbed $${a} like it was nothing. To the protocol, it was nothing.`,
+    (a,p)=>`$${a} into ${p}. Somewhere, an APY counter just got a little more unhinged.`,
+    (a,p)=>`${p} now holds $${a} more of other people's money, which is the entire business model.`,
+    (a,p)=>`You committed $${a} to ${p}, a decision your future self will have feelings about.`,
+    (a,p)=>`Deposit confirmed: $${a} into ${p}. The lockup period was mentioned. You didn't read it.`,
+    (a,p)=>`$${a} flows into ${p}. Somewhere, a smart contract giggles.`,
+    (a,p)=>`$${a} deposited. The "team" behind ${p} is one guy and a logo he made in Canva.`,
+    (a,p)=>`You gave ${p} $${a} on the strength of a Telegram sticker pack alone.`,
+    (a,p)=>`$${a} staked. ${p}'s roadmap is a single PNG with a rocket on it.`,
+    (a,p)=>`You sent ${p} $${a} without asking who controls the admin key. Bold.`,
+    (a,p)=>`${p} accepted $${a} without so much as a receipt. Trust the process.`,
+    (a,p)=>`$${a} deposited into ${p} based on a 280-character thread and a gut feeling.`,
 ];
 
 const STAKE_WITHDRAW_LINES = [
-    (amt, pool) => `You pulled $${amt} out of ${pool} clean. Smart move, or a lucky one.`,
-    (amt, pool) => `$${amt} successfully extracted from ${pool} before anyone noticed.`,
-    (amt, pool) => `Principal of $${amt} returned from ${pool}. The vault sheds a single tear.`,
-    (amt, pool) => `$${amt} back in your wallet. ${pool} has trust issues now.`,
-    (amt, pool) => `Clean exit: $${amt} from ${pool}. Congratulations on your continued existence.`,
-    (amt, pool) => `You withdrew $${amt}. The Discord mod called it "fud." You called it "financial sanity."`,
-    (amt, pool) => `$${amt} pulled from ${pool}. Somewhere a bagholder is being told to "zoom out."`,
-    (amt, pool) => `Withdrawal complete: $${amt}. ${pool} remains. Your survival instincts are intact.`,
-    (amt, pool) => `$${amt} extracted from ${pool} without incident. An increasingly rare outcome.`,
-    (amt, pool) => `You took $${amt} back from ${pool}. Paper hands? More like "hands attached to a functioning brain."`,
-    (amt, pool) => `$${amt} landed safely. ${pool} waves goodbye. The wave looks suspicious.`,
-    (amt, pool) => `Funds returned: $${amt}. The Telegram group is calling you a traitor. You don't care.`,
-    (amt, pool) => `$${amt} out of ${pool}. Profit? Maybe. Alive? Yes. That's something.`,
-    (amt, pool) => `Your $${amt} principal is home. ${pool} has already found a replacement.`,
-    (amt, pool) => `$${amt} withdrawal processed. The protocol logged it as "unexpected user rationality."`,
-    (amt, pool) => `$${amt} pulled from ${pool} with zero drama. A rare and beautiful thing.`,
-    (amt, pool) => `You requested $${amt} back from ${pool}. ${pool} actually complied. Shocking.`,
-    (amt, pool) => `$${amt} exited ${pool} safely. Somewhere, a risk manager would be proud, if this game had one.`,
-    (amt, pool) => `Withdrawal of $${amt} processed. ${pool} pretends not to be hurt by this.`,
-    (amt, pool) => `$${amt} is back where it belongs: your wallet, not someone else's yield farm.`,
-    (amt, pool) => `You cashed out $${amt} from ${pool}. The Discord will call this "weak hands." Ignore them.`,
-    (amt, pool) => `${pool} released $${amt} without a fight. The vault's PR team is relieved.`,
-    (amt, pool) => `$${amt} withdrawn. ${pool}'s TVL chart just took a small, personal hit.`,
-    (amt, pool) => `You got $${amt} out of ${pool} before the next "unexpected liquidity event."`,
-    (amt, pool) => `Principal recovered: $${amt}. ${pool} will simply find a new depositor. It always does.`,
-    (amt, pool) => `$${amt} pulled. ${pool} posts a tweet about "diamond hands" anyway. Ironic.`,
-    (amt, pool) => `You withdrew $${amt} from ${pool}. The exit liquidity gods smiled on you today.`,
-    (amt, pool) => `$${amt} is yours again. ${pool} keeps the lights on with the next sucker's deposit.`,
-    (amt, pool) => `Withdrawal complete: $${amt}. You read the contract once. You'll never do it again, but you read it.`,
-    (amt, pool) => `$${amt} successfully removed from ${pool}. The vault's "lock" was apparently more of a "suggestion."`,
-    (amt, pool) => `You took back $${amt}. ${pool} will absolutely still be advertising 6-figure APY tomorrow.`,
-    (amt, pool) => `$${amt} withdrawn clean. Future you sends a small thank-you note to present you.`,
-    (amt, pool) => `${pool} let go of $${amt}. It did not want to. It rarely does.`,
-    (amt, pool) => `$${amt} back in your wallet. ${pool}'s next victim is already filling out the deposit form.`,
-    (amt, pool) => `You extracted $${amt} from ${pool}. The smart contract logged it as "regrettable."`,
-    (amt, pool) => `$${amt} withdrawn. ${pool}'s APY number remains aggressively, suspiciously high.`,
-    (amt, pool) => `Funds out: $${amt}. ${pool} immediately runs a "limited time deposit bonus" to refill the bags.`,
-    (amt, pool) => `$${amt} pulled from ${pool}. No fireworks, no drama, just a clean exit. Cherish it.`,
-    (amt, pool) => `You withdrew $${amt}. ${pool} thanks you for your contribution to its liquidity, briefly.`,
-    (amt, pool) => `$${amt} is safely yours. ${pool} is already pitching the next depositor on "sustainable yield."`,
-    (amt, pool) => `Withdrawal successful: $${amt}. The vault's withdrawal button worked. Mark the date.`,
-    (amt, pool) => `$${amt} returned from ${pool}. The protocol's Twitter bio still says "rug-proof." It is not.`,
-    (amt, pool) => `You got $${amt} out before the music stopped. ${pool}'s chairs are running low.`,
-    (amt, pool) => `$${amt} withdrawn. ${pool} files this under "acceptable losses" and moves on.`,
-    (amt, pool) => `Principal of $${amt} secured. ${pool} will be just fine. It always finds new liquidity.`,
-    (amt, pool) => `$${amt} out clean. ${pool}'s next APY announcement is, somehow, even higher.`,
-    (amt, pool) => `You withdrew $${amt} from ${pool}. The vault's smart contract has no feelings, but if it did.`,
-    (amt, pool) => `$${amt} returned. ${pool} remains exactly as audited as before: not at all.`,
-    (amt, pool) => `Withdrawal of $${amt} confirmed. ${pool}'s Discord mods are already drafting the "don't panic" message for others.`,
-    (amt, pool) => `$${amt} back home. ${pool} keeps spinning, waiting for the next deposit to keep the lights on.`,
+    (a,p)=>`You pulled $${a} out of ${p} clean. Smart move, or a lucky one.`,
+    (a,p)=>`$${a} successfully extracted from ${p} before anyone noticed.`,
+    (a,p)=>`Principal of $${a} returned from ${p}. The vault sheds a single tear.`,
+    (a,p)=>`$${a} back in your wallet. ${p} has trust issues now.`,
+    (a,p)=>`Clean exit: $${a} from ${p}. Congratulations on your continued existence.`,
+    (a,p)=>`You withdrew $${a}. The Discord mod called it "fud." You called it "financial sanity."`,
+    (a,p)=>`$${a} pulled from ${p}. Somewhere a bagholder is being told to "zoom out."`,
+    (a,p)=>`Withdrawal complete: $${a}. ${p} remains. Your survival instincts are intact.`,
+    (a,p)=>`$${a} extracted from ${p} without incident. An increasingly rare outcome.`,
+    (a,p)=>`You took $${a} back from ${p}. Paper hands? More like "hands attached to a functioning brain."`,
+    (a,p)=>`$${a} landed safely. ${p} waves goodbye. The wave looks suspicious.`,
+    (a,p)=>`Funds returned: $${a}. The Telegram group is calling you a traitor. You don't care.`,
+    (a,p)=>`$${a} out of ${p}. Profit? Maybe. Alive? Yes. That's something.`,
+    (a,p)=>`Your $${a} principal is home. ${p} has already found a replacement.`,
+    (a,p)=>`$${a} withdrawal processed. The protocol logged it as "unexpected user rationality."`,
+    (a,p)=>`$${a} pulled from ${p} with zero drama. A rare and beautiful thing.`,
+    (a,p)=>`You requested $${a} back from ${p}. ${p} actually complied. Shocking.`,
+    (a,p)=>`$${a} exited ${p} safely. A risk manager would be proud, if this game had one.`,
+    (a,p)=>`You cashed out $${a} from ${p}. The Discord will call this "weak hands." Ignore them.`,
+    (a,p)=>`${p} released $${a} without a fight. The vault's PR team is relieved.`,
+    (a,p)=>`$${a} withdrawn. ${p}'s TVL chart just took a small, personal hit.`,
+    (a,p)=>`You got $${a} out of ${p} before the next "unexpected liquidity event."`,
+    (a,p)=>`$${a} is yours again. ${p} will simply find a new depositor. It always does.`,
+    (a,p)=>`$${a} pulled. ${p} posts a tweet about "diamond hands" anyway. Ironic.`,
+    (a,p)=>`You withdrew $${a} from ${p}. The exit liquidity gods smiled on you today.`,
+    (a,p)=>`$${a} is yours again. ${p} keeps the lights on with the next sucker's deposit.`,
+    (a,p)=>`$${a} back home. ${p} keeps spinning, waiting for the next deposit.`,
+    (a,p)=>`You got $${a} out before the music stopped. ${p}'s chairs are running low.`,
+    (a,p)=>`$${a} withdrawn. ${p} files this under "acceptable losses" and moves on.`,
+    (a,p)=>`$${a} secured. ${p} remains exactly as audited as before: not at all.`,
 ];
 
 const STAKE_WITHDRAW_RUGGED_LINES = [
-    (amt) => `Your withdrawal request for $${amt} got "processed" by a contract that no longer exists.... DRAIN.`,
-    (amt) => `The withdrawal queue was actually just a funnel to the dev wallet. $${amt} gone.`,
-    (amt) => `A "routine maintenance" event ate your $${amt} withdrawal mid-transaction. Routine, apparently.`,
-    (amt) => `$${amt} withdrawal initiated... routed to offshore mixer... marked as complete. It was not complete.`,
-    (amt) => `The "emergency timelock" activated during your $${amt} withdrawal. Permanently.`,
-    (amt) => `Your $${amt} triggered an "anti-bot protection" clause on the way out. You were not a bot.`,
-    (amt) => `Withdrawal of $${amt} failed with error code 0x5C4M. Dev is "looking into it."`,
-    (amt) => `$${amt} withdrawal entered the queue. The queue had exactly one exit: the dev's Coinbase.`,
-    (amt) => `An MEV bot front-ran your $${amt} withdrawal with a better withdrawal. Yours was cancelled.`,
-    (amt) => `The protocol detected your $${amt} and reclassified it as "protocol-owned liquidity." Goodbye.`,
-    (amt) => `The withdraw button worked perfectly. The funds it sent went to a wallet that wasn't yours. $${amt} gone.`,
-    (amt) => `Your $${amt} withdrawal was "delayed for security review." The review concluded: it's gone.`,
-    (amt) => `A smart contract upgrade silently swapped the withdraw function for a black hole. $${amt} in.`,
-    (amt) => `The vault's "emergency pause" activated the instant your $${amt} tried to leave. Convenient timing.`,
-    (amt) => `Your $${amt} withdrawal got sandwiched by the protocol's own treasury wallet. Self-inflicted, somehow.`,
-    (amt) => `The smart contract's withdraw function had a typo. The typo redirected $${amt} to "0xDEAD."`,
-    (amt) => `A "liquidity rebalancing event" occurred at the precise moment of your $${amt} exit. Suspicious timing.`,
-    (amt) => `Your withdrawal of $${amt} was routed through a "yield optimizer" that optimized it directly into the void.`,
-    (amt) => `The dev's wallet executed a function called withdrawAllToMe(). Yours was included. $${amt} gone.`,
-    (amt) => `A "temporary" smart contract pause on withdrawals became permanent the instant after your $${amt} request.`,
-    (amt) => `Your $${amt} got caught in a "cross-chain bridge exploit" that this pool definitely should not have been exposed to.`,
-    (amt) => `The protocol's "fair withdrawal queue" was alphabetical by wallet, and yours never came up. $${amt} stuck, then gone.`,
-    (amt) => `Withdrawal of $${amt} approved by governance vote. Governance was three wallets. All three were the dev.`,
-    (amt) => `Your $${amt} exit transaction got front-run by the protocol's own "treasury management" bot.`,
-    (amt) => `The vault's withdraw function silently called transferToDev() instead. $${amt} relocated accordingly.`,
-    (amt) => `A "security incident" was disclosed 4 minutes after your $${amt} withdrawal vanished. Coincidence, surely.`,
-    (amt) => `Your $${amt} withdrawal succeeded, technically. It just succeeded into someone else's wallet.`,
-    (amt) => `The smart contract interpreted your withdrawal of $${amt} as a "donation." There is no undo button.`,
-    (amt) => `A rogue admin key, which definitely should not have existed, redirected your $${amt} mid-transaction.`,
-    (amt) => `Your $${amt} got stuck behind a "withdrawal fee" of exactly 100%. The fee structure was never disclosed.`,
-    (amt) => `The protocol's withdrawal contract self-destructed the moment your $${amt} request was confirmed.`,
-    (amt) => `Your $${amt} withdrawal triggered a "circuit breaker" that, oddly, only ever breaks in one direction.`,
-    (amt) => `A "smart contract migration" moved everyone's funds to a new address. You were not given the new address.`,
-    (amt) => `Your $${amt} exit was flagged as "suspicious activity" by the protocol that, itself, is the suspicious activity.`,
-    (amt) => `The withdraw function called the right method with the wrong recipient. The recipient was the dev. $${amt} gone.`,
-    (amt) => `Your $${amt} withdrawal cleared the mempool, then mysteriously cleared your wallet instead of crediting it.`,
-    (amt) => `A "yield harvesting bot" intercepted your $${amt} withdrawal and harvested it directly into nonexistence.`,
-    (amt) => `The protocol's withdrawal logic was, it turns out, just a function called keepItAllHaha().`,
-    (amt) => `Your $${amt} got "temporarily locked for compliance reasons." The compliance department was a single wallet.`,
+    (a)=>`Your withdrawal request for $${a} got "processed" by a contract that no longer exists.... DRAIN.`,
+    (a)=>`The withdrawal queue was actually just a funnel to the dev wallet. $${a} gone.`,
+    (a)=>`A "routine maintenance" event ate your $${a} withdrawal mid-transaction. Routine, apparently.`,
+    (a)=>`$${a} withdrawal initiated... routed to offshore mixer... marked as complete. It was not complete.`,
+    (a)=>`The "emergency timelock" activated during your $${a} withdrawal. Permanently.`,
+    (a)=>`Your $${a} triggered an "anti-bot protection" clause on the way out. You were not a bot.`,
+    (a)=>`Withdrawal of $${a} failed with error code 0x5C4M. Dev is "looking into it."`,
+    (a)=>`$${a} withdrawal entered the queue. The queue had exactly one exit: the dev's Coinbase.`,
+    (a)=>`An MEV bot front-ran your $${a} withdrawal with a better withdrawal. Yours was cancelled.`,
+    (a)=>`The protocol detected your $${a} and reclassified it as "protocol-owned liquidity." Goodbye.`,
+    (a)=>`The withdraw button worked perfectly. The funds went to a wallet that wasn't yours. $${a} gone.`,
+    (a)=>`Your $${a} withdrawal was "delayed for security review." The review concluded: it's gone.`,
+    (a)=>`A smart contract upgrade silently swapped the withdraw function for a black hole. $${a} in.`,
+    (a)=>`The vault's "emergency pause" activated the instant your $${a} tried to leave. Convenient timing.`,
+    (a)=>`The smart contract's withdraw function had a typo. The typo redirected $${a} to "0xDEAD."`,
+    (a)=>`The dev's wallet executed a function called withdrawAllToMe(). Yours was included. $${a} gone.`,
+    (a)=>`Your $${a} got caught in a "cross-chain bridge exploit" this pool definitely shouldn't have touched.`,
+    (a)=>`The vault's withdraw function silently called transferToDev() instead. $${a} relocated accordingly.`,
+    (a)=>`A "security incident" was disclosed 4 minutes after your $${a} withdrawal vanished. Coincidence.`,
+    (a)=>`Your $${a} withdrawal succeeded, technically. Into someone else's wallet.`,
 ];
 
 const STAKE_HARVEST_LINES = [
-    (amt) => `You harvested $${amt} in yield. The printer go brrr, briefly.`,
-    (amt) => `$${amt} in "generated yield derivatives" successfully laundered into your wallet.`,
-    (amt) => `$${amt} claimed. Definitely real money, not just numbers going up.`,
-    (amt) => `Harvest complete: $${amt}. The APY was real for exactly this long.`,
-    (amt) => `$${amt} harvested. The pool is slightly less ponzi-shaped than a moment ago.`,
-    (amt) => `You claimed $${amt}. Technically "yield." Technically "printed from nothing." Both true.`,
-    (amt) => `Yield harvested: $${amt}. The math didn't add up but the button worked.`,
-    (amt) => `$${amt} successfully extracted from the yield module. Spend it before the protocol reconsiders.`,
-    (amt) => `Rewards claimed: $${amt}. Origin of funds: vibes. Destination: your wallet.`,
-    (amt) => `$${amt} harvested from the void. Economics professors across the world felt something.`,
-    (amt) => `You pressed harvest. $${amt} appeared. No one is entirely sure why, but here we are.`,
-    (amt) => `Harvest: $${amt}. That's the power of 42069% APY, baby. Sustainable? No. Delicious? Yes.`,
-    (amt) => `$${amt} collected from the yield trap. The trap remains set for the next person.`,
-    (amt) => `Rewards unlocked: $${amt}. The protocol's accountant filed a complaint. No one read it.`,
-    (amt) => `$${amt} harvested clean. The early depositor in you would be proud.`,
-    (amt) => `$${amt} claimed before the pool noticed. Quick hands, good instincts.`,
-    (amt) => `Yield of $${amt} locked in. The APY counter immediately started adjusting to compensate.`,
-    (amt) => `$${amt} harvested. The smart contract has no idea why it gave you this. Neither do you.`,
-    (amt) => `You claimed $${amt} in freshly minted hopium. Spendable, for now.`,
-    (amt) => `$${amt} of "passive income" landed. The dev's Lambo payment is still larger.`,
-    (amt) => `Harvest button clicked, $${amt} received. The yield was real until proven otherwise.`,
-    (amt) => `$${amt} dropped into your wallet like nothing happened. The pool still pretends nothing happened.`,
-    (amt) => `You scooped $${amt} from the top of the yield pile before someone else could.`,
-    (amt) => `$${amt} claimed. This is what "number go up" feels like at the bottom of the stack.`,
-    (amt) => `Yield extraction complete: $${amt}. The token supply somewhere silently increased to cover it.`,
-    (amt) => `$${amt} in rewards, freshly printed from the protocol's inflationary fever dream.`,
-    (amt) => `You harvested $${amt}. This does not prove the pool is safe. It proves you were fast.`,
-    (amt) => `$${amt} claimed. The protocol says "you're welcome." It did not contribute this money. You did.`,
-    (amt) => `Harvest complete: $${amt}. The APY counter didn't even flinch. It has seen worse.`,
-    (amt) => `$${amt} landed. The yield came from new deposits funding old rewards. As is tradition.`,
-    (amt) => `You made $${amt} today. Somewhere, someone who deposited after you is funding your exit.`,
-    (amt) => `$${amt} harvested. The protocol's liquidity runway just got 0.003% shorter.`,
-    (amt) => `Rewards claimed: $${amt}. No animals were harmed. Several wallets were.`,
-    (amt) => `$${amt} in yield, successfully extracted before the next "unexpected liquidity event."`,
-    (amt) => `You collected $${amt}. The Ponzi thanks you for your patience and your principal.`,
+    (a)=>`You harvested $${a} in yield. The printer go brrr, briefly.`,
+    (a)=>`$${a} in "generated yield derivatives" successfully laundered into your wallet.`,
+    (a)=>`$${a} claimed. Definitely real money, not just numbers going up.`,
+    (a)=>`Harvest complete: $${a}. The APY was real for exactly this long.`,
+    (a)=>`$${a} harvested. The pool is slightly less ponzi-shaped than a moment ago.`,
+    (a)=>`You claimed $${a}. Technically "yield." Technically "printed from nothing." Both true.`,
+    (a)=>`Yield harvested: $${a}. The math didn't add up but the button worked.`,
+    (a)=>`$${a} successfully extracted from the yield module. Spend it before the protocol reconsiders.`,
+    (a)=>`Rewards claimed: $${a}. Origin of funds: vibes. Destination: your wallet.`,
+    (a)=>`$${a} harvested from the void. Economics professors felt something.`,
+    (a)=>`You pressed harvest. $${a} appeared. No one is entirely sure why, but here we are.`,
+    (a)=>`Harvest: $${a}. That's the power of 42069% APY. Sustainable? No. Delicious? Yes.`,
+    (a)=>`$${a} collected from the yield trap. The trap remains set for the next person.`,
+    (a)=>`Rewards unlocked: $${a}. The protocol's accountant filed a complaint. No one read it.`,
+    (a)=>`$${a} harvested clean. The early depositor in you would be proud.`,
+    (a)=>`$${a} claimed before the pool noticed. Quick hands, good instincts.`,
+    (a)=>`Yield of $${a} locked in. The APY counter immediately started adjusting to compensate.`,
+    (a)=>`$${a} harvested. The smart contract has no idea why it gave you this. Neither do you.`,
+    (a)=>`You claimed $${a} in freshly minted hopium. Spendable, for now.`,
+    (a)=>`$${a} of "passive income" landed. The dev's Lambo payment is still larger.`,
+    (a)=>`Harvest button clicked, $${a} received. The yield was real until proven otherwise.`,
+    (a)=>`$${a} dropped into your wallet like nothing happened. The pool still pretends nothing happened.`,
+    (a)=>`You scooped $${a} from the top of the yield pile before someone else could.`,
+    (a)=>`$${a} claimed. This is what "number go up" feels like at the bottom of the stack.`,
+    (a)=>`Yield extraction complete: $${a}. The token supply somewhere silently increased to cover it.`,
+    (a)=>`$${a} in rewards, freshly printed from the protocol's inflationary fever dream.`,
+    (a)=>`You harvested $${a}. This does not prove the pool is safe. It proves you were fast.`,
+    (a)=>`$${a} claimed. The protocol says "you're welcome." It did not contribute this money. You did.`,
+    (a)=>`Harvest complete: $${a}. The APY counter didn't even flinch. It has seen worse.`,
+    (a)=>`$${a} landed. The yield came from new deposits funding old rewards. As is tradition.`,
+    (a)=>`You made $${a} today. Somewhere, someone who deposited after you is funding your exit.`,
+    (a)=>`$${a} harvested. The protocol's liquidity runway just got 0.003% shorter.`,
+    (a)=>`Rewards claimed: $${a}. No animals were harmed. Several wallets were.`,
+    (a)=>`$${a} in yield, successfully extracted before the next "unexpected liquidity event."`,
+    (a)=>`You collected $${a}. The Ponzi thanks you for your patience and your principal.`,
+    (a)=>`$${a} hits your wallet. The yield farm's Discord says "keep staking." You kept harvesting.`,
+    (a)=>`$${a} in yield claimed. The smart contract shrugged and printed it. Works for you.`,
+    (a)=>`You harvested $${a} in "organic yield." The yield is not organic. Nothing here is organic.`,
+    (a)=>`$${a} reward secured. You are now $${a} richer and zero percent less at risk.`,
+    (a)=>`Yield harvest: $${a}. The pool absorbs the loss, redistributes the hopium, and moves on.`,
+    (a)=>`$${a} of pure financial fiction, now yours. Spend it on something real.`,
+    (a)=>`$${a} claimed from the yield factory floor. Factory conditions: unregulated.`,
+    (a)=>`Rewards: $${a}. The liquidity underpinning this is mostly vibes and late deposits.`,
+    (a)=>`Harvest confirmed: $${a}. The pool says "plenty more where that came from." Sure it does.`,
+    (a)=>`$${a} harvested. This is what winning looks like in a game designed for you to lose.`,
 ];
 
 const STAKE_EXPLOIT_LINES = [
     `Flash loan structural liquidation drained your principal.... DRAIN.`,
-    `An anonymous dev forked the vault mid-harvest, removed the withdraw function, and vanished. Classic.`,
+    `An anonymous dev forked the vault mid-harvest, removed the withdraw function, and vanished.`,
     `The audit said "low risk." The audit was written by the dev. Principal: gone.`,
-    `A governance vote passed while you were sleeping: "transfer all funds to treasury." You weren't on the committee.`,
+    `A governance vote passed while you were sleeping: "transfer all funds to treasury."`,
     `The "insurance fund" that was supposed to cover this? It was also in this pool.`,
     `Someone found a reentrancy bug and found it before you found your money.`,
     `A 0-day exploit in the reward-distribution function redistributed your funds to the explorer.`,
-    `The protocol "upgraded" mid-harvest. The new version doesn't have a withdrawal function. Noted.`,
+    `The protocol "upgraded" mid-harvest. The new version doesn't have a withdrawal function.`,
     `A flash loan attack drained the pool in 3 transactions. Transaction 1 was your harvest request.`,
     `The multisig wallet executed a "strategic reallocation." You were not a signer.`,
     `A "price oracle manipulation" event coincided exactly with your harvest. Principal: confiscated.`,
-    `The protocol's emergency shutdown function was triggered. "Emergency" being defined loosely here.`,
+    `The protocol's emergency shutdown function was triggered. "Emergency" loosely defined.`,
     `An undisclosed admin key executed exitAll() at 3:47 AM. Your principal exited into someone else's wallet.`,
     `The reward contract called selfdestruct() during your transaction. This was a feature, apparently.`,
     `A sandwich attack at the contract level front-ran your harvest and took the principal as a "fee."`,
@@ -246,7 +191,6 @@ const STAKE_EXPLOIT_LINES = [
     `Your harvest triggered a cascading liquidation that ate the entire pool, starting with your deposit.`,
     `The protocol posted a Medium article titled "Post-Mortem" while your transaction was still pending.`,
     `An oracle returned a price of $0 for one second. The contract acted accordingly.`,
-    `The "safe" modifier on the withdraw function had a typo. The typo cost you your principal.`,
     `A governance proposal to "reallocate idle liquidity" passed 3-0. The committee was three dev wallets.`,
     `The smart contract hit an integer overflow. The overflow direction was not in your favor.`,
     `Your harvest transaction confirmed in the same block as a drain function. The drain went first.`,
@@ -255,75 +199,163 @@ const STAKE_EXPLOIT_LINES = [
     `A whitehat hacker drained the pool to "protect it." They returned zero funds. Very white hat.`,
     `The yield farm's underlying asset depegged to $0 during your transaction. Principal: vaporized.`,
     `An "economic attack" exploited the exact function you called, at the exact moment you called it.`,
-    `The protocol ran out of liquidity to pay your rewards and compensated you with the principal instead. Incorrectly.`,
+    `The protocol ran out of liquidity and compensated you with your own principal. Incorrectly.`,
     `Someone posted the private key to the admin wallet in the public Discord. You were already too late.`,
+    `The vault's proxy contract was upgraded to point to a different vault. A personal one.`,
+    `A bot caught your harvest in the mempool and front-ran it with a complete drain of the pool.`,
+    `The team announced a "v2 migration." v2 is just the dev's personal wallet with extra steps.`,
+    `An "unplanned maintenance window" occurred during your harvest. Duration: forever.`,
+    `A "dust attack" prepared for 3 weeks culminated in your harvest transaction. Unlucky timing.`,
+    `The contract's onlyOwner check was accidentally removed in the last "minor update."`,
+    `The protocol triggered a "rage quit" function that doesn't exist in any documentation.`,
+    `An MEV bot targeted specifically this harvest amount in a coordinated drain.`,
+    `The pool ran a "community vote" to burn unclaimed rewards. Your rewards were included. Retroactively.`,
+    `A "token migration" swapped your underlying asset 1:1 into a brand-new unverified contract.`,
+    `A governance attack using flash-loaned voting tokens passed a "protocol improvement": taking your money.`,
+    `The "immutable" contract was deployed behind a proxy that was, it turns out, entirely mutable.`,
+    `The protocol celebrated 1,000 transactions by executing transaction 1,001: draining the yield pool.`,
+    `An anonymous researcher published an exploit 30 seconds after you deposited. They also deployed it.`,
+    `The bridge the protocol used to move funds lost your principal somewhere in the middle.`,
+    `A coordinated bot network drained the pool in the exact block window between your deposit and harvest.`,
+    `The smart contract interpreted your harvest as a "donation." There is no undo button.`,
+    `A rogue admin key, which definitely should not have existed, redirected your funds mid-transaction.`,
+    `Your harvest got stuck behind a "withdrawal fee" of exactly 100%. The fee was never disclosed.`,
+    `The protocol's withdrawal contract self-destructed the moment your harvest request was confirmed.`,
+    `A "circuit breaker" activated that, oddly, only ever breaks in one direction: against you.`,
 ];
 
 const AMBIENT_YIELD_TEMPLATES = [
-    { tag: 'DEPOSIT', color: 'text-green-400', text: () => `${randomYieldWallet()} deposited ${randomYieldAmt()} USDSHT into ${randomFromYield(POOLS).name}. Bold strategy.` },
-    { tag: 'DEPOSIT', color: 'text-green-400', text: () => `${randomYieldWallet()} just yolo'd ${randomYieldAmt()} USDSHT into ${randomFromYield(POOLS).name}. No questions asked.` },
-    { tag: 'DEPOSIT', color: 'text-green-400', text: () => `New bag: ${randomYieldWallet()} dropped ${randomYieldAmt()} into ${randomFromYield(POOLS).name}. The pool says thanks.` },
-    { tag: 'DEPOSIT', color: 'text-green-400', text: () => `${randomYieldWallet()} deposited ${randomYieldAmt()} USDSHT. The smart contract's TVL counter went up, morale unchanged.` },
-    { tag: 'DEPOSIT', color: 'text-green-400', text: () => `Fresh liquidity: ${randomYieldWallet()} added ${randomYieldAmt()} to ${randomFromYield(POOLS).name}. Another bagholder acquired.` },
-    { tag: 'WITHDRAW', color: 'text-amber-400', text: () => `${randomYieldWallet()} withdrew ${randomYieldAmt()} USDSHT from ${randomFromYield(POOLS).name}. Got out clean, allegedly.` },
-    { tag: 'WITHDRAW', color: 'text-amber-400', text: () => `${randomYieldWallet()} pulled ${randomYieldAmt()} from ${randomFromYield(POOLS).name}. Congratulations on your continued financial existence.` },
-    { tag: 'WITHDRAW', color: 'text-amber-400', text: () => `${randomYieldWallet()} exited ${randomFromYield(POOLS).name} with ${randomYieldAmt()}. The Discord called it "fud." They didn't care.` },
-    { tag: 'WITHDRAW', color: 'text-amber-400', text: () => `Principal recovered: ${randomYieldWallet()} got ${randomYieldAmt()} out of ${randomFromYield(POOLS).name}. Rare outcome. Celebrated accordingly.` },
-    { tag: 'HARVEST', color: 'text-emerald-400', text: () => `${randomYieldWallet()} harvested ${randomYieldAmt()} USDSHT in yield. Definitely sustainable.` },
-    { tag: 'HARVEST', color: 'text-emerald-400', text: () => `${randomYieldWallet()} claimed ${randomYieldAmt()} in freshly minted hopium from ${randomFromYield(POOLS).name}.` },
-    { tag: 'HARVEST', color: 'text-emerald-400', text: () => `Yield collected: ${randomYieldWallet()} extracted ${randomYieldAmt()} from ${randomFromYield(POOLS).name} before the music stopped.` },
-    { tag: 'HARVEST', color: 'text-emerald-400', text: () => `${randomYieldWallet()} pressed harvest on ${randomFromYield(POOLS).name}. ${randomYieldAmt()} appeared. The laws of economics wept.` },
-    { tag: 'DRAIN', color: 'text-rose-500 font-bold', text: () => `${randomYieldWallet()} tried harvesting from ${randomFromYield(POOLS).name}.... DRAIN. Principal: gone.` },
-    { tag: 'DRAIN', color: 'text-rose-500 font-bold', text: () => `${randomYieldWallet()} hit harvest on ${randomFromYield(POOLS).name}. Got a flash loan to the face instead. Principal: relocated.` },
-    { tag: 'DRAIN', color: 'text-rose-500 font-bold', text: () => `Exploit confirmed: ${randomYieldWallet()} lost ${randomYieldAmt()} USDSHT from ${randomFromYield(POOLS).name}. Post-mortem pending, refund not.` },
-    { tag: 'DRAIN', color: 'text-rose-500 font-bold', text: () => `${randomYieldWallet()} tried to exit ${randomFromYield(POOLS).name}. The pool had other plans for their ${randomYieldAmt()}.` },
-    { tag: 'WHALE', color: 'text-blue-400', text: () => `A whale just deposited ${randomYieldAmt()} USDSHT into ${randomFromYield(POOLS).name} in a single block.` },
-    { tag: 'WHALE', color: 'text-blue-400', text: () => `Whale alert: ${randomYieldWallet()} dumped ${randomYieldAmt()} USDSHT into ${randomFromYield(POOLS).name}. APY dropped 0.0001% and nobody noticed.` },
-    { tag: 'WHALE', color: 'text-blue-400', text: () => `${randomYieldWallet()} (suspected whale) entered ${randomFromYield(POOLS).name} with ${randomYieldAmt()}. Everyone is watching this wallet now.` },
-    { tag: 'RUG', color: 'text-rose-500', text: () => `A "withdrawal processing fee" quietly ate ${randomYieldAmt()} USDSHT from someone's exit. Cost of doing business.` },
-    { tag: 'RUG', color: 'text-rose-500', text: () => `The ${randomFromYield(POOLS).name} vault just executed an "emergency protocol adjustment." ${randomYieldAmt()} adjusted to the dev's wallet.` },
-    { tag: 'RUG', color: 'text-rose-500', text: () => `Admin function triggered: ${randomYieldAmt()} USDSHT "migrated" from ${randomFromYield(POOLS).name}. Migration destination undisclosed.` },
-    { tag: 'APY', color: 'text-amber-400', text: () => `${randomFromYield(POOLS).name}'s APY just recalculated itself. The math still doesn't check out.` },
-    { tag: 'APY', color: 'text-amber-400', text: () => `${randomFromYield(POOLS).name} APY spiked to a number that implies impossible returns. Telegram is very excited.` },
-    { tag: 'APY', color: 'text-amber-400', text: () => `"Sustainable yield" update: ${randomFromYield(POOLS).name} just printed more tokens to cover its APY promises.` },
-    { tag: 'AUDIT', color: 'text-purple-400', text: () => `Someone asked if these pools are audited. The silence in the Discord was deafening.` },
-    { tag: 'AUDIT', color: 'text-purple-400', text: () => `${randomFromYield(POOLS).name} audit report released. Page 1: "looks fine." Pages 2-40: blank.` },
-    { tag: 'AUDIT', color: 'text-purple-400', text: () => `A security researcher flagged something in ${randomFromYield(POOLS).name}. The Discord mod banned them for "spreading fud."` },
-    { tag: 'PANIC', color: 'text-rose-400', text: () => `${randomYieldWallet()} is asking in chat where the withdraw button is. There isn't one. There never was.` },
-    { tag: 'PANIC', color: 'text-rose-400', text: () => `Multiple wallets attempting emergency exits from ${randomFromYield(POOLS).name}. The exit queue is "processing."` },
-    { tag: 'PANIC', color: 'text-rose-400', text: () => `${randomYieldWallet()} posted "IS THE POOL OK" in all caps in 4 different Discord channels. No response from devs.` },
-    { tag: 'PANIC', color: 'text-rose-400', text: () => `Sell pressure detected: ${randomYieldWallet()} is trying to withdraw ${randomYieldAmt()} but gas fees are "unexpectedly high."` },
-    { tag: 'LOCK', color: 'text-gray-400', text: () => `${randomFromYield(POOLS).name} quietly updated its terms. Withdrawals now require a "7-day cooldown." Terms were not announced.` },
-    { tag: 'LOCK', color: 'text-gray-400', text: () => `${randomYieldWallet()} just discovered their ${randomYieldAmt()} is "time-locked for security." Time-lock duration: undefined.` },
-    { tag: 'TVL', color: 'text-blue-400', text: () => `${randomFromYield(POOLS).name} TVL: ${randomYieldAmt()} USDSHT. That number is made up but it sounds impressive.` },
-    { tag: 'SHILL', color: 'text-green-400', text: () => `${randomFromYield(POOLS).name} trending on crypto Twitter. Three people tweeted about it, two are bots.` },
-    { tag: 'SHILL', color: 'text-green-400', text: () => `"WAGMI" posted in ${randomFromYield(POOLS).name} Discord 47 times in the last hour. Dev has not posted once.` },
-    { tag: 'COPY', color: 'text-gray-400', text: () => `A copycat protocol launched "${randomFromYield(POOLS).name} v2" with 10x the APY and half the code.` },
-    { tag: 'COPY', color: 'text-gray-400', text: () => `Fork of ${randomFromYield(POOLS).name} deployed in 4 minutes using the original's exact bytecode. Rugged in 5.` },
+    { tag:'DEPOSIT', color:'text-green-400', text:()=>`${randomYieldWallet()} deposited ${randomYieldAmt()} USDSHT into ${randomFromYield(POOLS).name}. Bold strategy.` },
+    { tag:'DEPOSIT', color:'text-green-400', text:()=>`${randomYieldWallet()} yolo'd ${randomYieldAmt()} into ${randomFromYield(POOLS).name}. No questions asked.` },
+    { tag:'DEPOSIT', color:'text-green-400', text:()=>`${randomYieldWallet()} dropped ${randomYieldAmt()} into ${randomFromYield(POOLS).name}. The pool says thanks.` },
+    { tag:'DEPOSIT', color:'text-green-400', text:()=>`${randomYieldWallet()} deposited ${randomYieldAmt()} USDSHT. TVL counter went up, morale unchanged.` },
+    { tag:'DEPOSIT', color:'text-green-400', text:()=>`Fresh liquidity: ${randomYieldWallet()} added ${randomYieldAmt()} to ${randomFromYield(POOLS).name}. Another bagholder acquired.` },
+    { tag:'DEPOSIT', color:'text-green-400', text:()=>`${randomYieldWallet()} aped ${randomYieldAmt()} into ${randomFromYield(POOLS).name}. "Ape now, read later" energy.` },
+    { tag:'DEPOSIT', color:'text-green-400', text:()=>`${randomYieldWallet()} deposited ${randomYieldAmt()} with zero due diligence and maximum optimism.` },
+    { tag:'DEPOSIT', color:'text-green-400', text:()=>`${randomYieldWallet()} chose ${randomFromYield(POOLS).name} after a 4-second read of the homepage. ${randomYieldAmt()} committed.` },
+    { tag:'DEPOSIT', color:'text-green-400', text:()=>`${randomYieldWallet()} sent ${randomYieldAmt()} to ${randomFromYield(POOLS).name}. The dev's TVL screenshot just got better.` },
+    { tag:'DEPOSIT', color:'text-green-400', text:()=>`${randomFromYield(POOLS).name} received ${randomYieldAmt()} from ${randomYieldWallet()}. The pool didn't say thank you.` },
+    { tag:'WITHDRAW', color:'text-amber-400', text:()=>`${randomYieldWallet()} withdrew ${randomYieldAmt()} from ${randomFromYield(POOLS).name}. Got out clean, allegedly.` },
+    { tag:'WITHDRAW', color:'text-amber-400', text:()=>`${randomYieldWallet()} pulled ${randomYieldAmt()} from ${randomFromYield(POOLS).name}. Congratulations on continued financial existence.` },
+    { tag:'WITHDRAW', color:'text-amber-400', text:()=>`${randomYieldWallet()} exited ${randomFromYield(POOLS).name} with ${randomYieldAmt()}. Discord called it "fud." They didn't care.` },
+    { tag:'WITHDRAW', color:'text-amber-400', text:()=>`Principal recovered: ${randomYieldWallet()} got ${randomYieldAmt()} out of ${randomFromYield(POOLS).name}. Rare outcome.` },
+    { tag:'WITHDRAW', color:'text-amber-400', text:()=>`${randomYieldWallet()} rage-quit ${randomFromYield(POOLS).name} with ${randomYieldAmt()}. Telegram posted rocket emojis in response.` },
+    { tag:'WITHDRAW', color:'text-amber-400', text:()=>`${randomYieldWallet()} exited quietly with ${randomYieldAmt()}. A professional move in an amateur environment.` },
+    { tag:'HARVEST', color:'text-emerald-400', text:()=>`${randomYieldWallet()} harvested ${randomYieldAmt()} USDSHT in yield. Definitely sustainable.` },
+    { tag:'HARVEST', color:'text-emerald-400', text:()=>`${randomYieldWallet()} claimed ${randomYieldAmt()} in freshly minted hopium from ${randomFromYield(POOLS).name}.` },
+    { tag:'HARVEST', color:'text-emerald-400', text:()=>`${randomYieldWallet()} extracted ${randomYieldAmt()} from ${randomFromYield(POOLS).name} before the music stopped.` },
+    { tag:'HARVEST', color:'text-emerald-400', text:()=>`${randomYieldWallet()} pressed harvest on ${randomFromYield(POOLS).name}. ${randomYieldAmt()} appeared. Economics wept.` },
+    { tag:'HARVEST', color:'text-emerald-400', text:()=>`${randomYieldWallet()} grabbed ${randomYieldAmt()} before the APY "adjusted." Smart or lucky, outcome same.` },
+    { tag:'HARVEST', color:'text-emerald-400', text:()=>`Harvest: ${randomYieldWallet()} claimed ${randomYieldAmt()} from ${randomFromYield(POOLS).name}. Funds printed, dignity intact.` },
+    { tag:'HARVEST', color:'text-emerald-400', text:()=>`${randomYieldWallet()} cashed out ${randomYieldAmt()} in "passive income." The origin of that income: new depositors.` },
+    { tag:'DRAIN', color:'text-rose-500 font-bold', text:()=>`${randomYieldWallet()} tried harvesting from ${randomFromYield(POOLS).name}.... DRAIN. Principal: gone.` },
+    { tag:'DRAIN', color:'text-rose-500 font-bold', text:()=>`${randomYieldWallet()} hit harvest on ${randomFromYield(POOLS).name}. Got a flash loan to the face instead.` },
+    { tag:'DRAIN', color:'text-rose-500 font-bold', text:()=>`Exploit confirmed: ${randomYieldWallet()} lost ${randomYieldAmt()} from ${randomFromYield(POOLS).name}. Post-mortem pending, refund not.` },
+    { tag:'DRAIN', color:'text-rose-500 font-bold', text:()=>`${randomYieldWallet()} tried to exit ${randomFromYield(POOLS).name}. The pool had other plans for their ${randomYieldAmt()}.` },
+    { tag:'DRAIN', color:'text-rose-500 font-bold', text:()=>`${randomFromYield(POOLS).name} drain event detected. ${randomYieldWallet()} was collateral damage. ${randomYieldAmt()} gone.` },
+    { tag:'DRAIN', color:'text-rose-500 font-bold', text:()=>`Reentrancy attack caught ${randomYieldWallet()} mid-harvest. ${randomYieldAmt()} liquidated before block confirmation.` },
+    { tag:'WHALE', color:'text-blue-400', text:()=>`Whale deposited ${randomYieldAmt()} USDSHT into ${randomFromYield(POOLS).name} in a single block.` },
+    { tag:'WHALE', color:'text-blue-400', text:()=>`Whale alert: ${randomYieldWallet()} dumped ${randomYieldAmt()} into ${randomFromYield(POOLS).name}. APY dropped 0.0001%.` },
+    { tag:'WHALE', color:'text-blue-400', text:()=>`${randomYieldWallet()} (suspected whale) entered ${randomFromYield(POOLS).name} with ${randomYieldAmt()}. Everyone is watching.` },
+    { tag:'WHALE', color:'text-blue-400', text:()=>`Whale entering: ${randomYieldWallet()} dropped ${randomYieldAmt()} into ${randomFromYield(POOLS).name}. Small wallets are nervous.` },
+    { tag:'RUG', color:'text-rose-500', text:()=>`A "withdrawal fee" quietly ate ${randomYieldAmt()} USDSHT from someone's exit. Cost of doing business.` },
+    { tag:'RUG', color:'text-rose-500', text:()=>`${randomFromYield(POOLS).name} vault executed an "emergency adjustment." ${randomYieldAmt()} adjusted to the dev's wallet.` },
+    { tag:'RUG', color:'text-rose-500', text:()=>`Admin function triggered: ${randomYieldAmt()} USDSHT "migrated" from ${randomFromYield(POOLS).name}. Destination undisclosed.` },
+    { tag:'RUG', color:'text-rose-500', text:()=>`Governance passed a proposal to "optimize" ${randomFromYield(POOLS).name}. The optimization moved ${randomYieldAmt()} to the team.` },
+    { tag:'APY', color:'text-amber-400', text:()=>`${randomFromYield(POOLS).name}'s APY just recalculated itself. The math still doesn't check out.` },
+    { tag:'APY', color:'text-amber-400', text:()=>`${randomFromYield(POOLS).name} APY spiked to impossible-return territory. Telegram is very excited.` },
+    { tag:'APY', color:'text-amber-400', text:()=>`"Sustainable yield" update: ${randomFromYield(POOLS).name} just printed more tokens to cover its APY promises.` },
+    { tag:'APY', color:'text-amber-400', text:()=>`${randomFromYield(POOLS).name} APY is now higher than the GDP of several small nations. All is well.` },
+    { tag:'AUDIT', color:'text-purple-400', text:()=>`Someone asked if these pools are audited. The silence in the Discord was deafening.` },
+    { tag:'AUDIT', color:'text-purple-400', text:()=>`${randomFromYield(POOLS).name} audit report released. Page 1: "looks fine." Pages 2-40: blank.` },
+    { tag:'AUDIT', color:'text-purple-400', text:()=>`A security researcher flagged something in ${randomFromYield(POOLS).name}. Discord mod banned them for "spreading fud."` },
+    { tag:'AUDIT', color:'text-purple-400', text:()=>`"KYC completed" posted in ${randomFromYield(POOLS).name} chat. The KYC was a photo of a dog. Passed.` },
+    { tag:'AUDIT', color:'text-purple-400', text:()=>`${randomFromYield(POOLS).name} security score: 94/100. The 6 missing points are the withdraw function.` },
+    { tag:'PANIC', color:'text-rose-400', text:()=>`${randomYieldWallet()} is asking where the withdraw button is. There isn't one. There never was.` },
+    { tag:'PANIC', color:'text-rose-400', text:()=>`Multiple wallets attempting emergency exits from ${randomFromYield(POOLS).name}. Exit queue is "processing."` },
+    { tag:'PANIC', color:'text-rose-400', text:()=>`${randomYieldWallet()} posted "IS THE POOL OK" in all caps in 4 Discord channels. No dev response.` },
+    { tag:'PANIC', color:'text-rose-400', text:()=>`${randomYieldWallet()} noticed the dev wallet moved. Now refreshing the pool page every 3 seconds.` },
+    { tag:'PANIC', color:'text-rose-400', text:()=>`"Why is the APY dropping" posted in the ${randomFromYield(POOLS).name} channel. Dev is "traveling."` },
+    { tag:'LOCK', color:'text-gray-400', text:()=>`${randomFromYield(POOLS).name} quietly updated terms. Withdrawals now require a "7-day cooldown." Not announced.` },
+    { tag:'LOCK', color:'text-gray-400', text:()=>`${randomYieldWallet()} discovered their ${randomYieldAmt()} is "time-locked for security." Lock duration: undefined.` },
+    { tag:'LOCK', color:'text-gray-400', text:()=>`${randomFromYield(POOLS).name} added an "anti-dump mechanism." It also prevents withdrawals. Technically different things.` },
+    { tag:'TVL', color:'text-blue-400', text:()=>`${randomFromYield(POOLS).name} TVL: ${randomYieldAmt()} USDSHT. That number is made up but sounds impressive.` },
+    { tag:'TVL', color:'text-blue-400', text:()=>`TVL update: ${randomFromYield(POOLS).name} hit a new high of ${randomYieldAmt()} USDSHT. Mostly because nobody can leave.` },
+    { tag:'SHILL', color:'text-green-400', text:()=>`${randomFromYield(POOLS).name} trending on crypto Twitter. Three tweeted about it, two are bots.` },
+    { tag:'SHILL', color:'text-green-400', text:()=>`"WAGMI" posted in ${randomFromYield(POOLS).name} Discord 47 times this hour. Dev has not posted once.` },
+    { tag:'SHILL', color:'text-green-400', text:()=>`An influencer called ${randomFromYield(POOLS).name} "the next 100x." The influencer was paid in pool tokens.` },
+    { tag:'SHILL', color:'text-green-400', text:()=>`A YouTube thumbnail reading "UNLIMITED YIELD?? 🤑" just went up about ${randomFromYield(POOLS).name}. Comments disabled.` },
+    { tag:'COPY', color:'text-gray-400', text:()=>`A copycat launched "${randomFromYield(POOLS).name} v2" with 10x the APY and half the code.` },
+    { tag:'COPY', color:'text-gray-400', text:()=>`Fork of ${randomFromYield(POOLS).name} deployed in 4 minutes using the original's bytecode. Rugged in 5.` },
+    { tag:'COPY', color:'text-gray-400', text:()=>`"${randomFromYield(POOLS).name} Pro Max Plus Ultra" just launched. Same contract, different name.` },
+    { tag:'TEAM', color:'text-gray-400', text:()=>`The ${randomFromYield(POOLS).name} dev posted a "transparency update" that contains no new information.` },
+    { tag:'TEAM', color:'text-gray-400', text:()=>`${randomFromYield(POOLS).name} Discord mod just left the server without explanation. "No cause for concern" pinned.` },
+    { tag:'TEAM', color:'text-gray-400', text:()=>`${randomFromYield(POOLS).name} team is "fully doxxed" according to a Medium post written by the team.` },
+    { tag:'GAS', color:'text-amber-400', text:()=>`Gas spike: ${randomYieldWallet()} paid ${randomYieldAmt()} USDSHT in gas to claim ${(Math.random()*2+0.01).toFixed(4)} in rewards.` },
+    { tag:'GAS', color:'text-amber-400', text:()=>`${randomFromYield(POOLS).name} harvest gas fees just exceeded the reward amount for small wallets.` },
+    { tag:'MEV', color:'text-purple-400', text:()=>`A sandwich bot front-ran ${randomYieldWallet()}'s harvest from ${randomFromYield(POOLS).name}, extracting ${randomYieldAmt()}.` },
+    { tag:'MEV', color:'text-purple-400', text:()=>`${randomYieldWallet()} lost ${randomYieldAmt()} to an MEV bot that saw their harvest coming from 3 blocks away.` },
+    { tag:'FUD', color:'text-rose-400', text:()=>`${randomYieldWallet()} posted a thread questioning ${randomFromYield(POOLS).name}'s tokenomics. Thread was deleted.` },
+    { tag:'FUD', color:'text-rose-400', text:()=>`Someone said "${randomFromYield(POOLS).name} is unsustainable" in the Discord. It was the dev. They deleted it.` },
+    { tag:'FARM', color:'text-emerald-400', text:()=>`${randomYieldWallet()} auto-compounding their ${randomFromYield(POOLS).name} position. Compounding losses counts, right?` },
+    { tag:'FARM', color:'text-emerald-400', text:()=>`${randomYieldWallet()} has been staking in ${randomFromYield(POOLS).name} for 14 days. They are not concerned. They should be.` },
 ];
 
-/* ---- no-repeat helper for ambient yield log ---- */
-const recentYieldIdxs = new Set();
+/* ---- no-repeat sets for every pool ---- */
+const recentYieldIdxs    = new Set();
+const recentHarvestIdxs  = new Set();
+const recentDepositIdxs  = new Set();
+const recentWithdrawIdxs = new Set();
 
-function generateAmbientYieldLog() {
-    const available = AMBIENT_YIELD_TEMPLATES
-        .map((t, i) => ({ t, i }))
-        .filter(({ i }) => !recentYieldIdxs.has(i));
-    const pool = available.length > 0 ? available : AMBIENT_YIELD_TEMPLATES.map((t, i) => ({ t, i }));
-    const chosen = pool[Math.floor(Math.random() * pool.length)];
-    recentYieldIdxs.add(chosen.i);
-    if (recentYieldIdxs.size > Math.floor(AMBIENT_YIELD_TEMPLATES.length * 0.55)) {
-        recentYieldIdxs.delete(recentYieldIdxs.values().next().value);
-    }
-    pushYieldLog(chosen.t.tag, chosen.t.text(), chosen.t.color);
+function pickNoRepeat(arr, seen) {
+    const available = arr.map((_,i) => i).filter(i => !seen.has(i));
+    const pool = available.length > 0 ? available : arr.map((_,i) => i);
+    const idx = pool[Math.floor(Math.random() * pool.length)];
+    seen.add(idx);
+    if (seen.size > Math.floor(arr.length * 0.55)) seen.delete(seen.values().next().value);
+    return arr[idx];
 }
 
-/* ---- core pool logic ---- */
+/* ============================================================
+   LOG OUTPUT
+   ============================================================ */
+function pushYieldLog(tag, text, colorClass) {
+    const log = document.getElementById('stakingEventLog');
+    if (!log) return;
+    const el = document.createElement('div');
+    el.className = "py-0.5 border-b border-[#1A2232]/30";
+    el.innerHTML = `<span class="${colorClass} font-bold">[${tag}]</span> <span class="text-gray-300 font-light">${text}</span>`;
+    log.prepend(el);
+    while (log.children.length > 50) log.removeChild(log.lastChild);
+}
 
+function generateAmbientYieldLog() {
+    const t = pickNoRepeat(AMBIENT_YIELD_TEMPLATES, recentYieldIdxs);
+    pushYieldLog(t.tag, t.text(), t.color);
+}
+
+/* ============================================================
+   UI HELPERS
+   ============================================================ */
+function resetStakingDisplay() {
+    const safeSet = (id, val) => { const el = document.getElementById(id); if (el) el.innerText = val; };
+    safeSet('stakedLocked',       '$0.00');
+    safeSet('stakedPoolType',     '—');
+    safeSet('unclaimedShitcoins', '0.0000');
+    POOLS.forEach(p => {
+        const c = document.getElementById(`pool-card-${p.id}`);
+        if (c) c.classList.remove('selected');
+    });
+    const inp = document.getElementById('stakeAmount');
+    if (inp) inp.value = '';
+}
+
+/* ============================================================
+   POOL CARDS
+   ============================================================ */
 function renderPoolCards() {
     const container = document.getElementById('poolCardsContainer');
-    if(!container || container.children.length > 0) return; // Prevent duplications
-
+    if (!container || container.children.length > 0) return;
     container.innerHTML = POOLS.map(p => `
         <div id="pool-card-${p.id}" onclick="selectPool('${p.id}')" class="pool-card">
             <h4 class="font-bold text-white text-xs uppercase mb-1">${p.name}</h4>
@@ -334,158 +366,158 @@ function renderPoolCards() {
 }
 
 function selectPool(id) {
-    POOLS.forEach(p => {
-        const card = document.getElementById(`pool-card-${p.id}`);
-        if(card) card.classList.remove('selected');
-    });
-    document.getElementById(`pool-card-${id}`).classList.add('selected');
+    POOLS.forEach(p => { const c = document.getElementById(`pool-card-${p.id}`); if (c) c.classList.remove('selected'); });
+    const chosen = document.getElementById(`pool-card-${id}`);
+    if (chosen) chosen.classList.add('selected');
     state.stakedPoolId = id;
     playSound('click');
 }
 
+/* ============================================================
+   DEPOSIT
+   ============================================================ */
 function stakeTokens() {
-    if(!state.stakedPoolId) { showToast("Select a structural yield card target first!"); return; }
+    if (!state.stakedPoolId) { showToast("Select a pool first.", "error"); return; }
     const amount = parseFloat(document.getElementById('stakeAmount').value) || 0;
-    
-    if(amount <= 0 || state.cash < amount) {
-        showToast("Invalid allocation metrics requested!");
-        return;
-    }
+    if (amount <= 0) { showToast("Enter a valid amount.", "error"); return; }
+    if (amount > (state.cash || 0)) { showToast("Not enough cash in your wallet.", "error"); return; }
 
     state.cash -= amount;
-    state.stakedAmount += amount;
+    state.stakedAmount  = (parseFloat(state.stakedAmount)  || 0) + amount;
+    state.unclaimedRewards = parseFloat(state.unclaimedRewards) || 0;
     state.lastHarvestOrStakeTime = Date.now();
-    
-    playSound('stake');
-    document.getElementById('stakedLocked').innerText = `$${state.stakedAmount.toFixed(2)}`;
+
+    const pool = POOLS.find(p => p.id === state.stakedPoolId);
+    const poolName = pool ? pool.name : 'the pool';
+
+    document.getElementById('stakedLocked').innerText  = `$${state.stakedAmount.toFixed(2)}`;
     document.getElementById('stakedPoolType').innerText = state.stakedPoolId.toUpperCase();
 
-    const pool = POOLS.find(p => p.id === state.stakedPoolId);
-    pushYieldLog('DEPOSIT', randomFromYield(STAKE_DEPOSIT_LINES)(amount.toFixed(2), pool ? pool.name : 'the pool'), 'text-green-400');
+    pushYieldLog('DEPOSIT', pickNoRepeat(STAKE_DEPOSIT_LINES, recentDepositIdxs)(amount.toFixed(2), poolName), 'text-green-400');
 
+    playSound('stake');
+    showToast(`💰 Staked $${amount.toFixed(2)} into ${poolName}.`, "success");
     saveGame();
     updateUI();
 }
 
-/** Pulls staked principal back to wallet cash. Tiny 0.01% rug risk on the
- *  way out — same severity tier as every other catastrophic event in the
- *  game. Does NOT touch lifetimeEarned: this is your own money coming
- *  back, not new earnings. */
+/* ============================================================
+   WITHDRAW — also auto-harvests any pending rewards first
+   ============================================================ */
 function withdrawStake() {
-    if (state.stakedAmount <= 0) {
-        showToast("Nothing staked to withdraw.", "error");
-        return;
-    }
+    const principal = parseFloat(state.stakedAmount) || 0;
+    if (principal <= 0) { showToast("Nothing staked to withdraw.", "error"); return; }
 
-    const amount = state.stakedAmount;
     const poolName = (POOLS.find(p => p.id === state.stakedPoolId) || {}).name || 'the pool';
 
+    /* --- 0.01% rug risk on withdrawal --- */
     if (Math.random() < WITHDRAW_RUG_CHANCE) {
-        state.stakedAmount = 0;
-        state.stakedPoolId = null;
+        state.stakedAmount     = 0;
+        state.stakedPoolId     = null;
         state.unclaimedRewards = 0;
-
+        pushYieldLog('DRAIN', pickNoRepeat(STAKE_WITHDRAW_RUGGED_LINES, recentWithdrawIdxs)(principal.toFixed(2)), 'text-red-500 font-extrabold');
+        resetStakingDisplay();
         playSound('rug');
-        pushYieldLog('DRAIN', randomFromYield(STAKE_WITHDRAW_RUGGED_LINES)(amount.toFixed(2)), 'text-red-500 font-extrabold');
-        showAlertModal(`🚨 WITHDRAWAL RUGGED! Your $${amount.toFixed(2)} principal vanished mid-withdrawal. Classic.`);
-
-        document.getElementById('stakedLocked').innerText = "$0.00";
-        document.getElementById('stakedPoolType').innerText = "—";
-        POOLS.forEach(p => { const c = document.getElementById(`pool-card-${p.id}`); if (c) c.classList.remove('selected'); });
-
         saveGame();
         updateUI();
+        showAlertModal(`🚨 WITHDRAWAL RUGGED! Your $${principal.toFixed(2)} principal vanished mid-withdrawal.`);
         return;
     }
 
-    state.cash += amount;
-    state.stakedAmount = 0;
-    state.stakedPoolId = null;
+    /* --- auto-harvest pending rewards before returning principal --- */
+    const unclaimed = parseFloat(state.unclaimedRewards) || 0;
+    if (unclaimed > 0.0001) {
+        state.cash += unclaimed;
+        state.unclaimedRewards = 0;
+        pushYieldLog('HARVEST', pickNoRepeat(STAKE_HARVEST_LINES, recentHarvestIdxs)(unclaimed.toFixed(4)), 'text-emerald-400');
+        setTimeout(() => showToast(`🌾 Auto-harvested $${unclaimed.toFixed(4)} on withdrawal!`, "success"), 100);
+    }
 
+    /* --- return principal --- */
+    state.cash += principal;
+    state.stakedAmount  = 0;
+    state.stakedPoolId  = null;
+
+    pushYieldLog('WITHDRAW', pickNoRepeat(STAKE_WITHDRAW_LINES, recentWithdrawIdxs)(principal.toFixed(2), poolName), 'text-amber-400');
+    resetStakingDisplay();
     playSound('click');
-    showToast(`💵 Withdrew $${amount.toFixed(2)} in principal back to your wallet.`, "success");
-    pushYieldLog('WITHDRAW', randomFromYield(STAKE_WITHDRAW_LINES)(amount.toFixed(2), poolName), 'text-amber-400');
-
-    document.getElementById('stakedLocked').innerText = "$0.00";
-    document.getElementById('stakedPoolType').innerText = "—";
-    POOLS.forEach(p => { const c = document.getElementById(`pool-card-${p.id}`); if (c) c.classList.remove('selected'); });
-
+    showToast(`💵 Withdrew $${principal.toFixed(2)} back to your wallet.`, "success");
     saveGame();
     updateUI();
 }
 
+/* ============================================================
+   REWARD ACCRUAL — called every second by main.js game tick
+   ============================================================ */
 function processStakingRewards() {
-    if(state.stakedAmount <= 0 || !state.stakedPoolId) return;
+    const staked = parseFloat(state.stakedAmount) || 0;
+    if (staked <= 0 || !state.stakedPoolId) return;
 
     const pool = POOLS.find(p => p.id === state.stakedPoolId);
-    if(!pool) return;
+    if (!pool) return;
 
-    // Realtime incremental generation matrix
-    let rewardPerSec = (state.stakedAmount * (pool.apy / 100)) / (365 * 24 * 3600);
-    state.unclaimedRewards += rewardPerSec;
+    const rewardPerSec = (staked * (pool.apy / 100)) / (365 * 24 * 3600);
+    state.unclaimedRewards = (parseFloat(state.unclaimedRewards) || 0) + rewardPerSec;
 
-    document.getElementById('unclaimedShitcoins').innerText = state.unclaimedRewards.toLocaleString('en-US', {minimumFractionDigits:4, maximumFractionDigits:4});
+    const el = document.getElementById('unclaimedShitcoins');
+    if (el) el.innerText = state.unclaimedRewards.toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 });
 }
 
+/* ============================================================
+   MANUAL HARVEST
+   ============================================================ */
 function harvestRewards() {
-    if(state.unclaimedRewards <= 0) return;
+    const unclaimed = parseFloat(state.unclaimedRewards) || 0;
+    if (unclaimed <= 0) { showToast("Nothing to harvest yet.", "error"); return; }
 
-    // Exploit roll calculator configuration bounds
-    if(Math.random() < 0.15) {
-        pushYieldLog('DRAIN', randomFromYield(STAKE_EXPLOIT_LINES), 'text-rose-500 font-bold');
-        state.stakedAmount = 0;
+    if (Math.random() < 0.15) {
+        const lost = parseFloat(state.stakedAmount) || 0;
+        state.stakedAmount     = 0;
         state.unclaimedRewards = 0;
-        state.stakedPoolId = null;
+        state.stakedPoolId     = null;
+        pushYieldLog('DRAIN', pickNoRepeat(STAKE_EXPLOIT_LINES, recentHarvestIdxs), 'text-rose-500 font-bold');
+        resetStakingDisplay();
         playSound('liquidated');
-        
-        document.getElementById('stakedLocked').innerText = "$0.00";
-        document.getElementById('stakedPoolType').innerText = "—";
-        POOLS.forEach(p => { const c = document.getElementById(`pool-card-${p.id}`); if (c) c.classList.remove('selected'); });
         saveGame();
         updateUI();
-        showAlertModal("⚠️ EXPLORED RESTRUCTURE! A rogue hacker group systematically frontran your withdrawal path, vaporizing 100% of your vault configurations.");
+        showAlertModal("⚠️ PROTOCOL EXPLOIT! A flash loan attack drained 100% of your vault. Principal: gone.");
         return;
     }
 
-    let harvested = state.unclaimedRewards;
+    state.cash += unclaimed;
     state.unclaimedRewards = 0;
-    state.cash += harvested; // wallet cash only — does not count toward lifetimeEarned/Lambo
 
-    const unclaimedEl = document.getElementById('unclaimedShitcoins');
-    if (unclaimedEl) unclaimedEl.innerText = "0.0000";
+    const el = document.getElementById('unclaimedShitcoins');
+    if (el) el.innerText = '0.0000';
 
-    showToast(`🌾 Harvested +$${harvested.toFixed(2)} in generated yield derivatives!`, "success");
-    pushYieldLog('HARVEST', randomFromYield(STAKE_HARVEST_LINES)(harvested.toFixed(2)), 'text-emerald-400');
+    pushYieldLog('HARVEST', pickNoRepeat(STAKE_HARVEST_LINES, recentHarvestIdxs)(unclaimed.toFixed(4)), 'text-emerald-400');
+    showToast(`🌾 Harvested $${unclaimed.toFixed(4)} in yield!`, "success");
     playSound('buy');
     saveGame();
     updateUI();
 }
 
 /* ============================================================
-   WITHDRAW BUTTON + AMBIENT LOG TICKER
-   Both self-initializing via JS — no HTML changes required.
+   WITHDRAW BUTTON INJECTION + AMBIENT TICKER START
    ============================================================ */
-
 function setupWithdrawButton() {
     if (document.getElementById('withdrawStakeBtn')) return;
-
     const poolTypeEl = document.getElementById('stakedPoolType');
-    if (!poolTypeEl) {
-        setTimeout(setupWithdrawButton, 200); // DOM not ready yet, retry shortly
-        return;
-    }
-
+    if (!poolTypeEl) { setTimeout(setupWithdrawButton, 300); return; }
     const infoBlock = poolTypeEl.closest('div');
     if (!infoBlock) return;
-
-    const btnHtml = `
-        <button id="withdrawStakeBtn" onclick="withdrawStake()" class="w-full mt-2 py-2 bg-amber-600 hover:bg-amber-500 text-black font-extrabold text-xs rounded-lg transition shadow-md uppercase tracking-wider">
-            Withdraw Principal
-        </button>`;
-    infoBlock.insertAdjacentHTML('afterend', btnHtml);
+    infoBlock.insertAdjacentHTML('afterend', `
+        <button id="withdrawStakeBtn" onclick="withdrawStake()" class="w-full mt-2 py-2.5 bg-amber-600 hover:bg-amber-500 text-black font-extrabold text-xs rounded-lg transition shadow-md uppercase tracking-wider">
+            Withdraw Principal + Harvest
+        </button>`);
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    setupWithdrawButton();
-    setInterval(generateAmbientYieldLog, AMBIENT_YIELD_LOG_INTERVAL_MS);
-});
+function startStakingAmbientLogs() {
+    if (ambientYieldTimer) return; // already running
+    ambientYieldTimer = setInterval(generateAmbientYieldLog, AMBIENT_YIELD_LOG_INTERVAL);
+}
+
+/* Start on DOMContentLoaded AND also when the page is fully loaded
+   (belt-and-suspenders — covers both defer and non-defer loading) */
+document.addEventListener('DOMContentLoaded', () => { setupWithdrawButton(); startStakingAmbientLogs(); });
+window.addEventListener('load', () => { setupWithdrawButton(); startStakingAmbientLogs(); });
