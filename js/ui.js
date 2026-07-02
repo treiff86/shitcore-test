@@ -85,7 +85,7 @@ function showToast(message, type = "info") {
     msgEl.innerText = message;
     
     toast.classList.remove('hidden');
-    setTimeout(() => { toast.classList.add('hidden'); }, 4000);
+    setTimeout(() => { toast.classList.add('hidden'); }, 5000);
 }
 
 function showAlertModal(message) {
