@@ -363,6 +363,14 @@ function nftTick() {
     const col = nftCollection;
     if (!col) return;
 
+    /* --- 0.01% general drain: any interaction with OpenShit risks the whole wallet --- */
+    if (Math.random() < 0.0001) {
+        nftSeize('DRAINED', '☠️ DRAINED! An unknown exploit swept your entire wallet while your NFT collection was live. Wallet: $0. Collection: seized. Have a nice day.');
+        state.cash = 0;
+        updateUI();
+        return;
+    }
+
     /* --- IP Lawsuit: instant seizure --- */
     if (Math.random() < IP_LAWSUIT_CHANCE) {
         nftSeize('IP LAWSUIT',
@@ -480,28 +488,147 @@ function floorPumpAndDump() {
    MANUAL SHILL
    ============================================================ */
 
+
+/* ---- Heman Tusk viral post (uses the generated NFT image as his pfp) ---- */
+function pushTuskPost(collectionName, imageUrl) {
+    const feed = document.getElementById('yFeed');
+    if (!feed) return;
+
+    const texts = [
+        `just changed my pfp to a ${collectionName} NFT. incredible art. the future of digital ownership.`,
+        `${collectionName} is the most culturally significant NFT project I've seen. changing my pfp immediately.`,
+        `I don't buy NFTs. I just bought a ${collectionName}. make of that what you will.`,
+        `${collectionName} reminds me of why I believe in decentralized art. pfp changed. this is the one.`,
+    ];
+    const text = texts[Math.floor(Math.random() * texts.length)];
+
+    const post = document.createElement('div');
+    post.className = 'border-b border-[#2F3336] p-4 flex gap-3 hover:bg-white/[0.03] transition-colors cursor-pointer border-l-4 border-l-[#1D9BF0] bg-[#1D9BF0]/5';
+    const avatarHtml = imageUrl
+        ? `<div class="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 border-2 border-[#1D9BF0]"><img src="${imageUrl}" class="w-full h-full object-cover" alt="Heman Tusk" /></div>`
+        : `<div class="w-10 h-10 rounded-full bg-[#1D9BF0] flex items-center justify-center flex-shrink-0 text-lg border-2 border-[#1D9BF0]">🐦</div>`;
+    post.innerHTML = avatarHtml +
+        `<div class="flex-1 min-w-0">` +
+          `<div class="flex items-center gap-1 flex-wrap text-sm mb-0.5">` +
+            `<span class="font-bold text-white">Heman Tusk</span>` +
+            `<span class="text-[#1D9BF0] text-xs font-bold">✓</span>` +
+            `<span class="text-[#FFD700] text-xs">⭐</span>` +
+            `<span class="text-[#71767B]">@heman_tusk · just now</span>` +
+          `</div>` +
+          `<p class="y-post-text text-[#E7E9EA] text-sm mt-1 leading-relaxed">${text}</p>` +
+          `<div class="flex gap-5 mt-2.5 text-[#71767B] text-xs select-none">` +
+            `<span class="hover:text-[#1D9BF0] transition-colors cursor-pointer">💬 ${(Math.floor(Math.random()*200000+500000)).toLocaleString()}</span>` +
+            `<span class="hover:text-green-400 transition-colors cursor-pointer">🔁 ${(Math.floor(Math.random()*500000+1500000)).toLocaleString()}</span>` +
+            `<span class="hover:text-pink-500 transition-colors cursor-pointer">🤍 ${(Math.floor(Math.random()*5000000+14000000)).toLocaleString()}</span>` +
+            `<span class="hover:text-[#1D9BF0] transition-colors cursor-pointer">📊 1,200,000,000</span>` +
+          `</div>` +
+        `</div>`;
+    feed.prepend(post);
+}
+
 function nftShill() {
     if (!nftCollection) { showToast('Launch a collection first.', 'error'); return; }
-    if ((state.cash || 0) < 50) { showToast('Not enough USDSHT for the influencer fee.', 'error'); return; }
+    if ((state.cash || 0) < 100) { showToast('Not enough USDSHT. Y Social influencers cost $100.', 'error'); return; }
 
-    state.cash -= 50;
+    state.cash -= 100;
 
-    if (Math.random() < 0.10) {
+    const roll = Math.random();
+
+    /* 0.01% — DRAINED: paying an influencer just wiped your wallet */
+    if (roll < 0.0001) {
+        state.cash = 0;
+        clearInterval(nftGameInterval);
+        clearInterval(nftYFeedTimer);
+        nftCollection = null;
+        nftResetUI();
+        playSound('liquidated');
+        saveGame();
+        updateUI();
+        showAlertModal('☠️ DRAINED! The Y Social "influencer" you hired was a phishing front. Every dollar in your wallet is gone.');
+        return;
+    }
+
+    /* 1% — Heman Tusk changes his pfp to your NFT → instant sellout */
+    if (roll < 0.0001 + 0.01) {
+        const col = nftCollection;
+        col.minted = col.supply;
+        col.revenue = col.supply * col.mintPrice;
+        col.hype = 100;
+        playSound('lambo');
+        pushTuskPost(col.name, nftImageUrl);
+        setTimeout(() => {
+            pushYPost('NFTFloor', 'floor_is_gone', true, '📈',
+                `${col.name} just sold out in 4 minutes after Heman Tusk changed his pfp. floor is already 40x. I missed the mint. I hate this.`);
+        }, 2500);
+        showToast(`🚀 HEMAN TUSK POSTED! ${col.name} is SOLD OUT. Absolute scenes.`, 'success');
+        nftUpdateUI();
+        saveGame();
+        updateUI();
+        return;
+    }
+
+    /* 10% — influencer scams you, hacks wallet 10-50% */
+    if (roll < 0.0001 + 0.01 + 0.10) {
         const hackPct = 0.10 + Math.random() * 0.40;
         const hacked  = (state.cash || 0) * hackPct;
         state.cash    = Math.max(0, (state.cash || 0) - hacked);
         playSound('rug');
-        showToast(`😱 SCAM! Lost $50 fee + ${Math.round(hackPct*100)}% of wallet ($${hacked.toFixed(2)}).`, 'error');
+        showToast(`😱 SCAMMED! Lost $100 fee + ${Math.round(hackPct*100)}% of wallet ($${hacked.toFixed(2)}).`, 'error');
         pushYPost('ScamInfluencer', 'totally_real_nft_kol', false, '🎭',
-            `just accepted $50 to shill ${nftCollection.name}. wait they want me to keep shilling. no actually I'm deleting this account. bye`);
-    } else {
-        nftCollection.hype = Math.min(100, nftCollection.hype + 18);
-        playSound('click');
-        pushYPost(`NFTInfluencer${Math.floor(Math.random()*99)}`,
-            `nft_kol_${Math.floor(Math.random()*999)}`, true, '🎨',
-            `${nftCollection.name} is literally the most alpha collection I've seen this cycle. not financial advice. my bags are up 3x. not financial advice`);
-        showToast('Influencer posted. Hype +18%.', 'success');
+            `just accepted $100 to shill ${nftCollection.name}. wait they want more. no actually I'm deleting this account. wallet hacked. bye forever`);
+        saveGame();
+        updateUI();
+        nftUpdateUI();
+        return;
     }
+
+    /* SUCCESS — boost hype 5-25% and mint progress 5-10% */
+    const hypeBoost = 5 + Math.random() * 20;
+    const mintBoost = nftCollection.supply * (0.05 + Math.random() * 0.05);
+    nftCollection.hype   = Math.min(100, nftCollection.hype + hypeBoost);
+    nftCollection.minted = Math.min(nftCollection.supply, nftCollection.minted + mintBoost);
+    nftCollection.revenue = nftCollection.minted * nftCollection.mintPrice;
+
+    const viralLikes = Math.floor(Math.random()*80000+20000);
+    const viralRTs   = Math.floor(Math.random()*20000+5000);
+
+    const successPosts = [
+        `${nftCollection.name} is literally the most alpha collection I've seen this cycle. not financial advice. my bags are up 3x. not financial advice`,
+        `just discovered ${nftCollection.name} and I need everyone to look at this art RIGHT NOW. this is the one ser`,
+        `${nftCollection.name} has the strongest community I've seen since the last project I shilled. completely unbiased opinion`,
+        `my professional recommendation as a Y Social influencer: mint ${nftCollection.name} immediately. this is not financial advice (it is)`,
+        `${nftCollection.name} floor is going to be disgusting. in the best possible way. screenshot this post.`,
+    ];
+    const postText = successPosts[Math.floor(Math.random()*successPosts.length)];
+
+    playSound('buy');
+    showToast(`📣 Influencer posted! Hype +${hypeBoost.toFixed(0)}%, Minted +${Math.floor(mintBoost)} NFTs.`, 'success');
+
+    /* Viral Y post with inflated engagement numbers */
+    const feed = document.getElementById('yFeed');
+    if (feed) {
+        const post = document.createElement('div');
+        post.className = 'border-b border-[#2F3336] p-4 flex gap-3 hover:bg-white/[0.03] transition-colors border-l-4 border-l-amber-400 bg-amber-400/5';
+        post.innerHTML =
+            `<div class="w-10 h-10 rounded-full bg-[#1A1A2E] flex items-center justify-center text-lg flex-shrink-0">🎨</div>` +
+            `<div class="flex-1 min-w-0">` +
+              `<div class="flex items-center gap-1 text-sm mb-0.5">` +
+                `<span class="font-bold text-white">NFTInfluencer${Math.floor(Math.random()*99)}</span>` +
+                `<span class="text-[#1D9BF0] text-xs font-bold">✓</span>` +
+                `<span class="text-[#71767B]">@nft_kol_${Math.floor(Math.random()*9999)} · just now</span>` +
+                `<span class="ml-auto text-[10px] text-amber-400 font-bold uppercase">SPONSORED</span>` +
+              `</div>` +
+              `<p class="y-post-text text-[#E7E9EA] text-sm mt-1 leading-relaxed">${postText}</p>` +
+              `<div class="flex gap-5 mt-2.5 text-[#71767B] text-xs select-none">` +
+                `<span class="hover:text-[#1D9BF0] cursor-pointer">💬 ${Math.floor(viralRTs*0.1).toLocaleString()}</span>` +
+                `<span class="hover:text-green-400 cursor-pointer">🔁 ${viralRTs.toLocaleString()}</span>` +
+                `<span class="hover:text-pink-500 cursor-pointer">🤍 ${viralLikes.toLocaleString()}</span>` +
+                `<span class="hover:text-[#1D9BF0] cursor-pointer">📊 ${(viralLikes*12).toLocaleString()}</span>` +
+              `</div>` +
+            `</div>`;
+        feed.prepend(post);
+    }
+
     saveGame();
     updateUI();
     nftUpdateUI();
@@ -692,10 +819,7 @@ function injectOpenShitHTML() {
         <p class="text-[#71767B] text-xs">Satirical NFT launchpad. Generate AI art. Mint a collection. Exit scam on your community.</p>
       </div>
     </div>
-    <div class="flex items-center gap-2">
-      <span class="bg-rose-500/10 text-rose-400 border border-rose-500/20 text-xs px-3 py-1 rounded-full font-bold">SATIRE MODE: ON</span>
-      <span class="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-xs px-3 py-1 rounded-full">500 NFT Supply</span>
-    </div>
+    <span class="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-xs px-3 py-1 rounded-full">500 NFT Supply · ~15 min grind</span>
   </div>
 
   <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -761,7 +885,7 @@ function injectOpenShitHTML() {
         <!-- Manual shill -->
         <button onclick="nftShill()"
           class="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded text-xs transition">
-          📱 Pay TikTok Influencer ($50 → +Hype)
+          📣 Pay Y Social Influencer ($100 → +Hype)
         </button>
 
         <!-- Launch -->
