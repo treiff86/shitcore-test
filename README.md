@@ -1,62 +1,216 @@
-# 🧻 Shitcore (USDSHT) — The Ultimate L1 for Absolute Rugs
+# Shitcore (USDSHT) — Layer 1 Shitcoin Tycoon
 
-Welcome to **Shitcore**, a satirical Layer 1 idle-tycoon game built for the Meme 3.0 era. This is a fictional universe where every meme coin is a ticking time bomb, and you are the one holding the detonator. 
+> **v1.0.0: OpenShit** — The most unhinged fake blockchain tycoon game on GitHub Pages.
 
-Extract liquidity from clueless investors, pay off TikTok influencers, deploy unhinged honeypot smart contracts, and try to secure a virtual Lambo before the feds raid your basement.
-
----
-
-## 🚫 Disclaimer & Real-World Risk Warning
-**This game is 100% satire.** This is a completely client-side, browser-based idle simulator. There is no real blockchain, no real smart contracts, no crypto wallet connection, and absolutely no real money involved. All numbers, transactions, and charts are generated entirely via `Math.random()` in your browser. 
-
-In the real world, rug pulls, honeypots, and exit scams steal real money from real people and are highly illegal. Don't be a jerk in real life. 
+A 100% free, 100% client-side satirical idle/tycoon game about meme-coin rug pulls, leveraged trading, NFT grifts, and Ponzi yield farms. No real blockchain. No real wallet. No real money. Every number is `Math.random()` running in your browser. It exists to satirize crypto culture, not teach or enable it.
 
 ---
 
-## 💥 New Mechanics: The Risk of Ruin
-The market is no longer just a chart—it's a battlefield.
-* **Wager Selection:** Choose your risk tolerance with 10%, 50%, or Custom wager buttons before entering a position.
-* **⚠️ Rugged (1% chance):** A sudden liquidity pull wipes your position and taxes an additional 10% of your total wallet.
-* **💀 Drained (0.01% chance):** The "Dev" strikes. Your entire wallet balance is reduced to zero. Start over, anon.
-* **Live Chain Feed:** Watch the chaos in real-time as the SHITCORE/USDSHT feed reports global activity, including snipes, dumps, and wallet drains.
+## 🚀 Play It Free
+
+**Live:** [treiff86.github.io/shitcore-test](https://treiff86.github.io/shitcore-test/)
 
 ---
 
-## 🎮 Game Features
+## 🎮 Mini-Games
 
-### 🚀 1. Rug Creator (Token Deployer)
-Configure and launch your own highly toxic assets. Set your token name, custom ticker, and seed the initial liquidity pool. 
-* **Toxicity Tax:** Crank up the transaction fee to extract cash directly into your wallet. High taxes pull cash faster but skyrocket your **Audit Threat**.
-* **🍯 Honeypot Backdoor:** Totally disable the sell button for maximum greed. You keep everything, but the regulators will close in fast.
+### 📊 Markets — Leverage Scalping
+Set a **wager** (10% / 50% / custom $) and pick your **leverage** (25x / 50x / 75x / 100x), then hit **Pump It** (Long) or **Dump It** (Short).
 
-### 📊 2. Markets & Orderbook Terminal
-Watch your token's price action unfold in real-time on the ambient chart. 
-* **100x Leverage Engine:** Put your stolen gains to work. Toggle your wager, slide your leverage all the way to 100x, and aggressively long or short the market.
-* **🤖 Shadow Validator Tools (MEV):** Once you hit Level 3, unlock the ability to sandwich-attack your own community's swaps straight out of the mempool for guaranteed risk-free extraction.
+- Your entry price is marked with a **dashed red line** on the live chart so you can see whether price is above or below your entry
+- Your live order, direction, leverage, and running P&L display in the **Live Orderbook** while the trade is open
+- Higher leverage = bigger swings AND a higher instant-bust chance (13% / 25% / 38% / 50%)
+- Trades always open — catastrophes resolve on the next tick, not before you see the position
+- **RUGGED (1%):** lose your wager + 10% of your wallet
+- **DRAINED (0.01%):** wallet goes to $0, start over
 
-### 🧪 3. Shit-GPT Smart Auditor
-Got a shady fake contract or a toxic token vibe? Paste it into our completely local, procedurally generated AI Solidity Auditor for an instant, line-by-line roast of your deployment's security vectors.
-
-### 🚜 4. Ponzi Yield Pools
-Unlock Staking at Level 2 to chase completely unhinged APYs. Lock your cash into highly unstable yield traps. Be careful when you harvest—there's a continuous chance of a **Protocol Exploit** that completely liquidates your principal.
+**Level 3 unlock — MEV Sandwich 🥪:** a cooldown ability that extracts $100-$1,000 with guaranteed cash and guaranteed Regulatory Heat every 12 seconds. 10% chance a bigger bot counter-sandwiches you and you lose money instead.
 
 ---
 
-## 🛠️ Tech Stack & Architecture
+### 🚀 Rug Creator — Token Deployer
+The main game loop. Deploy a fake token, pump its Hype Meter, crank the Toxicity Tax, and pull the rug before Audit Threat hits 100%.
 
-This project is built to be incredibly lightweight, modular, and fast, running entirely in the user's browser with zero backend dependencies:
+- **Toxicity Tax slider** — live-updates the % readout; higher tax = faster cash + faster Audit Threat
+- **Pay Y Social Influencer ($50)** — 90% success (+hype), 10% they steal your fee AND hack 10-50% of your wallet
+- **Quantum Audit** — a rare per-second chance of instant deployment seizure, independent of Audit Threat level
+- **Marketing Campaigns** (Level 2+, Level 4+) — 4 tiers, each permanently multiplies both capital inflow AND Audit Threat speed for that deployment; stacks if you run multiple campaigns
+- **🍀 Easter Egg:** deploy under any name other than the default for a 1% chance at a **$10,000 Binance Pump & Dump** windfall
+- **0.01% DRAINED** on deploy
 
-* **Frontend Framework:** Semantic HTML5 & [Tailwind CSS](https://tailwindcss.com/) (via CDN) for a clean, sleek, high-fidelity dark-mode trading UI.
-* **Icons:** [FontAwesome 6](https://fontawesome.com/) for crisp, responsive modular components.
-* **State Engine:** Vanilla JavaScript (`js/state.js`, `js/main.js`) managing persistent local storage, custom interval loops for ticking tickers, and event log streaming.
-* **Graphics:** HTML5 Canvas API (`js/markets.js`) driving a live, real-time procedural candlestick chart simulation.
+**Level 4 unlock — Honeypot Backdoor:** locks all sells, doubles Audit Threat growth, guarantees you keep every dollar raised.
 
 ---
 
-## 📦 Local Installation & Development
+### 🤖 AI Solidity Auditor — Heat Reduction
+The **only** way to lower Regulatory Heat. Paste 50+ characters with real variety (10+ unique chars, no single char over 40% of input) and hit Compile.
 
-Because Shitcore runs completely client-side, you don't need `npm`, node modules, or a local build step. 
+- Must change the input between compiles — can't spam the same code
+- **Every compile** reduces Heat by 4-10%
+- **10% chance** of "audit backfire" — Heat still drops but costs 10% of your wallet
+- **0.01% chance** of severe backfire — 35% of your wallet gone
+- **0.01% DRAINED** outright
+- **1% jackpot** — Liquidity Lock Status flips green "100% UNLOCKED," a **DRAIN** button appears, click it for $1,000-$10,000
+- 50+ unique badges, signatures, liquidity statuses, verdicts, and line roasts per compile
 
-1. **Clone the repository:**
-   ```bash
-   git clone [https://github.com/YOUR_USERNAME/shitcore.git](https://github.com/YOUR_USERNAME/shitcore.git)
+---
+
+### 🌾 Ponzi Yield Pools — Staking
+Lock funds into one of three increasingly unhinged APY vaults.
+
+| Pool | APY |
+|---|---|
+| Porcelain Yield Slip | 420% |
+| Plutonium Compound Core | 6,900% |
+| Blackhole Liquidity Devourer | 42,069% |
+
+- **Deposit** any amount into your selected pool
+- **Harvest Rewards** — 85% success (yield added to wallet cash), 15% "Protocol Exploit" liquidates 100% of your stake
+- **Withdraw Principal** — instant and risk-free... except for a **0.01% chance it gets rugged mid-withdrawal**
+- Withdrawing **auto-harvests** any pending rewards at the same time with a second popup
+- Harvested yield and returned principal go to **wallet cash only** — neither counts toward your Lambo tracker or Degen Level
+- Live Yield Logs feeds 70+ ambient fake events (deposits, drains, whales, panics, audits, gas horror stories), no-repeat
+
+---
+
+### 🎨 OpenShit — NFT Collection Launcher *(New in v1.0.0)*
+Mock OpenSea. Generate real AI art via Pollinations.ai (free, no API key). Mint a fake NFT collection. Exit scam your community.
+
+**Flow:**
+1. **Generate Art** — type any prompt, get a real AI image for free
+2. **Configure** — name your collection, set ticker + mint price (500 NFT supply)
+3. **Launch** ($100 deploy fee) — fake buyers start minting over ~15-20 min, Hype decays slowly
+4. **Hype it** — Pay Y Social Influencer ($100):
+   - **0.01%** — DRAINED
+   - **1%** — Heman Tusk (CEO of Y) changes his pfp to *your actual generated image* and posts about it — **instant sellout**, millions of likes
+   - **10%** — scammer takes your $100 AND hacks 10-50% of your wallet
+   - **~89%** — success: Hype +5-25%, Mint progress +5-10%, sponsored Y post with viral engagement numbers
+5. **Exit** — pick your strategy:
+   - **💀 Mint & Rug** — ghost the community, keep all mint revenue
+   - **📈 Floor Pump & Dump** — pump the floor (1.5x-4x multiplier based on current hype), dump on retail buyers
+
+**Live Y Feed** — a fake Twitter/X feed (branded "Y") with 75 hype posts, 59 panic posts, and 59 rug-reaction posts streaming in as your collection progresses. Heman Tusk's viral post uses your actual generated image as his profile picture.
+
+**Risks while live:** 0.01%/sec general drain · 0.03%/sec IP Lawsuit (instant seizure) · 0.07%/sec DMCA Strike (-28% hype)
+
+---
+
+## 🛒 Perk Shop — Permanent Upgrades
+
+| Perk | Cost | Effect |
+|---|---|---|
+| Telegram Bot Automator | $600 | Hype Meter decays 40% slower AND generates +1%/sec passively — campaigns last much longer |
+| DeFi Twitter Coordination Network | $2,500 | +40% capital inflow, Marketing Campaigns 25% cheaper, victim count grows 50% faster |
+| Offshore Cayman Layering Loop | $12,000 | Seizures and rug pulls generate ~50% less Regulatory Heat |
+
+---
+
+## 🌡️ Regulatory Heat
+
+Heat is **account-wide**. Hit **100% = instant game over**, all assets seized.
+
+| What raises it | Amount |
+|---|---|
+| Token seized (Audit Threat maxed) | +25% |
+| Pulling the rug | Scales with Toxicity Tax (up to ~25%) |
+| MEV Sandwich (each use) | +5-9% base, up to +34% on rare "noticed" event |
+
+**The only thing that lowers it:** AI Solidity Auditor compiles (-4 to -10% per run) — but each compile carries its own wallet risks now.
+
+---
+
+## ⚠️ Full Risk Event Reference
+
+| Event | Where | Odds | Effect |
+|---|---|---|---|
+| DRAINED | Almost every interaction | 0.01% | Wallet → $0, start over |
+| RUGGED | Markets wager | 1% | Wager + 10% of wallet lost |
+| Instant Bust | Markets wager | 13-50% (leverage-scaled) | Wager lost immediately |
+| MEV Counter-Sandwich | MEV Sandwich | 10% | Lose $100-$1,000 instead of gaining |
+| Influencer Scam | Rug Creator / OpenShit shill | 10% | Fee + 10-50% of wallet hacked |
+| Quantum Audit | Rug Creator (per second) | 0.05%/sec | Active deployment instantly seized |
+| Deploy Drain | Rug Creator launch | 0.01% | Wallet → $0 |
+| Auditor Backfire | AI Auditor compile | 10% | 10% of wallet lost |
+| Auditor Severe Backfire | AI Auditor compile | 0.01% | 35% of wallet lost |
+| Auditor Full Drain | AI Auditor compile | 0.01% | Wallet → $0 |
+| Protocol Exploit | Ponzi Pool harvest | 15% | 100% of staked principal wiped |
+| Withdrawal Rug | Ponzi Pool withdrawal | 0.01% | Principal lost mid-withdrawal |
+| OpenShit General Drain | OpenShit (per second live) | 0.01%/sec | Wallet → $0 |
+| IP Lawsuit | OpenShit (per second live) | 0.03%/sec | Collection seized, revenue forfeited |
+| DMCA Strike | OpenShit (per second live) | 0.07%/sec | Hype -28% |
+| Heman Tusk Post | OpenShit shill | 1% | Instant sellout (positive event!) |
+
+---
+
+## 🏆 Degen Levels & Lambo Tracker
+
+| Level | Name | Threshold | Unlocks |
+|---|---|---|---|
+| 1 | The Basement Dev | $0 | All base features |
+| 2 | The Shiller | $3,000 | Ponzi Yield Pools, Campaign Tiers 1-2 |
+| 3 | The Shadow Validator | $15,000 | MEV Sandwich |
+| 4 | The Institutional Rugger | $60,000 | Honeypot Backdoor, Campaign Tiers 3-4 |
+
+**Win condition:** $1,000,000 lifetime earnings → 🏎️ Real Lambo
+
+---
+
+## 🗂️ File Structure
+
+```
+index.html            Page structure, all tabs, modals
+css/style.css         Theme, animations, card styling
+js/audio.js           Web Audio API synthesizer (no audio files)
+js/state.js           Game state, save/load, levels, lambo tiers
+js/ui.js              Tab switching, toasts, header rendering
+js/markets.js         Markets mini-game + MEV Sandwich + chain feed
+js/auditor.js         AI Solidity Auditor mini-game
+js/deployer.js        Rug Creator mini-game
+js/staking.js         Ponzi Yield Pools mini-game
+js/perks.js           Perk shop
+js/openshit.js        OpenShit NFT mini-game (self-injecting)
+js/main.js            Boot + 1-second game tick
+```
+
+---
+
+## 🆕 Changelog
+
+### v1.0.0 — OpenShit
+- **New mini-game:** OpenShit — AI image generation, 500-NFT fake collections, fake Y social feed, Mint & Rug + Floor Pump & Dump exits
+- **New:** Heman Tusk easter egg — 1% chance of instant sellout, uses your actual AI image as his pfp
+- **New:** 75 hype / 59 panic / 59 rug Y feed posts, no-repeat system
+- **Expanded:** All Markets flavor pools to 50-75+ entries (BOT_NAMES, HANDLES, FAKE_RIVAL_TOKENS, CHAIN_LOG_TEMPLATES, MEV lines, FAKE_WHALE_NAMES)
+- **Expanded:** All Staking flavor pools to 50+ entries, 70 ambient yield log entries
+- **Expanded:** All Auditor flavor pools to 50-65 entries each
+- **Fixed:** Toxicity Tax slider not updating % readout live
+- **Fixed:** Ponzi Yield Pool — withdrawn principal not clearing displayed balance
+- **Fixed:** Ponzi Yield Pool — unclaimed rewards not zeroing after harvest
+- **Fixed:** Ponzi Yield Pool — withdraw button now auto-harvests simultaneously
+- **Fixed:** Mempool Roulette tab staying visible after switching away
+- **Fixed:** Regulatory Heat showing 14 decimal places (now 2 d.p.)
+- **Fixed:** Markets wager — RUGGED/DRAINED/BUST events now always show the trade opening first before resolving
+- **Changed:** AI Auditor — must change code between compiles; same input rejected
+- **Changed:** AI Auditor compile now carries wallet-penalty risk (10% → 10% wallet, 0.01% → 35% wallet)
+- **Changed:** Ponzi Yield Pool withdrawal now carries 0.01% rug risk
+- **Changed:** MEV Sandwich button renamed from "Frontrun The Mempool"
+- **Changed:** OpenShit shill button costs $100, not $50
+
+### v0.6.9 — No Crying in the Casino
+- Leverage scalping in Markets (25x/50x/75x/100x) with real P&L multiplier and bust odds
+- Wager system (10%/50%/custom $) gating Pump/Dump buttons
+- Dashed entry-price line on chart + live order in orderbook
+- MEV Sandwich cooldown ability (Level 3)
+- 4-tier Marketing Campaigns in Rug Creator
+- Withdraw Principal added to Ponzi Yield Pools
+- Perk Shop fully functional — all 3 perks wired to real effects
+- Coming Soon overlay on Mempool Roulette
+- Expanded How To Play section
+
+---
+
+## ⚖️ Disclaimer
+
+This is satire. In real life, rug pulls, honeypot tokens, and NFT exit scams steal real money from real people and are illegal in most jurisdictions. Nothing in this repository is financial, legal, or security advice.
+
+**MIT License** — do whatever you want with it, just don't use it to actually scam anyone.
