@@ -14,14 +14,26 @@ document.addEventListener('DOMContentLoaded', () => {
     initMarkets();
 
     // 4. Global Core Heartbeat Intervallic Loops
+    let cloudSaveTickCounter = 0;
     setInterval(() => {
         processStakingRewards();
-        
+        tickMarketVolatility();
+
         // Cayman heat reduction optimization check
         if(state.ownedPerks.includes('cayman_vault') && state.globalHeat > 0 && !state.activeToken) {
             state.globalHeat = Math.max(0, state.globalHeat - 0.25);
             document.getElementById('heatPct').innerText = `${Math.floor(state.globalHeat)}%`;
             document.getElementById('heatBarFill').style.width = `${Math.floor(state.globalHeat)}%`;
+        }
+
+        // Cloud autosave every 30s, only while a wallet is connected - avoids
+        // hammering Supabase on every single tick the way localStorage can.
+        if (typeof walletAddress !== 'undefined' && walletAddress) {
+            cloudSaveTickCounter++;
+            if (cloudSaveTickCounter >= 30) {
+                cloudSaveTickCounter = 0;
+                saveToCloud();
+            }
         }
     }, 1000);
 
