@@ -17,6 +17,17 @@ const NFT_LAUNCH_COST   = 100;
 const NFT_HYPE_DECAY    = 0.28;   // /sec — much slower than Rug Creator's 2.5
 const NFT_BASE_MINT_RATE = 0.56;  // NFTs/sec at 100% hype → ~15 min to fill 500
 const NFT_Y_INTERVAL    = 4200;   // ms between ambient Y posts
+
+const NFT_SHILL_MAX_PER_SESSION = 3;    // resets on page reload, not per-collection
+const NFT_SHILL_RUG_CHANCE      = 0.0001; // 0.01%
+const NFT_SHILL_RUG_PCT         = 0.25;   // 25% of wallet
+const NFT_RUG_EARLY_HACK_CHANCE = 0.01;   // 1%, only if rugging before sellout
+const NFT_RUG_EARLY_HACK_PCT    = 0.90;   // 90% of wallet
+const NFT_FLOOR_MOVE_PCT        = 0.15;   // ±15%, stacks multiplicatively
+const NFT_FLOOR_HACK_CHANCE     = 0.0001; // 0.01% per Floor Pump & Dump use
+const NFT_FLOOR_HACK_PCT        = 0.90;   // 90% of wallet
+
+let nftShillUsesThisSession = 0;
 const IP_LAWSUIT_CHANCE = 0.0003; // /sec while collection is live
 const DMCA_CHANCE       = 0.0007; // /sec while collection is live
 
@@ -322,6 +333,7 @@ function launchNFTCollection() {
         minted: 0,
         revenue: 0,
         hype: 65,
+        floorMultiplier: 1,
         mintComplete: false,
         dmcaWarned: false,
         imageUrl: nftImageUrl,
@@ -332,6 +344,8 @@ function launchNFTCollection() {
     document.getElementById('nftConfigFields').classList.add('opacity-40', 'pointer-events-none');
     document.getElementById('nftLaunchBtn').classList.add('hidden');
     document.getElementById('nftExitBtns').classList.remove('hidden');
+    document.getElementById('nftFloorSection').classList.remove('hidden');
+    document.getElementById('nftFloorMultDisplay').innerText = '1.00x';
     document.getElementById('nftMonitor').classList.remove('hidden');
     document.getElementById('nftMonitorName').innerText = `${name}  (${ticker})`;
 
@@ -430,10 +444,22 @@ function mintAndRug() {
     clearInterval(nftYFeedTimer);
     playSound('rug');
 
-    const haul = Math.round(col.revenue);
+    const mult = col.floorMultiplier || 1;
+    const haul = Math.round(col.revenue * mult);
     state.cash  = (state.cash || 0) + haul;
     state.lifetimeEarned = (state.lifetimeEarned || 0) + haul;
     nftAddHeat(7 + Math.random() * 8);
+
+    /* Rugging before full sellout leaves a trail - 1% chance it costs you
+       90% of your wallet on the way out */
+    const soldOut = col.minted >= col.supply;
+    let hackMsg = '';
+    if (!soldOut && Math.random() < NFT_RUG_EARLY_HACK_CHANCE) {
+        const hackAmt = (state.cash || 0) * NFT_RUG_EARLY_HACK_PCT;
+        state.cash = Math.max(0, (state.cash || 0) - hackAmt);
+        playSound('liquidated');
+        hackMsg = `\n\n⚠️ HACKED ON THE WAY OUT: rugging before sellout made you an easy mark. A wallet drainer hit you for 90% ($${hackAmt.toLocaleString(undefined,{maximumFractionDigits:2})}) right after.`;
+    }
 
     /* post rug tweets with delay */
     const rugPosts = Y_POSTS_RUG.slice(0, 6);
@@ -444,44 +470,57 @@ function mintAndRug() {
     });
 
     const colName = col.name;
+    const mintedCount = col.minted;
     nftCollection = null;
     nftResetUI();
     saveGame();
     if (typeof checkProgressions === 'function') checkProgressions();
     updateUI();
-    showAlertModal(`💀 MINT & RUG COMPLETE!\n\nYou ghosted the ${colName} community and walked away with $${haul.toLocaleString()} USDSHT in mint revenue.\n\n${Math.floor(col.minted)} people are currently in a Discord server asking where you went.`);
+    showAlertModal(`💀 MINT & RUG COMPLETE!\n\nYou ghosted the ${colName} community and walked away with $${haul.toLocaleString()} USDSHT in mint revenue${mult !== 1 ? ` (floor multiplier: ${mult.toFixed(2)}x)` : ''}.\n\n${Math.floor(mintedCount)} people are currently in a Discord server asking where you went.${hackMsg}`);
 }
 
 function floorPumpAndDump() {
     const col = nftCollection;
     if (!col) return;
-    if (col.minted < 30) { showToast('Need at least 30 mints to pump the floor.', 'error'); return; }
+    if (col.minted < 30) { showToast('Need at least 30 mints to move the floor.', 'error'); return; }
 
-    clearInterval(nftGameInterval);
-    clearInterval(nftYFeedTimer);
-    playSound('lambo');
+    /* 0.01% per use — a wallet drainer catches you mid-manipulation */
+    if (Math.random() < NFT_FLOOR_HACK_CHANCE) {
+        const hackAmt = (state.cash || 0) * NFT_FLOOR_HACK_PCT;
+        state.cash = Math.max(0, (state.cash || 0) - hackAmt);
+        playSound('liquidated');
+        saveGame();
+        updateUI();
+        showAlertModal(`☠️ HACKED! Someone was watching your wallet while you juiced the floor and drained 90% of it ($${hackAmt.toLocaleString(undefined,{maximumFractionDigits:2})}).`);
+        return;
+    }
 
-    /* multiplier based on hype: 1.5x at 0% hype → 4x at 100% hype */
-    const multiplier = 1.5 + (col.hype / 100) * 2.5;
-    const haul = Math.round(col.revenue * multiplier);
-    state.cash  = (state.cash || 0) + haul;
-    state.lifetimeEarned = (state.lifetimeEarned || 0) + haul;
-    nftAddHeat(14 + Math.random() * 11);
+    const isPump = Math.random() < 0.5;
+    col.floorMultiplier = (col.floorMultiplier || 1) * (isPump ? (1 + NFT_FLOOR_MOVE_PCT) : (1 - NFT_FLOOR_MOVE_PCT));
+    nftAddHeat(isPump ? (2 + Math.random() * 3) : (1 + Math.random() * 2));
 
-    pushYPost('FloorWatcher', 'nft_floor_watch', true, '📊',
-        `${col.name} floor just ${multiplier.toFixed(1)}x'd in 10 minutes. someone is listing 200 at once. this is NOT organic price discovery`);
-    setTimeout(() => {
-        pushYPost('BoughtTheTop', 'literally_bought_the_top', false, '😭',
-            `waited weeks for the ${col.name} pump and bought at the exact top. someone dumped 200 on me simultaneously. goodbye savings`);
-    }, 2200);
+    const displayEl = document.getElementById('nftFloorMultDisplay');
+    if (displayEl) displayEl.innerText = `${col.floorMultiplier.toFixed(2)}x`;
 
-    const colName = col.name;
-    nftCollection = null;
-    nftResetUI();
+    playSound(isPump ? 'buy' : 'alarm');
+    showToast(
+        isPump
+            ? `📈 PUMPED the floor +15%. Running multiplier: ${col.floorMultiplier.toFixed(2)}x — cash out with Mint & Rug whenever.`
+            : `📉 DUMPED the floor -15%. Running multiplier: ${col.floorMultiplier.toFixed(2)}x.`,
+        isPump ? 'success' : 'error'
+    );
+
+    if (isPump) {
+        pushYPost('FloorWatcher', 'nft_floor_watch', true, '📊',
+            `${col.name} floor just moved. someone is buying/selling in size. this does not look like organic price discovery`);
+    } else {
+        pushYPost('BagholderAnon', 'still_holding_unfortunately', false, '😭',
+            `${col.name} floor just dumped and I have no idea why. holding anyway. diamond hands or just too lazy to sell`);
+    }
+
+    nftUpdateUI();
     saveGame();
-    if (typeof checkProgressions === 'function') checkProgressions();
     updateUI();
-    showAlertModal(`📈 FLOOR PUMP & DUMP COMPLETE!\n\nYou artificially pumped the ${colName} floor ${multiplier.toFixed(1)}x and dumped your holdings on retail buyers.\n\nTotal extracted: $${haul.toLocaleString()} USDSHT.\n\nSomeone on Y is already writing a thread about you.`);
 }
 
 /* ============================================================
@@ -528,9 +567,14 @@ function pushTuskPost(collectionName, imageUrl) {
 
 function nftShill() {
     if (!nftCollection) { showToast('Launch a collection first.', 'error'); return; }
+    if (nftShillUsesThisSession >= NFT_SHILL_MAX_PER_SESSION) {
+        showToast(`You've hired ${NFT_SHILL_MAX_PER_SESSION} influencers already this session. That's all the "growth marketing" budget allows.`, 'error');
+        return;
+    }
     if ((state.cash || 0) < 100) { showToast('Not enough USDSHT. Y Social influencers cost $100.', 'error'); return; }
 
     state.cash -= 100;
+    nftShillUsesThisSession++;
 
     const roll = Math.random();
 
@@ -544,12 +588,25 @@ function nftShill() {
         playSound('liquidated');
         saveGame();
         updateUI();
+        nftUpdateUI();
         showAlertModal('☠️ DRAINED! The Y Social "influencer" you hired was a phishing front. Every dollar in your wallet is gone.');
         return;
     }
 
+    /* 0.01% — influencer rug: a rarer, more surgical hit than the 10% scam below */
+    if (roll < 0.0001 + NFT_SHILL_RUG_CHANCE) {
+        const rugAmt = (state.cash || 0) * NFT_SHILL_RUG_PCT;
+        state.cash = Math.max(0, (state.cash || 0) - rugAmt);
+        playSound('rug');
+        saveGame();
+        updateUI();
+        nftUpdateUI();
+        showAlertModal(`💸 INFLUENCER RUG! Your "growth partner" quietly drained 25% of your wallet ($${rugAmt.toLocaleString(undefined,{maximumFractionDigits:2})}) before ghosting you. No contract. No LinkedIn. Nothing.`);
+        return;
+    }
+
     /* 1% — Heman Tusk changes his pfp to your NFT → instant sellout */
-    if (roll < 0.0001 + 0.01) {
+    if (roll < 0.0001 + NFT_SHILL_RUG_CHANCE + 0.01) {
         const col = nftCollection;
         col.minted = col.supply;
         col.revenue = col.supply * col.mintPrice;
@@ -568,7 +625,7 @@ function nftShill() {
     }
 
     /* 10% — influencer scams you, hacks wallet 10-50% */
-    if (roll < 0.0001 + 0.01 + 0.10) {
+    if (roll < 0.0001 + NFT_SHILL_RUG_CHANCE + 0.01 + 0.10) {
         const hackPct = 0.10 + Math.random() * 0.40;
         const hacked  = (state.cash || 0) * hackPct;
         state.cash    = Math.max(0, (state.cash || 0) - hacked);
@@ -728,7 +785,20 @@ function nftAmbientYPost() {
    UI UPDATE + RESET
    ============================================================ */
 
+function updateShillButtonLabel() {
+    const btn = document.getElementById('nftShillBtn');
+    if (!btn) return;
+    const left = Math.max(0, NFT_SHILL_MAX_PER_SESSION - nftShillUsesThisSession);
+    btn.innerText = left > 0
+        ? `📣 Pay Y Social Influencer ($100 → +Hype)  [${left}/${NFT_SHILL_MAX_PER_SESSION} left this session]`
+        : `📣 Pay Y Social Influencer — none left this session`;
+    btn.disabled = left <= 0;
+    btn.classList.toggle('opacity-40', left <= 0);
+    btn.classList.toggle('cursor-not-allowed', left <= 0);
+}
+
 function nftUpdateUI() {
+    updateShillButtonLabel();
     const col = nftCollection;
     if (!col) return;
 
@@ -754,6 +824,7 @@ function nftResetUI() {
     if (s('nftConfigFields'))  s('nftConfigFields').classList.remove('opacity-40','pointer-events-none');
     if (s('nftLaunchBtn'))   s('nftLaunchBtn').classList.remove('hidden');
     if (s('nftExitBtns'))    s('nftExitBtns').classList.add('hidden');
+    if (s('nftFloorSection')) s('nftFloorSection').classList.add('hidden');
     if (s('nftMonitor'))     s('nftMonitor').classList.add('hidden');
 }
 
@@ -885,7 +956,7 @@ function injectOpenShitHTML() {
         </div>
 
         <!-- Manual shill -->
-        <button onclick="nftShill()"
+        <button id="nftShillBtn" onclick="nftShill()"
           class="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded text-xs transition">
           📣 Pay Y Social Influencer ($100 → +Hype)
         </button>
@@ -896,20 +967,28 @@ function injectOpenShitHTML() {
           🚀 Launch Collection — $100 Deploy Fee
         </button>
 
-        <!-- Exit buttons (hidden until launched) -->
-        <div id="nftExitBtns" class="hidden grid grid-cols-2 gap-3">
-          <button onclick="mintAndRug()"
-            class="py-3 bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-500 hover:to-rose-600 text-white font-extrabold rounded-lg text-xs shadow-lg transition uppercase tracking-wide">
-            💀 Mint &amp; Rug
-          </button>
+        <!-- Floor manipulation - repeatable, stacks, does NOT end the collection -->
+        <div id="nftFloorSection" class="hidden space-y-2">
+          <div class="flex items-center justify-between text-[10px] text-gray-400 uppercase font-semibold">
+            <span>Floor Multiplier (stacks)</span>
+            <span id="nftFloorMultDisplay" class="text-white font-mono text-xs">1.00x</span>
+          </div>
           <button onclick="floorPumpAndDump()"
-            class="py-3 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-black font-extrabold rounded-lg text-xs shadow-lg transition uppercase tracking-wide">
-            📈 Floor Pump &amp; Dump
+            class="w-full py-2.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-black font-extrabold rounded-lg text-xs shadow-lg transition uppercase tracking-wide">
+            📈 Floor Pump &amp; Dump (50/50, ±15%)
+          </button>
+        </div>
+
+        <!-- Exit (ends the collection, cashes out revenue × floor multiplier) -->
+        <div id="nftExitBtns" class="hidden">
+          <button onclick="mintAndRug()"
+            class="w-full py-3 bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-500 hover:to-rose-600 text-white font-extrabold rounded-lg text-xs shadow-lg transition uppercase tracking-wide">
+            💀 Mint &amp; Rug — Cash Out Now
           </button>
         </div>
 
         <p class="text-[9px] text-gray-600 leading-relaxed">
-          ⚠️ Risk: 0.03%/sec IP Lawsuit (instant seizure) · 0.07%/sec DMCA Strike (hype -28%) · Influencer 10% chance to scam you
+          ⚠️ Risk: 0.03%/sec IP Lawsuit (instant seizure) · 0.07%/sec DMCA Strike (hype -28%) · Influencer: 10% scam, 0.01% rugs 25% of wallet, max 3/session · Rug before sellout: 1% chance of a 90% wallet hack on exit · Floor Pump &amp; Dump: 0.01% hack chance per use (90% of wallet)
         </p>
       </div>
     </div>
@@ -1004,6 +1083,7 @@ function injectOpenShitHTML() {
 
 function initOpenShit() {
     injectOpenShitHTML();
+    updateShillButtonLabel();
     patchSwitchTab();
 }
 
