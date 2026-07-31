@@ -328,8 +328,8 @@ function launchNFTCollection() {
         launchTime: Date.now(),
     };
 
-    /* lock setup panel, show monitor + exit buttons */
-    document.getElementById('nftSetupPanel').classList.add('opacity-40', 'pointer-events-none');
+    /* lock config fields only, show monitor + exit buttons */
+    document.getElementById('nftConfigFields').classList.add('opacity-40', 'pointer-events-none');
     document.getElementById('nftLaunchBtn').classList.add('hidden');
     document.getElementById('nftExitBtns').classList.remove('hidden');
     document.getElementById('nftMonitor').classList.remove('hidden');
@@ -751,7 +751,7 @@ function nftResetUI() {
     nftGameInterval = null;
     nftYFeedTimer   = null;
     const s = id => document.getElementById(id);
-    if (s('nftSetupPanel'))  s('nftSetupPanel').classList.remove('opacity-40','pointer-events-none');
+    if (s('nftConfigFields'))  s('nftConfigFields').classList.remove('opacity-40','pointer-events-none');
     if (s('nftLaunchBtn'))   s('nftLaunchBtn').classList.remove('hidden');
     if (s('nftExitBtns'))    s('nftExitBtns').classList.add('hidden');
     if (s('nftMonitor'))     s('nftMonitor').classList.add('hidden');
@@ -861,25 +861,27 @@ function injectOpenShitHTML() {
       <div id="nftSetupPanel" class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-5 shadow-lg space-y-4">
         <h3 class="text-white font-bold text-sm">📋 Collection Setup</h3>
 
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="block text-gray-400 text-[10px] uppercase font-semibold mb-1.5">Collection Name</label>
-            <input id="nftCollectionName" type="text" value="Bored Toilet Apes"
-              class="w-full bg-[#070A0F] text-white text-xs px-3 py-2 rounded border border-[#1A2232] focus:outline-none focus:border-amber-500">
+        <div id="nftConfigFields" class="space-y-4">
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-gray-400 text-[10px] uppercase font-semibold mb-1.5">Collection Name</label>
+              <input id="nftCollectionName" type="text" value="Bored Toilet Apes"
+                class="w-full bg-[#070A0F] text-white text-xs px-3 py-2 rounded border border-[#1A2232] focus:outline-none focus:border-amber-500">
+            </div>
+            <div>
+              <label class="block text-gray-400 text-[10px] uppercase font-semibold mb-1.5">Ticker (max 5)</label>
+              <input id="nftTicker" type="text" value="BTA" maxlength="5"
+                class="w-full bg-[#070A0F] text-white text-xs px-3 py-2 rounded border border-[#1A2232] focus:outline-none focus:border-amber-500 uppercase">
+            </div>
           </div>
-          <div>
-            <label class="block text-gray-400 text-[10px] uppercase font-semibold mb-1.5">Ticker (max 5)</label>
-            <input id="nftTicker" type="text" value="BTA" maxlength="5"
-              class="w-full bg-[#070A0F] text-white text-xs px-3 py-2 rounded border border-[#1A2232] focus:outline-none focus:border-amber-500 uppercase">
-          </div>
-        </div>
 
-        <div>
-          <label class="block text-gray-400 text-[10px] uppercase font-semibold mb-1.5">Mint Price (USDSHT per NFT)</label>
-          <input id="nftMintPrice" type="number" value="2.5" min="0.01" step="0.1"
-            oninput="document.getElementById('nftMaxRev').innerText = ((parseFloat(this.value)||0)*500).toFixed(2)"
-            class="w-full bg-[#070A0F] text-white text-xs px-3 py-2 rounded border border-[#1A2232] focus:outline-none focus:border-amber-500">
-          <p class="text-[9px] text-gray-500 mt-1">Max revenue at full mint (500 NFTs): $<span id="nftMaxRev">1250.00</span> USDSHT</p>
+          <div>
+            <label class="block text-gray-400 text-[10px] uppercase font-semibold mb-1.5">Mint Price (USDSHT per NFT)</label>
+            <input id="nftMintPrice" type="number" value="2.5" min="0.01" step="0.1"
+              oninput="document.getElementById('nftMaxRev').innerText = ((parseFloat(this.value)||0)*500).toFixed(2)"
+              class="w-full bg-[#070A0F] text-white text-xs px-3 py-2 rounded border border-[#1A2232] focus:outline-none focus:border-amber-500">
+            <p class="text-[9px] text-gray-500 mt-1">Max revenue at full mint (500 NFTs): $<span id="nftMaxRev">1250.00</span> USDSHT</p>
+          </div>
         </div>
 
         <!-- Manual shill -->
