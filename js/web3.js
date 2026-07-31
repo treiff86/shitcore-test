@@ -16,10 +16,10 @@
         meant to be public/client-side - that's what it's for.
    ============================================================ */
 
-const SUPABASE_URL = "https://dhoewjzwimvgogckprof.supabase.co";       // e.g. "https://abcdefgh.supabase.co"
-const SUPABASE_ANON_KEY = "sb_publishable_AECc75ywuwTSIeXmtCmqzg_FqsutxYE";  // the "anon" / "public" key, not service_role
+const SUPABASE_URL = "";       // e.g. "https://abcdefgh.supabase.co"
+const SUPABASE_ANON_KEY = "";  // the "anon" / "public" key, not service_role
 
-let supabase = null;
+let sb = null;
 let walletAddress = null;
 let leaderboardChannel = null;
 
@@ -36,7 +36,7 @@ function initSupabase() {
         console.warn("[web3] Supabase JS client script not loaded - check the <script> tag in index.html.");
         return;
     }
-    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 }
 
 /* ---------------- Wallet connect (Phantom) ---------------- */
@@ -89,8 +89,8 @@ function updateWalletUI() {
 /* ---------------- Cloud save / load ---------------- */
 
 async function offerCloudLoadIfExists() {
-    if (!supabase || !walletAddress) return;
-    const { data, error } = await supabase
+    if (!sb || !walletAddress) return;
+    const { data, error } = await sb
         .from("players")
         .select("game_state, updated_at")
         .eq("wallet_address", walletAddress)
@@ -111,8 +111,8 @@ async function offerCloudLoadIfExists() {
 }
 
 async function saveToCloud() {
-    if (!supabase || !walletAddress) return;
-    const { error } = await supabase.from("players").upsert({
+    if (!sb || !walletAddress) return;
+    const { error } = await sb.from("players").upsert({
         wallet_address: walletAddress,
         game_state: state,
         lifetime_earned: state.lifetimeEarned || 0,
@@ -127,11 +127,11 @@ async function saveToCloud() {
 async function renderLeaderboard() {
     const box = document.getElementById("leaderboardBody");
     if (!box) return;
-    if (!supabase) {
+    if (!sb) {
         box.innerHTML = `<div class="text-gray-500 italic text-xs">Leaderboard not configured yet.</div>`;
         return;
     }
-    const { data, error } = await supabase
+    const { data, error } = await sb
         .from("players")
         .select("wallet_address, display_name, lifetime_earned, degen_level")
         .order("lifetime_earned", { ascending: false })
@@ -149,8 +149,8 @@ async function renderLeaderboard() {
 }
 
 function subscribeLeaderboardRealtime() {
-    if (!supabase || leaderboardChannel) return;
-    leaderboardChannel = supabase
+    if (!sb || leaderboardChannel) return;
+    leaderboardChannel = sb
         .channel("players-leaderboard")
         .on("postgres_changes", { event: "*", schema: "public", table: "players" }, renderLeaderboard)
         .subscribe();
