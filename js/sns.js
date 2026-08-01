@@ -8,26 +8,30 @@
    to web3.js the only way it can: a function on `window`.
 
    Scans the connected wallet directly for any .sol domain(s) it
-   owns, on-chain, via the official Bonfida/SNS SDK. (A previous
-   version of this file tried SNS's "favorite domain" proxy API
-   first, but that endpoint's exact input format couldn't be
-   verified and it errored on real wallet addresses - dropped
-   entirely rather than keep guessing at an unverifiable API.)
+   owns, on-chain, via the official Bonfida/SNS SDK.
 
-   RPC_ENDPOINTS is tried in order. Solana's own public endpoint
-   (api.mainnet-beta.solana.com) actively 403s this kind of
-   browser-origin traffic - confirmed, not in this list on purpose.
-   If ALL of these end up unreliable for you, the properly durable
-   fix is a free Helius API key (dashboard.helius.dev, no cost,
-   takes a couple minutes) - swap RPC_ENDPOINTS for a single
-   `https://mainnet.helius-rpc.com/?api-key=YOUR_KEY` and this
-   stops depending on shared public infrastructure at all.
+   RPC SETUP - free public endpoints have proven unreliable enough
+   in testing (one blocks browser traffic outright, one now requires
+   a paid key, one hits SSL errors) that this now expects a real,
+   free Helius API key instead of gambling on shared infrastructure:
+
+     1. Sign up free at https://dashboard.helius.dev (no cost)
+     2. Copy your API key
+     3. Paste it into HELIUS_API_KEY below
+
+   Until that's filled in, this falls back to the same public
+   endpoints as before - they may or may not work depending on your
+   network/browser, which is exactly the unreliability a real key
+   avoids.
    ============================================================ */
 
 import { Connection, PublicKey } from "https://esm.sh/@solana/web3.js@1";
 import { getAllDomains, performReverseLookup } from "https://esm.sh/@bonfida/spl-name-service@3";
 
+const HELIUS_API_KEY = "9c094b2b-cfdb-4fb9-b7e5-78c46d88066c"; // paste your free key from https://dashboard.helius.dev here
+
 const RPC_ENDPOINTS = [
+    ...(HELIUS_API_KEY ? [`https://mainnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}`] : []),
     "https://rpc.ankr.com/solana",
     "https://solana-rpc.publicnode.com",
 ];
@@ -39,7 +43,7 @@ async function getAnyDomain(walletAddressStr) {
         try {
             const connection = new Connection(rpcUrl);
             const domainKeys = await getAllDomains(connection, owner);
-            console.log(`[sns] ${rpcUrl} -> found ${domainKeys?.length || 0} domain(s) for this wallet`);
+            console.log(`[sns] ${rpcUrl.split("?")[0]} -> found ${domainKeys?.length || 0} domain(s) for this wallet`);
             if (!domainKeys || !domainKeys.length) return null; // reached the RPC fine, wallet just has none
 
             const names = await Promise.all(
@@ -48,10 +52,11 @@ async function getAnyDomain(walletAddressStr) {
             const first = names.find((n) => !!n);
             return first ? `${first}.sol` : null;
         } catch (e) {
-            console.warn(`[sns] ${rpcUrl} failed, trying next endpoint if any:`, e);
+            console.warn(`[sns] ${rpcUrl.split("?")[0]} failed, trying next endpoint if any:`, e);
         }
     }
     console.warn("[sns] all RPC endpoints failed - see the warnings above for each one's specific error.");
+    if (!HELIUS_API_KEY) console.warn("[sns] HELIUS_API_KEY is empty - fill that in for a reliable connection instead of depending on public endpoints.");
     return null;
 }
 
