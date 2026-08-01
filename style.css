@@ -113,3 +113,14 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     outline: 2px solid var(--accent-blue);
     outline-offset: 2px;
 }
+
+/* Doopie holder cosmetic - rainbow mode. Applied to <body> in web3.js when
+   a connected wallet holds a Doopie. The prefers-reduced-motion rule above
+   already catches this animation same as everything else. */
+@keyframes rainbow-shift {
+    0%   { filter: hue-rotate(0deg); }
+    100% { filter: hue-rotate(360deg); }
+}
+.rainbow-mode {
+    animation: rainbow-shift 8s linear infinite;
+}
