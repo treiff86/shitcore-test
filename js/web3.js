@@ -39,14 +39,7 @@ const COSMETIC_THEMES = [
     {
         id: "midevils",
         label: "Mid Evils - Medieval",
-        // NOT independently verified yet the way Doopies was (paste the mint
-        // into Solscan, confirm the metadata's `collection.key` matches this
-        // exact value) - it's possible this is an individual NFT's mint
-        // address rather than the shared collection address, same mix-up
-        // that happened with Doopies at first. Works fine for previewing via
-        // the master panel either way; real holder detection depends on it
-        // being correct.
-        collectionAddress: "HMkCcrGmrxE9EBwjjDP3q4MokodrJkxBofpCVEYNVaRf",
+        collectionAddress: "w44WvLKRdLGye2ghhDJBxcmnWpBo31A1tCBko2G6DgW", // verified via Solscan (MidEvil #3592's collection.key)
         cssClass: "medieval-mode",
         toastMsg: "🏰 Mid Evil detected! The realm grows old.",
     },
