@@ -43,7 +43,7 @@ const EARNINGS_PENALTY_SEVERE_PCT = 0.35;
 const EARNINGS_PENALTY_MINOR_CHANCE = 0.10;    // 10% — docks 10%
 const EARNINGS_PENALTY_MINOR_PCT = 0.10;
 
-let compileOnCooldown = false;
+// cooldown is tracked via state.compileCooldownUntil (persisted, survives reload)
 let lastCompiledCode = null;
 
 /* ---- flavor pools ---- */
@@ -269,7 +269,7 @@ function loadTemplate(key) {
 /* ---- main entry point ---- */
 
 function auditContract() {
-    if (compileOnCooldown) return;
+    if (Date.now() < (state.compileCooldownUntil || 0)) return;
 
     const rawCode = document.getElementById('contractInput').value;
     const validationError = validateAuditInput(rawCode);
@@ -392,29 +392,38 @@ function triggerAuditorFullDrain() {
 }
 
 function startCompileCooldown() {
-    compileOnCooldown = true;
+    state.compileCooldownUntil = Date.now() + COMPILE_COOLDOWN_MS;
+    saveGame();
+    renderCompileCooldownUI();
+}
+
+function renderCompileCooldownUI() {
+    const msLeft = (state.compileCooldownUntil || 0) - Date.now();
+    if (msLeft <= 0) return;
+
     const btn = document.querySelector("button[onclick='auditContract()']");
     if (!btn) {
-        setTimeout(() => { compileOnCooldown = false; }, COMPILE_COOLDOWN_MS);
+        setTimeout(renderCompileCooldownUI, 500);
         return;
     }
 
-    const original = btn.innerHTML;
-    let secondsLeft = Math.ceil(COMPILE_COOLDOWN_MS / 1000);
+    const original = btn.dataset.originalHtml || (btn.dataset.originalHtml = btn.innerHTML);
     btn.disabled = true;
     btn.classList.add('opacity-50', 'cursor-not-allowed');
-    btn.innerText = `Recompiling in ${secondsLeft}s...`;
 
     const interval = setInterval(() => {
-        secondsLeft--;
-        if (secondsLeft <= 0) {
+        const remaining = (state.compileCooldownUntil || 0) - Date.now();
+        if (remaining <= 0) {
             clearInterval(interval);
             btn.disabled = false;
             btn.classList.remove('opacity-50', 'cursor-not-allowed');
             btn.innerHTML = original;
-            compileOnCooldown = false;
         } else {
-            btn.innerText = `Recompiling in ${secondsLeft}s...`;
+            btn.innerText = `Recompiling in ${Math.ceil(remaining / 1000)}s...`;
         }
     }, 1000);
 }
+
+document.addEventListener('DOMContentLoaded', () => {
+    renderCompileCooldownUI(); // in case a cooldown was already running before a reload
+});
