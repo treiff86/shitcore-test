@@ -249,7 +249,8 @@ function launchToken() {
         triggerBinancePumpBonus();
     }
 
-    const cost = parseFloat(document.getElementById('deployLiquidity').value) || 200;
+    let cost = parseFloat(document.getElementById('deployLiquidity').value);
+    if (isNaN(cost) || cost <= 0) cost = 200;
     if (state.cash < cost) {
         showToast("Insufficient cash reserves to seed structural liquidity!", "error");
         return;
