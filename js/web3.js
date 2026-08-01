@@ -16,8 +16,9 @@
         meant to be public/client-side - that's what it's for.
    ============================================================ */
 
-const SUPABASE_URL = "https://dhoewjzwimvgogckprof.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_AECc75ywuwTSIeXmtCmqzg_FqsutxYE";
+const SUPABASE_URL = "";       // e.g. "https://abcdefgh.supabase.co"
+const SUPABASE_ANON_KEY = "";  // the "anon" / "public" key, not service_role
+const DOOPIES_COLLECTION_ADDRESS = ""; // real verified collection address - blank = rainbow mode never triggers, purely cosmetic either way
 
 let sb = null;
 let walletAddress = null;
@@ -68,6 +69,18 @@ async function connectWallet() {
                     walletSolDomain = domain;
                     updateWalletUI();
                     showToast(`✨ Resolved ${domain}`, "success");
+                }
+            });
+        }
+
+        // Doopie holder check - purely cosmetic, never blocks anything. Blank
+        // collection address by default; fill in DOOPIES_COLLECTION_ADDRESS
+        // once you have a real one to check against.
+        if (typeof window.checkCollectionOwnership === "function" && DOOPIES_COLLECTION_ADDRESS) {
+            window.checkCollectionOwnership(walletAddress, DOOPIES_COLLECTION_ADDRESS).then((owns) => {
+                if (owns) {
+                    document.body.classList.add("rainbow-mode");
+                    showToast("🌈 Doopie detected! Rainbow mode activated.", "success");
                 }
             });
         }
