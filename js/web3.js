@@ -18,7 +18,39 @@
 
 const SUPABASE_URL = "https://dhoewjzwimvgogckprof.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_AECc75ywuwTSIeXmtCmqzg_FqsutxYE";
-const DOOPIES_COLLECTION_ADDRESS = ""; // real verified collection address - blank = rainbow mode never triggers, purely cosmetic either way
+
+// Master wallet: previewing a theme here never checks real ownership, and
+// never affects what anyone else sees - it's a local dev-only toggle.
+const MASTER_WALLET = "AUrTSsPC2hqZB71QDPn1iHCtTpdFqk4uzk1eRmJDnmGs";
+
+// Cosmetic collection themes. Each entry: a collection to check ownership
+// against, and the CSS class (see style.css) to apply if the connected
+// wallet holds one. Only the first match applies - these are full-page
+// reskins, not meant to stack. Add new ones here as new collections come
+// in; nothing else needs to change to support another.
+const COSMETIC_THEMES = [
+    {
+        id: "doopies",
+        label: "Doopies - Rainbow",
+        collectionAddress: "7ifrcfFwVLBUKCo8smEK44npokR1xK8KHopRV98Moj8f", // verified via Solscan
+        cssClass: "rainbow-mode",
+        toastMsg: "🌈 Doopie detected! Rainbow mode activated.",
+    },
+    {
+        id: "midevils",
+        label: "Mid Evils - Medieval",
+        // NOT independently verified yet the way Doopies was (paste the mint
+        // into Solscan, confirm the metadata's `collection.key` matches this
+        // exact value) - it's possible this is an individual NFT's mint
+        // address rather than the shared collection address, same mix-up
+        // that happened with Doopies at first. Works fine for previewing via
+        // the master panel either way; real holder detection depends on it
+        // being correct.
+        collectionAddress: "HMkCcrGmrxE9EBwjjDP3q4MokodrJkxBofpCVEYNVaRf",
+        cssClass: "medieval-mode",
+        toastMsg: "🏰 Mid Evil detected! The realm grows old.",
+    },
+];
 
 let sb = null;
 let walletAddress = null;
@@ -39,6 +71,26 @@ function initSupabase() {
         return;
     }
     sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+}
+
+/* ---------------- Cosmetic theme detection ---------------- */
+
+function clearCosmeticThemes() {
+    COSMETIC_THEMES.forEach((t) => document.body.classList.remove(t.cssClass));
+}
+
+async function applyCosmeticThemes(addr) {
+    if (typeof window.checkCollectionOwnership !== "function") return;
+    for (const theme of COSMETIC_THEMES) {
+        if (!theme.collectionAddress) continue;
+        const owns = await window.checkCollectionOwnership(addr, theme.collectionAddress);
+        if (owns) {
+            clearCosmeticThemes();
+            document.body.classList.add(theme.cssClass);
+            showToast(theme.toastMsg, "success");
+            return; // first match wins, these don't stack
+        }
+    }
 }
 
 /* ---------------- Wallet connect (Phantom) ---------------- */
@@ -73,16 +125,14 @@ async function connectWallet() {
             });
         }
 
-        // Doopie holder check - purely cosmetic, never blocks anything. Blank
-        // collection address by default; fill in DOOPIES_COLLECTION_ADDRESS
-        // once you have a real one to check against.
-        if (typeof window.checkCollectionOwnership === "function" && DOOPIES_COLLECTION_ADDRESS) {
-            window.checkCollectionOwnership(walletAddress, DOOPIES_COLLECTION_ADDRESS).then((owns) => {
-                if (owns) {
-                    document.body.classList.add("rainbow-mode");
-                    showToast("🌈 Doopie detected! Rainbow mode activated.", "success");
-                }
-            });
+        // Real holder detection - checks every theme in COSMETIC_THEMES
+        applyCosmeticThemes(walletAddress);
+
+        // Master wallet gets the preview panel, in addition to (not instead
+        // of) normal real-ownership detection above
+        if (walletAddress === MASTER_WALLET) {
+            document.getElementById("themePreviewBtn")?.classList.remove("hidden");
+            openThemePreview();
         }
 
         await offerCloudLoadIfExists();
@@ -98,6 +148,8 @@ function disconnectWallet() {
     if (provider?.disconnect) provider.disconnect();
     walletAddress = null;
     walletSolDomain = null;
+    clearCosmeticThemes();
+    document.getElementById("themePreviewBtn")?.classList.add("hidden");
     updateWalletUI();
     showToast("Wallet disconnected. Still playing locally.", "info");
 }
@@ -195,6 +247,39 @@ function openLeaderboard() {
 }
 function closeLeaderboard() {
     document.getElementById("leaderboardModal")?.classList.add("hidden");
+}
+
+/* ---------------- Theme preview panel (master wallet only) ---------------- */
+
+function renderThemePreviewButtons() {
+    const box = document.getElementById("themePreviewButtons");
+    if (!box) return;
+    box.innerHTML = COSMETIC_THEMES.map((t) => `
+        <button onclick="previewTheme('${t.id}')"
+            class="w-full py-2 bg-purple-600/20 hover:bg-purple-600/40 border border-purple-500/30 text-purple-300 rounded text-xs font-bold transition">
+            ${t.label}
+        </button>
+    `).join("");
+}
+
+function previewTheme(themeId) {
+    clearCosmeticThemes();
+    if (!themeId) {
+        showToast("Preview reset to normal.", "info");
+        return;
+    }
+    const theme = COSMETIC_THEMES.find((t) => t.id === themeId);
+    if (!theme) return;
+    document.body.classList.add(theme.cssClass);
+    showToast(`Previewing: ${theme.label} (not a real ownership check)`, "info");
+}
+
+function openThemePreview() {
+    renderThemePreviewButtons();
+    document.getElementById("themePreviewModal")?.classList.remove("hidden");
+}
+function closeThemePreview() {
+    document.getElementById("themePreviewModal")?.classList.add("hidden");
 }
 
 /* ---------------- Init ---------------- */
