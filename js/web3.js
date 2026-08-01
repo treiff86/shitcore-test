@@ -16,8 +16,8 @@
         meant to be public/client-side - that's what it's for.
    ============================================================ */
 
-const SUPABASE_URL = "";       // e.g. "https://abcdefgh.supabase.co"
-const SUPABASE_ANON_KEY = "";  // the "anon" / "public" key, not service_role
+const SUPABASE_URL = "https://dhoewjzwimvgogckprof.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_AECc75ywuwTSIeXmtCmqzg_FqsutxYE";
 
 let sb = null;
 let walletAddress = null;
