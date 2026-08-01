@@ -18,17 +18,16 @@
       reason), fall back to grabbing any domain the wallet owns via
       the on-chain SDK, so something still shows instead of nothing.
 
-   Uses Solana's free public RPC endpoint for the fallback path only -
-   fine for occasional use, but rate-limited/can be flaky under load.
-   If domains stop resolving reliably, swap SOLANA_RPC for a proper
-   provider (Helius/QuickNode/etc, free tiers exist) - same code, just
-   a different URL.
+   Uses a public Solana RPC endpoint for the fallback path only. Solana's
+   own api.mainnet-beta.solana.com endpoint actively rejects this kind of
+   browser-origin traffic with a 403 (confirmed, not speculation) - using
+   solana-rpc.publicnode.com instead, which is built for exactly this.
    ============================================================ */
 
 import { Connection, PublicKey } from "https://esm.sh/@solana/web3.js@1";
 import { getAllDomains, performReverseLookup } from "https://esm.sh/@bonfida/spl-name-service@3";
 
-const SOLANA_RPC = "https://api.mainnet-beta.solana.com";
+const SOLANA_RPC = "https://solana-rpc.publicnode.com"; // api.mainnet-beta.solana.com actively 403s browser-origin traffic - confirmed, not a guess
 const SNS_PROXY = "https://sdk-proxy.sns.id";
 const connection = new Connection(SOLANA_RPC);
 
@@ -42,13 +41,16 @@ function normalizeDomain(raw) {
 async function getFavoriteDomain(walletAddressStr) {
     try {
         const res = await fetch(`${SNS_PROXY}/favorite-domain/${walletAddressStr}`);
+        const raw = await res.text();
+        console.log(`[sns] favorite-domain raw response (HTTP ${res.status}):`, raw);
         if (!res.ok) {
             console.warn(`[sns] favorite-domain lookup returned HTTP ${res.status}, falling back.`);
             return null;
         }
-        const data = await res.json();
+        let data;
+        try { data = JSON.parse(raw); } catch { data = raw; }
         const domain = normalizeDomain(data);
-        if (!domain) console.warn("[sns] favorite-domain response had no recognizable domain (owner likely hasn't set one), falling back.");
+        if (!domain) console.warn("[sns] favorite-domain response had no recognizable domain (owner likely hasn't set one, or the response shape doesn't match what normalizeDomain() expects - see the raw response logged above), falling back.");
         return domain;
     } catch (e) {
         console.warn("[sns] favorite-domain lookup failed (network or API issue), falling back:", e);
