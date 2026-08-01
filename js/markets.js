@@ -696,7 +696,7 @@ function generateChainLog() {
    ============================================================ */
 
 const MEV_COOLDOWN_MS = 12000;
-let mevCooldownActive = false;
+// cooldown is tracked via state.mevCooldownUntil (persisted, survives reload)
 
 const FAKE_WHALE_NAMES = [
     'a wallet that owns more leveraged BTC than is medically advisable',
@@ -919,10 +919,14 @@ function setupMevButton() {
     }
     btn.innerHTML = '🥪 MEV SANDWICH';
     btn.onclick = runMevSandwich;
+    renderMevCooldownUI(); // in case a cooldown was already running before a reload
 }
 
 function runMevSandwich() {
-    if (mevCooldownActive) return;
+    if (Date.now() < (state.mevCooldownUntil || 0)) {
+        showToast("MEV bot still cooling down.", "error");
+        return;
+    }
     if ((state.degenLevel || 1) < 3) {
         showToast("Reach Level 3: The Shadow Validator to unlock this.", "error");
         return;
@@ -967,29 +971,34 @@ function runMevSandwich() {
 }
 
 function startMevCooldown() {
-    mevCooldownActive = true;
+    state.mevCooldownUntil = Date.now() + MEV_COOLDOWN_MS;
+    saveGame();
+    renderMevCooldownUI();
+}
+
+function renderMevCooldownUI() {
     const btn = document.getElementById('mevFrontrunBtn');
+    const msLeft = (state.mevCooldownUntil || 0) - Date.now();
+    if (msLeft <= 0) return;
+
     if (!btn) {
-        setTimeout(() => { mevCooldownActive = false; }, MEV_COOLDOWN_MS);
+        setTimeout(renderMevCooldownUI, 500);
         return;
     }
 
-    const original = btn.innerHTML;
-    let secondsLeft = Math.ceil(MEV_COOLDOWN_MS / 1000);
+    const original = btn.dataset.originalHtml || (btn.dataset.originalHtml = btn.innerHTML);
     btn.disabled = true;
     btn.classList.add('opacity-50', 'cursor-not-allowed');
-    btn.innerText = `Cooling down (${secondsLeft}s)...`;
 
     const interval = setInterval(() => {
-        secondsLeft--;
-        if (secondsLeft <= 0) {
+        const remaining = (state.mevCooldownUntil || 0) - Date.now();
+        if (remaining <= 0) {
             clearInterval(interval);
             btn.disabled = false;
             btn.classList.remove('opacity-50', 'cursor-not-allowed');
             btn.innerHTML = original;
-            mevCooldownActive = false;
         } else {
-            btn.innerText = `Cooling down (${secondsLeft}s)...`;
+            btn.innerText = `Cooling down (${Math.ceil(remaining / 1000)}s)...`;
         }
     }, 1000);
 }
