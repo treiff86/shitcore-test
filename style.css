@@ -116,11 +116,26 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 
 /* Doopie holder cosmetic - rainbow mode. Applied to <body> in web3.js when
    a connected wallet holds a Doopie. The prefers-reduced-motion rule above
-   already catches this animation same as everything else. */
-@keyframes rainbow-shift {
-    0%   { filter: hue-rotate(0deg); }
-    100% { filter: hue-rotate(360deg); }
+   already catches these animations same as everything else.
+
+   Two effects layered together: an actual flowing rainbow gradient
+   background (hue-rotate alone barely shows against near-black colors -
+   there's no color there to rotate), plus a hue-cycling saturate filter
+   on the whole page so existing panels/accents/text shift through the
+   rainbow too, not just the background. */
+@keyframes rainbow-bg-flow {
+    0%   { background-position: 0% 50%; }
+    50%  { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+@keyframes rainbow-hue-cycle {
+    0%   { filter: hue-rotate(0deg) saturate(2); }
+    100% { filter: hue-rotate(360deg) saturate(2); }
 }
 .rainbow-mode {
-    animation: rainbow-shift 8s linear infinite;
+    background: linear-gradient(270deg,
+        #ff0055, #ff9500, #ffe600, #4dff4d, #00e5ff, #6a5cff, #ff4dd8, #ff0055);
+    background-size: 400% 400%;
+    animation: rainbow-bg-flow 14s ease-in-out infinite,
+               rainbow-hue-cycle 6s linear infinite;
 }
