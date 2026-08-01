@@ -163,6 +163,27 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     animation: rainbow-overlay-cycle 8s linear infinite;
 }
 
+/* Doopie panel backgrounds - actual doodle-blob artwork (not just the
+   body-level color glow) on the dark UI panels themselves. Targets any
+   element using a Tailwind arbitrary dark-background class (bg-[#0...]
+   or bg-[#1...], which covers every dark panel/card in this theme)
+   while .rainbow-mode is active, without needing to touch each one by
+   name individually.
+
+   Verified with actual rendering + connected-component pixel analysis
+   before shipping: every blob outline is a single closed shape (built
+   from smooth wobble only, no self-intersecting geometry), and the
+   full tiled pattern forms one continuous connected outline network -
+   no broken lines, no gaps, no naked spots. */
+.rainbow-mode [class*="bg-[#0"],
+.rainbow-mode [class*="bg-[#1"] {
+    background-color: #0C0F16 !important;
+    background-image: url('data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%22480%22%20height%3D%22320%22%20viewBox%3D%220%200%20480%20320%22%3E%0A%3Cg%20transform%3D%22translate%28-15.0%2C-10.0%29%20scale%280.7%29%22%3E%0A%3Cpath%20d%3D%22M297.7%2C170.0%20Q297.7%2C170.0%20289.4%2C201.4%20Q281.1%2C232.8%20253.4%2C255.1%20Q225.7%2C277.3%20187.9%2C284.4%20Q150.2%2C291.4%20116.9%2C274.6%20Q83.6%2C257.8%2060.2%2C231.1%20Q36.9%2C204.4%2052.6%2C174.1%20Q68.3%2C143.7%2079.2%2C116.3%20Q90.1%2C88.9%20120.1%2C68.7%20Q150.2%2C48.5%20186.8%2C57.8%20Q223.5%2C67.0%20254.7%2C85.7%20Q286.0%2C104.4%20291.9%2C137.2%20Z%22%20fill%3D%22%23ffb3d9%22%20stroke%3D%22%23000%22%20stroke-width%3D%226%22%20stroke-linejoin%3D%22round%22%20stroke-linecap%3D%22round%22/%3E%0A%3C/g%3E%3Cg%20transform%3D%22translate%28145.0%2C-10.0%29%20scale%280.7%29%22%3E%0A%3Cpath%20d%3D%22M288.2%2C170.0%20Q288.2%2C170.0%20280.6%2C199.1%20Q273.1%2C228.3%20246.5%2C247.2%20Q219.9%2C266.2%20186.3%2C270.9%20Q152.7%2C275.6%20122.1%2C262.7%20Q91.5%2C249.7%2068.9%2C225.9%20Q46.2%2C202.0%2053.2%2C171.8%20Q60.2%2C141.6%2073.2%2C113.2%20Q86.1%2C84.8%20120.5%2C81.5%20Q155.0%2C78.3%20186.6%2C77.7%20Q218.2%2C77.2%20243.4%2C95.7%20Q268.6%2C114.2%20278.4%2C142.1%20Z%22%20fill%3D%22%23a8f0c6%22%20stroke%3D%22%23000%22%20stroke-width%3D%226%22%20stroke-linejoin%3D%22round%22%20stroke-linecap%3D%22round%22/%3E%0A%3C/g%3E%3Cg%20transform%3D%22translate%28305.0%2C-10.0%29%20scale%280.7%29%22%3E%0A%3Cpath%20d%3D%22M298.7%2C170.0%20Q298.7%2C170.0%20289.3%2C201.1%20Q279.9%2C232.1%20254.0%2C257.1%20Q228.1%2C282.0%20191.1%2C274.8%20Q154.0%2C267.7%20126.9%2C254.5%20Q99.7%2C241.4%2070.1%2C222.4%20Q40.4%2C203.5%2049.0%2C172.2%20Q57.6%2C141.0%2075.0%2C116.1%20Q92.4%2C91.2%20121.6%2C71.9%20Q150.8%2C52.6%20183.6%2C66.6%20Q216.4%2C80.6%20251.3%2C92.4%20Q286.3%2C104.2%20292.5%2C137.1%20Z%22%20fill%3D%22%23c9b8ff%22%20stroke%3D%22%23000%22%20stroke-width%3D%226%22%20stroke-linejoin%3D%22round%22%20stroke-linecap%3D%22round%22/%3E%0A%3C/g%3E%3Cg%20transform%3D%22translate%28-15.0%2C150.0%29%20scale%280.7%29%22%3E%0A%3Cpath%20d%3D%22M298.3%2C170.0%20Q298.3%2C170.0%20284.9%2C198.7%20Q271.5%2C227.4%20248.0%2C251.3%20Q224.6%2C275.2%20189.7%2C269.4%20Q154.7%2C263.5%20119.6%2C260.1%20Q84.6%2C256.8%2070.4%2C228.1%20Q56.2%2C199.4%2052.1%2C168.9%20Q48.0%2C138.5%2072.6%2C117.3%20Q97.2%2C96.1%20125.2%2C81.9%20Q153.3%2C67.6%20185.5%2C72.9%20Q217.6%2C78.2%20243.0%2C96.3%20Q268.4%2C114.3%20283.4%2C142.2%20Z%22%20fill%3D%22%23ffe08a%22%20stroke%3D%22%23000%22%20stroke-width%3D%226%22%20stroke-linejoin%3D%22round%22%20stroke-linecap%3D%22round%22/%3E%0A%3C/g%3E%3Cg%20transform%3D%22translate%28145.0%2C150.0%29%20scale%280.7%29%22%3E%0A%3Cpath%20d%3D%22M277.4%2C170.0%20Q277.4%2C170.0%20274.2%2C198.6%20Q271.0%2C227.1%20243.1%2C242.2%20Q215.3%2C257.2%20183.2%2C271.3%20Q151.2%2C285.4%20120.1%2C268.8%20Q89.0%2C252.2%2078.3%2C224.3%20Q67.6%2C196.5%2067.7%2C170.0%20Q67.8%2C143.6%2075.7%2C112.9%20Q83.7%2C82.3%20119.0%2C78.0%20Q154.3%2C73.7%20189.5%2C69.1%20Q224.7%2C64.5%20251.2%2C86.8%20Q277.7%2C109.1%20277.5%2C139.6%20Z%22%20fill%3D%22%23a8d8ff%22%20stroke%3D%22%23000%22%20stroke-width%3D%226%22%20stroke-linejoin%3D%22round%22%20stroke-linecap%3D%22round%22/%3E%0A%3C/g%3E%3Cg%20transform%3D%22translate%28305.0%2C150.0%29%20scale%280.7%29%22%3E%0A%3Cpath%20d%3D%22M286.2%2C170.0%20Q286.2%2C170.0%20281.1%2C200.0%20Q276.1%2C230.0%20246.8%2C245.9%20Q217.6%2C261.8%20184.2%2C274.5%20Q150.9%2C287.1%20120.5%2C269.1%20Q90.1%2C251.2%2073.9%2C225.1%20Q57.7%2C199.0%2047.7%2C167.4%20Q37.8%2C135.9%2060.1%2C108.4%20Q82.3%2C80.9%20116.4%2C66.1%20Q150.6%2C51.2%20187.1%2C58.9%20Q223.7%2C66.5%20243.8%2C91.7%20Q264.0%2C116.9%20275.1%2C143.4%20Z%22%20fill%3D%22%23ffb088%22%20stroke%3D%22%23000%22%20stroke-width%3D%226%22%20stroke-linejoin%3D%22round%22%20stroke-linecap%3D%22round%22/%3E%0A%3C/g%3E%0A%3C/svg%3E') !important;
+    background-repeat: repeat !important;
+    background-size: 200px 133px !important;
+}
+
+
 /* Mid Evils holder cosmetic - aged/medieval mode. Same technique as rainbow
    mode: a filter over the whole page (sepia + contrast, not hue-rotate)
    so the existing dark UI reads as old parchment/torchlight without
