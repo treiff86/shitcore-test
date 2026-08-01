@@ -16,11 +16,12 @@
         meant to be public/client-side - that's what it's for.
    ============================================================ */
 
-const SUPABASE_URL = "https://dhoewjzwimvgogckprof.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_AECc75ywuwTSIeXmtCmqzg_FqsutxYE";
+const SUPABASE_URL = "";       // e.g. "https://abcdefgh.supabase.co"
+const SUPABASE_ANON_KEY = "";  // the "anon" / "public" key, not service_role
 
 let sb = null;
 let walletAddress = null;
+let walletSolDomain = null; // e.g. "degen.sol" - null until/unless resolved
 let leaderboardChannel = null;
 
 function web3Ready() {
@@ -59,6 +60,18 @@ async function connectWallet() {
         walletAddress = resp.publicKey.toString();
         updateWalletUI();
         showToast(`🔗 Wallet connected: ${shortAddr(walletAddress)}`, "success");
+
+        // Best-effort .sol domain resolution - purely cosmetic, never blocks anything
+        if (typeof window.lookupSolDomain === "function") {
+            window.lookupSolDomain(walletAddress).then((domain) => {
+                if (domain) {
+                    walletSolDomain = domain;
+                    updateWalletUI();
+                    showToast(`✨ Resolved ${domain}`, "success");
+                }
+            });
+        }
+
         await offerCloudLoadIfExists();
     } catch (e) {
         if (e?.code === 4001) return; // user closed the connect popup - not an error
@@ -71,6 +84,7 @@ function disconnectWallet() {
     const provider = getPhantomProvider();
     if (provider?.disconnect) provider.disconnect();
     walletAddress = null;
+    walletSolDomain = null;
     updateWalletUI();
     showToast("Wallet disconnected. Still playing locally.", "info");
 }
@@ -79,10 +93,14 @@ function shortAddr(addr) {
     return addr ? `${addr.slice(0, 4)}...${addr.slice(-4)}` : "";
 }
 
+function displayName() {
+    return walletSolDomain || shortAddr(walletAddress);
+}
+
 function updateWalletUI() {
     const btn = document.getElementById("walletConnectBtn");
     if (!btn) return;
-    btn.innerText = walletAddress ? `🔗 ${shortAddr(walletAddress)}` : "Connect Wallet";
+    btn.innerText = walletAddress ? `🔗 ${displayName()}` : "Connect Wallet";
     btn.onclick = walletAddress ? disconnectWallet : connectWallet;
 }
 
@@ -114,6 +132,7 @@ async function saveToCloud() {
     if (!sb || !walletAddress) return;
     const { error } = await sb.from("players").upsert({
         wallet_address: walletAddress,
+        display_name: walletSolDomain || null,
         game_state: state,
         lifetime_earned: state.lifetimeEarned || 0,
         degen_level: state.degenLevel || 1,
