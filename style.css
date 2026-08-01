@@ -139,3 +139,27 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     animation: rainbow-bg-flow 14s ease-in-out infinite,
                rainbow-hue-cycle 6s linear infinite;
 }
+
+/* Mid Evils holder cosmetic - aged/medieval mode. Same technique as rainbow
+   mode: a filter over the whole page (sepia + contrast, not hue-rotate)
+   so the existing dark UI reads as old parchment/torchlight without
+   touching every individual hardcoded color, plus a warm gradient
+   background and a decorative font on headings for the "old book" feel. */
+@keyframes medieval-flicker {
+    0%, 100% { filter: sepia(0.75) contrast(1.15) brightness(0.92) saturate(1.4); }
+    50%      { filter: sepia(0.8) contrast(1.18) brightness(0.88) saturate(1.3); }
+}
+.medieval-mode {
+    animation: medieval-flicker 4s ease-in-out infinite;
+    background:
+        radial-gradient(ellipse at 20% 20%, rgba(101,67,33,0.35), transparent 55%),
+        radial-gradient(ellipse at 80% 80%, rgba(80,50,20,0.35), transparent 55%),
+        #1a1208;
+}
+.medieval-mode h1,
+.medieval-mode h2,
+.medieval-mode h3,
+.medieval-mode .font-black {
+    font-family: 'MedievalSharp', cursive;
+    letter-spacing: 0.5px;
+}
