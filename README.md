@@ -1,8 +1,8 @@
 # Shitcore (USDSHT) — Layer 1 Shitcoin Tycoon
 
-> **v1.0.0: OpenShit** — The most unhinged fake blockchain tycoon game on GitHub Pages.
+> **v1.6.9: Leaders of Rugging** — The most unhinged fake blockchain tycoon game on GitHub Pages.
 
-A 100% free, 100% client-side satirical idle/tycoon game about meme-coin rug pulls, leveraged trading, NFT grifts, and Ponzi yield farms. No real blockchain. No real wallet. No real money. Every number is `Math.random()` running in your browser. It exists to satirize crypto culture, not teach or enable it.
+A 100% free, 100% client-side satirical idle/tycoon game about meme-coin rug pulls, leveraged trading, NFT grifts, and Ponzi yield farms. No real blockchain. No real money ever moves — every dollar is `Math.random()` running in your browser. Wallet connect is real (optional, read-only, just for cloud saves and the leaderboard) but never touches funds or asks for a signature. It exists to satirize crypto culture, not teach or enable it.
 
 ---
 
@@ -79,19 +79,45 @@ Mock OpenSea. Generate real AI art via Pollinations.ai (free, no API key). Mint 
 **Flow:**
 1. **Generate Art** — type any prompt, get a real AI image for free
 2. **Configure** — name your collection, set ticker + mint price (500 NFT supply)
-3. **Launch** ($100 deploy fee) — fake buyers start minting over ~15-20 min, Hype decays slowly
-4. **Hype it** — Pay Y Social Influencer ($100):
-   - **0.01%** — DRAINED
+3. **Launch** ($100 deploy fee) — fake buyers start minting over ~15-20 min, Hype decays slowly. Config fields lock; the shill, floor, and exit tools unlock.
+4. **Hype it** — Pay Y Social Influencer ($100), **max 3 uses per session** (resets on page reload, not per collection):
+   - **0.01%** — DRAINED, wallet → $0
+   - **0.01%** — Influencer Rug: they quietly take 25% of your wallet and vanish
    - **1%** — Heman Tusk (CEO of Y) changes his pfp to *your actual generated image* and posts about it — **instant sellout**, millions of likes
    - **10%** — scammer takes your $100 AND hacks 10-50% of your wallet
    - **~89%** — success: Hype +5-25%, Mint progress +5-10%, sponsored Y post with viral engagement numbers
-5. **Exit** — pick your strategy:
-   - **💀 Mint & Rug** — ghost the community, keep all mint revenue
-   - **📈 Floor Pump & Dump** — pump the floor (1.5x-4x multiplier based on current hype), dump on retail buyers
+5. **Floor Pump & Dump** — repeatable, does *not* end the collection. Each use is a coin flip: floor multiplier ×1.15 (pump) or ×0.85 (dump), and it **stacks multiplicatively** with every use. 0.01% chance per use of a hack that costs 90% of your wallet.
+6. **Mint & Rug** — the actual exit. Cashes out `revenue × current floor multiplier`. Rug it before the collection fully sells out and there's a 1% chance a wallet drainer hits you for 90% of your funds on the way out, on top of whatever you just cashed out.
 
 **Live Y Feed** — a fake Twitter/X feed (branded "Y") with 75 hype posts, 59 panic posts, and 59 rug-reaction posts streaming in as your collection progresses. Heman Tusk's viral post uses your actual generated image as his profile picture.
 
 **Risks while live:** 0.01%/sec general drain · 0.03%/sec IP Lawsuit (instant seizure) · 0.07%/sec DMCA Strike (-28% hype)
+
+---
+
+## 🔗 Wallet Connect & Leaderboard *(New in v1.6.9)*
+
+Fully optional — the game works exactly the same with zero wallet ever connected, same as v1.0.0.
+
+- **Connect Wallet** — read-only. Asks your browser wallet (Phantom, or anything Phantom-compatible) for your public address and nothing else. Never requests a transaction or a signature, never touches funds.
+- **Cloud save** — your wallet address becomes your save-slot key. Connect from any device and, if a save already exists under that address, you'll be asked whether to load it.
+- **Live Leaderboard** — ranks players by lifetime earned (the same number your Degen Level is based on). Updates live across every open browser tab the instant anyone's score changes, via Supabase Realtime — no refreshing.
+- **.sol domain display** — if your connected wallet owns a Solana Name Service domain, it replaces your wallet address everywhere it'd otherwise show up: the header button, and your row on the leaderboard.
+
+**Trust note:** writes aren't signature-verified, on purpose — it keeps connecting frictionless for a leaderboard with zero real stakes. That does mean someone could technically spoof a fake score via the browser console rather than actually playing. Fine for bragging rights on a satire game; noted here for transparency.
+
+**Setup required to enable this:** run `supabase_setup.sql` once in your own Supabase project's SQL Editor, then fill in that project's URL and public API key at the top of `js/web3.js`.
+
+---
+
+## 📉 Market Volatility
+
+A passive difficulty system that runs the whole time you have the tab open — completely separate from anything you actively do.
+
+- Every **5 minutes of active play**, your wallet cash takes a random hit: **-1% to -10%**
+- **0.01% chance per tick** it's a **Black Swan Event** instead: **-25%** flat
+- Applies to wallet cash only — staked principal and active token value aren't touched by this system
+- No warning, no countdown — same philosophy as every other risk event in this game
 
 ---
 
@@ -139,6 +165,11 @@ Heat is **account-wide**. Hit **100% = instant game over**, all assets seized.
 | IP Lawsuit | OpenShit (per second live) | 0.03%/sec | Collection seized, revenue forfeited |
 | DMCA Strike | OpenShit (per second live) | 0.07%/sec | Hype -28% |
 | Heman Tusk Post | OpenShit shill | 1% | Instant sellout (positive event!) |
+| Influencer Rug (new) | OpenShit shill | 0.01% | 25% of wallet lost, no fee refund |
+| Early Rug Hack (new) | OpenShit Mint & Rug, before sellout only | 1% | 90% of wallet lost, on top of the rug payout |
+| Floor Manipulation Hack (new) | OpenShit Floor Pump & Dump, per use | 0.01% | 90% of wallet lost |
+| Market Correction | Passive, every 5 min of play | 100% (always fires) | Wallet -1% to -10% |
+| Black Swan Event | Passive, every 5 min of play | 0.01% (replaces the above) | Wallet -25% |
 
 ---
 
@@ -158,16 +189,20 @@ Heat is **account-wide**. Hit **100% = instant game over**, all assets seized.
 ## 🗂️ File Structure
 
 ```
-index.html            Page structure, all tabs, modals
-css/style.css         Theme, animations, card styling
+index.html            Page structure, all tabs, modals, wallet/leaderboard UI
+style.css              Theme, animations, card styling
+supabase_setup.sql    One-time DB setup for cloud save + leaderboard (run in Supabase SQL Editor)
 js/audio.js           Web Audio API synthesizer (no audio files)
 js/state.js           Game state, save/load, levels, lambo tiers
 js/ui.js              Tab switching, toasts, header rendering
 js/markets.js         Markets mini-game + MEV Sandwich + chain feed
 js/auditor.js         AI Solidity Auditor mini-game
 js/deployer.js        Rug Creator mini-game
+js/volatility.js      Passive Market Volatility (wallet decay every 5 min)
 js/staking.js         Ponzi Yield Pools mini-game
 js/perks.js           Perk shop
+js/web3.js            Wallet connect, cloud save/load, live leaderboard (needs your Supabase URL/key)
+js/sns.js             .sol domain resolution (ES module, Solana Name Service)
 js/openshit.js        OpenShit NFT mini-game (self-injecting)
 js/main.js            Boot + 1-second game tick
 ```
@@ -175,6 +210,19 @@ js/main.js            Boot + 1-second game tick
 ---
 
 ## 🆕 Changelog
+
+### v1.6.9 — Leaders of Rugging: Web3 Integrations Begin
+- **New:** Wallet Connect (Phantom) — read-only, address-only, never requests a transaction or a signature
+- **New:** Cloud save — your wallet address becomes your save-slot key, pick up your run on any device
+- **New:** Live Leaderboard — ranks lifetime earned, updates in real time across every open tab via Supabase Realtime
+- **New:** .sol domain resolution — a connected wallet with a Solana Name Service domain shows that domain (e.g. "degen.sol") instead of its address, everywhere in the UI and on the leaderboard
+- **New:** Market Volatility — passive wallet decay every 5 min of active play (-1% to -10%, 0.01% chance of a -25% Black Swan)
+- **New:** Pay Y Social Influencer capped at 3 uses per session, plus a new 0.01% "Influencer Rug" outcome (-25% wallet)
+- **Changed:** Floor Pump & Dump is no longer a one-time exit — it's now repeatable and stacks a floor multiplier (±15% per use, multiplicative), with a 0.01% hack chance per use (-90% wallet)
+- **Changed:** Mint & Rug now applies the floor multiplier to its payout, and carries a new 1% wallet-hack risk (-90%) specifically when rugging before the collection fully sells out
+- **Fixed:** Pay Y Social Influencer, Mint & Rug, and Floor Pump & Dump were all getting disabled (greyed out, unclickable) after launching a collection — a `pointer-events-none` lock meant for the config fields was accidentally applied to their shared parent container instead
+- **Fixed (security):** Rug Creator's custom liquidity field accepted negative numbers, which meant "spending" liquidity to deploy actually *added* cash instead of subtracting it — an infinite free-money exploit. Input is now validated; invalid or non-positive values safely fall back to the $200 default
+- **Fixed (security):** MEV Sandwich and AI Auditor compile cooldowns were tracked in memory only, so reloading the page instantly reset either cooldown — letting both be spammed far faster than intended (MEV Sandwich pays out real cash per use). Both cooldowns now persist properly and survive a reload
 
 ### v1.0.0 — OpenShit
 - **New mini-game:** OpenShit — AI image generation, 500-NFT fake collections, fake Y social feed, Mint & Rug + Floor Pump & Dump exits
