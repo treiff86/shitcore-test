@@ -380,3 +380,14 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .medieval-mode [class*="hover:bg-[#252E3E]"]:hover {
     background: linear-gradient(160deg, #7d7d74 0%, #5a5a52 45%, #46463c 100%) !important;
 }
+
+/* Perk shop "buy" buttons - mossy stone instead of flat bright green,
+   still reads as "affordable/go" without breaking the theme. */
+.medieval-mode [class*="bg-emerald-600"] {
+    background: linear-gradient(160deg, #4d7a52 0%, #2f5233 50%, #1f3722 100%) !important;
+    border: 1px solid #000 !important;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08) !important;
+}
+.medieval-mode [class*="hover:bg-emerald-500"]:hover {
+    background: linear-gradient(160deg, #5c8f62 0%, #3d6642 50%, #294a2c 100%) !important;
+}
