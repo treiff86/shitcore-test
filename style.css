@@ -441,9 +441,14 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .mc-painter-body {
     clip-path: inset(55% 0 0 0);
 }
-.mc-painter-arm {
-    clip-path: inset(0 0 45% 0);
+.mc-painter-torso {
+    clip-path: inset(28% 0 45% 0);
     transform-origin: 50% 55%;
+    transition: transform 0.5s ease-out;
+}
+.mc-painter-arm {
+    clip-path: inset(0 0 72% 0);
+    transform-origin: 50% 28%;
     transition: transform 0.5s ease-out;
 }
 
