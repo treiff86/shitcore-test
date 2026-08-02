@@ -278,3 +278,53 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     background-repeat: repeat !important;
     background-size: 220px 220px !important;
 }
+
+/* Header + nav bar get the same wood-and-stone frame as the panels,
+   deliberately left out of the selector above (that one's scoped tight
+   on purpose). Thinner border since these are shallow strips, not boxes. */
+.medieval-mode header,
+.medieval-mode nav {
+    border-image-source: url('assets/medieval-panel-bg.png') !important;
+    border-image-slice: 145 !important;
+    border-image-width: 16px !important;
+    border-image-repeat: round !important;
+    border-style: solid !important;
+    background-color: #3a2418 !important;
+    background-image: url('assets/medieval-wood-fill.png') !important;
+    background-repeat: repeat !important;
+    background-size: 220px 220px !important;
+}
+
+/* Smaller inset boxes that sit inside the main panels (Spread strip,
+   Wager/Leverage controls) - same wood-and-stone treatment, scaled
+   down so the frame doesn't overwhelm a small element. */
+.medieval-mode .mc-inset-panel,
+.medieval-mode #wagerControlPanel {
+    border-image-source: url('assets/medieval-panel-bg.png') !important;
+    border-image-slice: 145 !important;
+    border-image-width: 12px !important;
+    border-image-repeat: round !important;
+    border-style: solid !important;
+    background-color: #3a2418 !important;
+    background-image: url('assets/medieval-wood-fill.png') !important;
+    background-repeat: repeat !important;
+    background-size: 140px 140px !important;
+}
+
+/* Medieval-styled scrollbar for every scrollable box on the page while
+   this theme is active (Chrome/Edge/Safari only - Firefox has no
+   equivalent styling hook, it'll just show its default scrollbar). */
+.medieval-mode ::-webkit-scrollbar {
+    width: 10px;
+}
+.medieval-mode ::-webkit-scrollbar-track {
+    background: #1a1208;
+}
+.medieval-mode ::-webkit-scrollbar-thumb {
+    background: #6b4423;
+    border: 2px solid #000;
+    border-radius: 4px;
+}
+.medieval-mode ::-webkit-scrollbar-thumb:hover {
+    background: #8a5a2e;
+}
