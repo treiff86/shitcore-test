@@ -125,17 +125,21 @@ function handleMarketAction(actionType) {
     // Roll the catastrophic outcome now, but DON'T act on it yet — the
     // trade always opens and rides for at least one tick first, instead
     // of being pre-empted before it's ever visible on screen.
+    // marketsLuckMultiplier (from a trait reward, see TRAIT_REWARDS in
+    // web3.js) divides every catastrophe's odds - 10x luck = 10x less
+    // likely to hit any of DRAINED/RUGGED/BUST.
+    const luck = state.marketsLuckMultiplier || 1;
     let pendingCatastrophe = null;
     const roll = Math.random();
-    let threshold = 0.0001;                       // 0.01% — DRAINED
+    let threshold = 0.0001 / luck;                // 0.01% — DRAINED
     if (roll < threshold) {
         pendingCatastrophe = 'DRAINED';
     } else {
-        threshold += 0.01;                         // +1% — RUGGED
+        threshold += 0.01 / luck;                  // +1% — RUGGED
         if (roll < threshold) {
             pendingCatastrophe = 'RUGGED';
         } else {
-            threshold += (BUST_CHANCE_MAP[committedLeverage] || 0); // +leverage-scaled bust odds
+            threshold += (BUST_CHANCE_MAP[committedLeverage] || 0) / luck; // +leverage-scaled bust odds
             if (roll < threshold) {
                 pendingCatastrophe = 'BUST';
             }
