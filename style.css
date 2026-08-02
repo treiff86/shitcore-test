@@ -384,7 +384,6 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 /* Same wood-and-stone inset treatment for the perk shop rows and the
    Ponzi Yield Pools cards - both use their own custom classes rather
    than the bg-[#10141D] Tailwind pattern, so they need their own rule. */
-.medieval-mode .perk-row,
 .medieval-mode .pool-card {
     border-image-source: url('assets/medieval-panel-bg.png') !important;
     border-image-slice: 145 !important;
@@ -395,6 +394,25 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     background-image: url('assets/medieval-wood-fill.png') !important;
     background-repeat: repeat !important;
     background-size: 140px 140px !important;
+}
+
+/* Perk shop rows get an aged-parchment scroll look instead of reusing
+   the wood texture everywhere - reads as "upgrade scroll" and stands
+   out from the panels around it. Text is forced dark here since
+   parchment is light-colored, unlike everywhere else in medieval-mode. */
+.medieval-mode .perk-row {
+    background-color: #d8c9a3 !important;
+    background-image: url('assets/medieval-parchment.webp') !important;
+    background-repeat: repeat !important;
+    background-size: 260px 260px !important;
+    border: 2px solid #3a2418 !important;
+    border-radius: 8px !important;
+    box-shadow: inset 0 0 14px rgba(58, 36, 24, 0.4) !important;
+}
+.medieval-mode .perk-row,
+.medieval-mode .perk-row * {
+    color: #2b1a10 !important;
+    text-shadow: none !important;
 }
 
 /* Perk buy buttons - keep the green (it still means "costs money / go"),
