@@ -381,6 +381,32 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     background: linear-gradient(160deg, #7d7d74 0%, #5a5a52 45%, #46463c 100%) !important;
 }
 
+/* Same wood-and-stone inset treatment for the perk shop rows and the
+   Ponzi Yield Pools cards - both use their own custom classes rather
+   than the bg-[#10141D] Tailwind pattern, so they need their own rule. */
+.medieval-mode .perk-row,
+.medieval-mode .pool-card {
+    border-image-source: url('assets/medieval-panel-bg.png') !important;
+    border-image-slice: 145 !important;
+    border-image-width: 12px !important;
+    border-image-repeat: round !important;
+    border-style: solid !important;
+    background-color: #3a2418 !important;
+    background-image: url('assets/medieval-wood-fill.png') !important;
+    background-repeat: repeat !important;
+    background-size: 140px 140px !important;
+}
+
+/* Perk buy buttons - keep the green (it still means "costs money / go"),
+   but carved instead of flat. */
+.medieval-mode [class*="bg-emerald-600"] {
+    background: linear-gradient(160deg, #4bb37e 0%, #1f6b45 55%, #123f29 100%) !important;
+    border: 1px solid #000 !important;
+}
+.medieval-mode [class*="bg-emerald-600"]:hover {
+    background: linear-gradient(160deg, #5fc794 0%, #2a8058 55%, #184f33 100%) !important;
+}
+
 /* Perk shop "buy" buttons - mossy stone instead of flat bright green,
    still reads as "affordable/go" without breaking the theme. */
 .medieval-mode [class*="bg-emerald-600"] {
