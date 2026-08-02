@@ -13,7 +13,7 @@
     <!-- FontAwesome icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Local styles (FIXED PATH) -->
-    <link rel="stylesheet" href="style.css?v=22">
+    <link rel="stylesheet" href="style.css?v=23">
 </head>
 <body class="overflow-x-hidden min-h-screen flex flex-col justify-between">
     <!-- Hand-drawn wobble filter for the chart canvas in Mid Evils mode -
@@ -61,7 +61,7 @@
 
             <!-- Core stats -->
             <div class="flex items-center gap-3 flex-wrap text-xs md:text-sm">
-                <span class="bg-[#121926] border border-[#1E293B] text-green-400 font-mono px-2.5 py-1.5 rounded flex items-center gap-1.5">
+                <span id="cashDisplayWrapper" onclick="addTestCash()" class="cursor-pointer bg-[#121926] border border-[#1E293B] text-green-400 font-mono px-2.5 py-1.5 rounded flex items-center gap-1.5" title="Testing only: click to add $4,200">
                     <i class="fa-solid fa-wallet text-[10px]"></i> $<span id="cashDisplay">1,000.00</span>
                 </span>
                 <div class="hidden md:flex flex-col w-32">
@@ -878,17 +878,17 @@
     <!-- ============================================================ -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>
 <script src="js/audio.js" defer></script>
-<script src="js/state.js" defer></script>
+<script src="js/state.js?v=1" defer></script>
 <script src="js/ui.js" defer></script>
-<script src="js/markets.js?v=7" defer></script>
+<script src="js/markets.js?v=8" defer></script>
 <script src="js/auditor.js" defer></script>
 <script src="js/deployer.js" defer></script>
 <script src="js/volatility.js" defer></script>
 <script src="js/staking.js" defer></script>
 <script src="js/perks.js" defer></script>
-<script src="js/web3.js?v=4" defer></script>
+<script src="js/web3.js?v=5" defer></script>
 <script type="module" src="js/sns.js?v=5"></script>
-<script type="module" src="js/nftgate.js?v=1"></script>
+<script type="module" src="js/nftgate.js?v=2"></script>
 <script src="js/gate.js" defer></script>
 <script src="js/main.js" defer></script>
 <script src="js/openshit.js" defer></script>
