@@ -234,6 +234,32 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     letter-spacing: 0.5px;
 }
 
+/* Call-out titles (chart title, orderbook header, USDSHT wordmark) -
+   red + black outline + a bit bigger, on top of whatever they already
+   get from the heading rule above. */
+.medieval-mode .mc-title-accent {
+    -webkit-text-stroke: 1px #000;
+    font-size: 1.15em;
+}
+
+/* Toast bubble background is white, so the global white-text rule above
+   would make the message invisible - force black text here regardless,
+   and drop the drop-shadow since it doesn't read well on a light bubble. */
+#toastBubble,
+#toastBubble * {
+    color: #000 !important;
+    text-shadow: none !important;
+}
+
+/* Character slides up from off-screen instead of just popping in. */
+@keyframes toastCharSlideUp {
+    from { transform: translateY(80px); opacity: 0; }
+    to   { transform: translateY(0);    opacity: 1; }
+}
+#toastMedieval img {
+    animation: toastCharSlideUp 0.45s ease-out;
+}
+
 /* Mid Evils panel backgrounds - one wood-and-stone panel per element,
    not a repeating wallpaper of the whole framed image. Uses CSS
    border-image to take just the stone-border portion of the artwork
