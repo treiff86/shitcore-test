@@ -220,18 +220,23 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     letter-spacing: 0.5px;
 }
 
-/* Mid Evils panel backgrounds - the actual wood+stone artwork on the
-   dark UI panels themselves, same verified-safe selector as the Doopies
-   panel treatment: requires the exact panel background color AND the
-   exact panel border color together, since bg-[#0C0F16] alone is reused
-   by every modal/toast/overlay in this theme too (each with its own
-   different colored border). This combination was already confirmed via
-   direct computed-style checks to hit only genuine content panels, not
-   the header, nav, or any modal. */
+/* Mid Evils panel backgrounds - one wood-and-stone panel per element,
+   not a repeating wallpaper of the whole framed image. Uses CSS
+   border-image to take just the stone-border portion of the artwork
+   and stretch it along the panel's actual edges (keeping corners
+   intact, standard technique for exactly this "picture frame" effect),
+   with a separate wood-only interior tile (cropped from the artwork's
+   own center, no stone in it) filling the middle. Same verified-safe
+   selector as before - requires the exact panel bg AND border color
+   together, confirmed to exclude header/nav/modals. */
 .medieval-mode [class*="bg-[#0C0F16]"][class*="border-[#1A2232]"] {
-    background-color: #0C0F16 !important;
-    background-image: url('assets/medieval-panel-bg.png') !important;
+    border-image-source: url('assets/medieval-panel-bg.png') !important;
+    border-image-slice: 145 !important;
+    border-image-width: 28px !important;
+    border-image-repeat: round !important;
+    border-style: solid !important;
+    background-color: #3a2418 !important;
+    background-image: url('assets/medieval-wood-fill.png') !important;
     background-repeat: repeat !important;
-    background-size: 340px 340px !important;
-    background-blend-mode: normal !important;
+    background-size: 220px 220px !important;
 }
