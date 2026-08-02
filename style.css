@@ -212,11 +212,38 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
         radial-gradient(ellipse at 80% 80%, rgba(80,50,20,0.35), transparent 55%),
         #1a1208;
 }
+/* All text in medieval-mode gets the Old English blackletter font,
+   a black outline, and a drop shadow so it reads like it's carved/
+   floating above the wood. White fill by default; headings override
+   to red fill just below. -webkit-text-stroke gives the crisp outline
+   in Chrome/Edge/Safari (this game's target browsers); the 4-direction
+   text-shadow stack is a fallback outline for anything that doesn't
+   support text-stroke, plus one extra soft shadow layer for the
+   "floating" drop-shadow effect. */
+.medieval-mode,
+.medieval-mode * {
+    font-family: 'UnifrakturMaguntia', 'MedievalSharp', cursive !important;
+    color: #ffffff !important;
+    -webkit-text-stroke: 1px #000;
+    text-shadow:
+        -1px -1px 0 #000,
+         1px -1px 0 #000,
+        -1px  1px 0 #000,
+         1px  1px 0 #000,
+         3px  4px 5px rgba(0,0,0,0.75);
+}
 .medieval-mode h1,
 .medieval-mode h2,
 .medieval-mode h3,
 .medieval-mode .font-black {
-    font-family: 'MedievalSharp', cursive;
+    color: #c62828 !important;
+    -webkit-text-stroke: 1.5px #000;
+    text-shadow:
+        -1.5px -1.5px 0 #000,
+         1.5px -1.5px 0 #000,
+        -1.5px  1.5px 0 #000,
+         1.5px  1.5px 0 #000,
+         4px  5px 6px rgba(0,0,0,0.8);
     letter-spacing: 0.5px;
 }
 
