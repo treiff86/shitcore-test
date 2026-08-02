@@ -13,7 +13,7 @@
     <!-- FontAwesome icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Local styles (FIXED PATH) -->
-    <link rel="stylesheet" href="style.css?v=9">
+    <link rel="stylesheet" href="style.css?v=10">
 </head>
 <body class="overflow-x-hidden min-h-screen flex flex-col justify-between">
 
@@ -44,7 +44,7 @@
                 <div>
                     <div class="flex items-center space-x-2">
                         <span class="text-white font-extrabold text-base md:text-lg uppercase flex items-center gap-1.5">
-                            USDSHT <span class="text-[10px] bg-[#1B2130] text-amber-500 px-1.5 py-0.5 rounded font-bold normal-case">Layer 1 Shitcoin Tycoon ▾</span>
+                            <span class="mc-title-accent">USDSHT</span> <span class="text-[10px] bg-[#1B2130] text-amber-500 px-1.5 py-0.5 rounded font-bold normal-case">Layer 1 Shitcoin Tycoon ▾</span>
                         </span>
                     </div>
                     <div id="levelBadge" class="text-[11px] text-amber-400 font-mono mt-0.5">LVL 1 — The Basement Dev</div>
@@ -272,7 +272,7 @@
                     <div>
                         <div class="flex items-center justify-between mb-4 gap-2">
                             <div class="flex items-center space-x-3">
-                                <span class="font-extrabold text-lg text-white">SHITCORE / USDSHT Ambient Chart</span>
+                                <span class="font-extrabold text-lg text-white mc-title-accent">SHITCORE / USDSHT Ambient Chart</span>
                                 <span class="bg-red-500/10 text-rose-400 px-2 py-0.5 rounded text-xs animate-pulse font-semibold">LIVE DRAIN</span>
                             </div>
                         </div>
@@ -298,7 +298,7 @@
                 <div class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-5 flex flex-col justify-between shadow-lg space-y-4">
                     <div>
                         <div class="border-b border-[#1A2232] pb-3 mb-3 flex items-center justify-between">
-                            <h3 class="font-bold text-sm text-gray-200">Live Orderbook</h3>
+                            <h3 class="font-bold text-sm text-gray-200 mc-title-accent">Live Orderbook</h3>
                             <span class="text-[10px] bg-amber-500/10 text-amber-500 px-1.5 py-0.5 rounded font-mono">Sim</span>
                         </div>
                         <div class="space-y-1 text-[11px] mono">
@@ -768,13 +768,13 @@
         <span id="toastMessageDefault">Default Alert State</span>
     </div>
 
-    <!-- Mid Evils toast - your PFP + speech bubble, only shown while medieval-mode is active -->
-    <div id="toastMedieval" class="fixed bottom-6 right-6 z-50 hidden flex items-end gap-2 max-w-sm">
-        <div id="toastBubble" class="bg-white text-black px-4 py-3 rounded-2xl shadow-2xl text-sm font-semibold mb-3 relative border-[3px] border-black">
+    <!-- Mid Evils toast - the character himself slides up bottom-left, speech bubble to his right -->
+    <div id="toastMedieval" class="fixed bottom-0 left-6 z-50 hidden flex items-end gap-2 max-w-md">
+        <img src="assets/pfp.png" alt="" class="w-48 h-auto flex-shrink-0 drop-shadow-2xl">
+        <div id="toastBubble" class="bg-white text-black px-4 py-3 rounded-2xl shadow-2xl text-sm font-semibold mb-6 relative border-[3px] border-black">
             <span id="toastMessageMedieval">Default Alert State</span>
-            <div class="absolute -bottom-[9px] right-6 w-4 h-4 bg-white border-r-[3px] border-b-[3px] border-black" style="transform: rotate(45deg);"></div>
+            <div class="absolute -bottom-[9px] left-6 w-4 h-4 bg-white border-l-[3px] border-b-[3px] border-black" style="transform: rotate(45deg);"></div>
         </div>
-        <img src="assets/pfp.png" alt="" class="w-16 h-16 rounded-full border-[3px] border-black shadow-2xl flex-shrink-0 bg-white">
     </div>
 
     <!-- Generic alert modal -->
