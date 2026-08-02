@@ -441,48 +441,36 @@ function renderChart() {
 }
 
 // Keeps the Mid Evils "painter" character's brush tip glued to the price
-// line at his position, WITHOUT moving his body - he stays planted, and
-// only rotates around his shoulder, like a rigid arm swinging on a hinge.
-// Both points were measured from the actual artwork:
-//   - brush tip: the topmost non-transparent pixel (~65.5% across, ~10% down)
-//   - shoulder pivot: where the raised arm's silhouette widens into the
-//     torso (~84% across, ~30% down) - this is an estimate off the pixel
-//     data, not a hand-picked joint, so it may need a nudge once it's
-//     visible live.
+// line at his position, by stretching just the arm-layer image (see
+// style.css .mc-painter-arm) from its fixed anchor at the 28% boundary
+// line - no rotation, no body movement, just a vertical scale.
+// Measured from the actual artwork:
+//   - brush tip: topmost non-transparent pixel -> 10% down the image
+//   - arm/body boundary: where the raised arm's silhouette widens into
+//     the torso -> ~28% down the image (this is the fixed anchor both
+//     layers are clipped/scaled from)
 const PAINTER_TIP_X_FRAC = 0.655;
 const PAINTER_TIP_Y_FRAC = 0.10;
-const PAINTER_PIVOT_X_FRAC = 0.84;
-const PAINTER_PIVOT_Y_FRAC = 0.30;
+const PAINTER_BOUNDARY_Y_FRAC = 0.28;
 const PAINTER_LINE_HUG_PX = 10; // nudges the target a little higher so the brush visibly overlaps the line instead of just grazing it
 
 function positionChartPainter(canvas, minVal, range) {
-    const painter = document.getElementById('mcChartPainter');
-    if (!painter || !priceHistory.length) return;
+    const arm = document.getElementById('mcChartPainterArm');
+    if (!arm || !priceHistory.length) return;
 
-    const pivotX = painter.offsetLeft + painter.offsetWidth * PAINTER_PIVOT_X_FRAC;
-    const pivotY = painter.offsetTop + painter.offsetHeight * PAINTER_PIVOT_Y_FRAC;
-    const restX = painter.offsetLeft + painter.offsetWidth * PAINTER_TIP_X_FRAC;
-    const restY = painter.offsetTop + painter.offsetHeight * PAINTER_TIP_Y_FRAC;
-    const radius = Math.hypot(restX - pivotX, restY - pivotY);
-    if (!radius) return;
+    const H = arm.offsetHeight;
+    const boundaryY = arm.offsetTop + PAINTER_BOUNDARY_Y_FRAC * H;
+    const restTipX = arm.offsetLeft + arm.offsetWidth * PAINTER_TIP_X_FRAC;
+    const restTipDistAboveBoundary = (PAINTER_BOUNDARY_Y_FRAC - PAINTER_TIP_Y_FRAC) * H; // positive, in px
 
     const step = canvas.width / (priceHistory.length - 1 || 1);
-    const targetX = restX; // he stands still, so we sample the line at his fixed brush X
-    const i = Math.min(priceHistory.length - 1, Math.max(0, Math.round(targetX / step)));
+    const i = Math.min(priceHistory.length - 1, Math.max(0, Math.round(restTipX / step)));
     const targetY = (canvas.height - ((priceHistory[i] - minVal) / range * canvas.height)) - PAINTER_LINE_HUG_PX;
 
-    // Rigid-arm rotation: keep the same pivot-to-tip distance, just find the
-    // angle that puts the tip's Y at the target (clamped so it can't reach
-    // further than the arm's actual length).
-    const dyTarget = Math.max(-radius, Math.min(radius, targetY - pivotY));
-    const dxSign = (restX - pivotX) >= 0 ? 1 : -1;
-    const dxTarget = dxSign * Math.sqrt(Math.max(0, radius * radius - dyTarget * dyTarget));
-    const restAngle = Math.atan2(restY - pivotY, restX - pivotX);
-    const targetAngle = Math.atan2(dyTarget, dxTarget);
-    let deltaDeg = (targetAngle - restAngle) * (180 / Math.PI);
-    deltaDeg = Math.max(-45, Math.min(45, deltaDeg)); // keep it looking like a shoulder, not a windmill
+    let scaleY = (boundaryY - targetY) / restTipDistAboveBoundary;
+    scaleY = Math.max(0.15, Math.min(3.0, scaleY));
 
-    painter.style.transform = `rotate(${deltaDeg.toFixed(1)}deg)`;
+    arm.style.transform = `scaleY(${scaleY.toFixed(3)})`;
 }
 
 function renderOrderbook(midPrice) {
