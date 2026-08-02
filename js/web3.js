@@ -45,6 +45,27 @@ const COSMETIC_THEMES = [
     },
 ];
 
+// Trait-gated rewards - checked against the specific NFT's metadata
+// attributes, not just collection membership. Add more entries here as
+// new ones get designed; nothing else needs to change to support them.
+//   - startingCashBonus: one-time, only applied the very first time a
+//     wallet is seen (see offerCloudLoadIfExists) - REPLACES the default
+//     starting cash, doesn't stack with it.
+//   - marketsLuckMultiplier: permanent once earned (persisted in the
+//     save via claimedTraitRewards), divides all Markets catastrophe
+//     odds (DRAINED/RUGGED/BUST) by this amount. Sticks even if the NFT
+//     is later sold, by design - once earned, it's earned.
+const TRAIT_REWARDS = [
+    {
+        id: "caravaggio_clothing",
+        collectionAddress: "w44WvLKRdLGye2ghhDJBxcmnWpBo31A1tCBko2G6DgW", // Mid Evils
+        traitType: "Clothing",
+        traitValue: "Caravaggio",
+        startingCashBonus: 4200,
+        marketsLuckMultiplier: 10,
+    },
+];
+
 let sb = null;
 let walletAddress = null;
 let walletSolDomain = null; // e.g. "degen.sol" - null until/unless resolved
@@ -258,6 +279,33 @@ function updateWalletUI() {
     btn.onclick = walletAddress ? disconnectWallet : connectWallet;
 }
 
+/* ---------------- Trait-gated rewards ---------------- */
+
+// Checks every entry in TRAIT_REWARDS and grants whichever the wallet
+// qualifies for and hasn't already claimed. `isNewSave` gates the
+// one-time cash bonus - only a brand-new wallet gets it; the luck
+// multiplier is granted regardless (and permanently, once granted).
+async function applyTraitRewards(addr, isNewSave) {
+    for (const reward of TRAIT_REWARDS) {
+        if ((state.claimedTraitRewards || []).includes(reward.id)) continue; // already earned - no need to recheck the chain
+
+        const has = await window.checkTraitOwnership(addr, reward.collectionAddress, reward.traitType, reward.traitValue);
+        if (!has) continue;
+
+        state.claimedTraitRewards = [...(state.claimedTraitRewards || []), reward.id];
+        if (reward.marketsLuckMultiplier) {
+            state.marketsLuckMultiplier = Math.max(state.marketsLuckMultiplier || 1, reward.marketsLuckMultiplier);
+        }
+        if (isNewSave && reward.startingCashBonus) {
+            state.cash = reward.startingCashBonus; // replaces the default starting cash, doesn't stack with it
+        }
+
+        showToast(`✨ ${reward.traitValue} trait detected! Reward unlocked permanently.`, "success");
+        saveGame(); // keep localStorage in sync immediately, cloud save happens right after this in offerCloudLoadIfExists
+        updateUI();
+    }
+}
+
 /* ---------------- Cloud save / load ---------------- */
 
 async function offerCloudLoadIfExists() {
@@ -269,7 +317,11 @@ async function offerCloudLoadIfExists() {
         .maybeSingle();
 
     if (error) { console.error("[web3] load check failed:", error); return; }
-    if (!data) { await saveToCloud(); return; } // first time this wallet's been seen - create its row
+    if (!data) {
+        await applyTraitRewards(walletAddress, true); // brand-new wallet - eligible for one-time starting bonuses too
+        await saveToCloud();
+        return;
+    }
 
     const when = new Date(data.updated_at).toLocaleString();
     if (confirm(`Found a cloud save for this wallet from ${when}. Load it? (Cancel keeps your current local progress and overwrites the cloud save with it instead.)`)) {
@@ -280,6 +332,7 @@ async function offerCloudLoadIfExists() {
     } else {
         await saveToCloud();
     }
+    await applyTraitRewards(walletAddress, false); // existing save - can still earn permanent perks (e.g. luck), no cash bonus though
 }
 
 async function saveToCloud() {
