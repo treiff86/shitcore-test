@@ -21,7 +21,13 @@ const defaultState = {
     ownedPerks: [],
     
     // Leaderboard entries
-    victimLeaderboard: []
+    victimLeaderboard: [],
+
+    // NFT trait rewards (see TRAIT_REWARDS in web3.js) - permanent once
+    // earned, persisted in the save so they survive even if the NFT is
+    // later sold/transferred.
+    claimedTraitRewards: [],   // reward ids already granted
+    marketsLuckMultiplier: 1   // divides Markets catastrophe odds; 1 = no bonus
 };
 
 let state = { ...defaultState };
@@ -62,6 +68,16 @@ function saveGame() {
     } catch (e) {
         console.error("Save failed:", e);
     }
+}
+
+// TESTING ONLY - click the wallet balance in the header to add $4,200.
+// Wired up for verifying the Caravaggio trait's starting-cash amount
+// without needing a real qualifying wallet every time.
+function addTestCash() {
+    state.cash = (state.cash || 0) + 4200;
+    saveGame();
+    if (typeof updateUI === "function") updateUI();
+    if (typeof showToast === "function") showToast("🧪 Test: +$4,200 added.", "success");
 }
 
 function resetGame() {
