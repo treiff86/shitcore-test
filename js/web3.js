@@ -287,10 +287,17 @@ function updateWalletUI() {
 // multiplier is granted regardless (and permanently, once granted).
 async function applyTraitRewards(addr, isNewSave) {
     for (const reward of TRAIT_REWARDS) {
-        if ((state.claimedTraitRewards || []).includes(reward.id)) continue; // already earned - no need to recheck the chain
-
         const has = await window.checkTraitOwnership(addr, reward.collectionAddress, reward.traitType, reward.traitValue);
         if (!has) continue;
+
+        // Always confirm the on-chain check itself succeeded, every time -
+        // this is separate from whether the reward below actually gets
+        // (re-)granted, so it's a reliable way to verify detection is
+        // working even on a wallet that already claimed it before.
+        showToast(`🎨 Trait Recognized: ${reward.traitValue}`, "success");
+
+        const alreadyClaimed = (state.claimedTraitRewards || []).includes(reward.id);
+        if (alreadyClaimed) continue; // detection confirmed above, but don't re-grant
 
         state.claimedTraitRewards = [...(state.claimedTraitRewards || []), reward.id];
         if (reward.marketsLuckMultiplier) {
@@ -300,7 +307,7 @@ async function applyTraitRewards(addr, isNewSave) {
             state.cash = reward.startingCashBonus; // replaces the default starting cash, doesn't stack with it
         }
 
-        showToast(`✨ ${reward.traitValue} trait detected! Reward unlocked permanently.`, "success");
+        showToast(`✨ Reward unlocked permanently from ${reward.traitValue}.`, "success");
         saveGame(); // keep localStorage in sync immediately, cloud save happens right after this in offerCloudLoadIfExists
         updateUI();
     }
