@@ -441,52 +441,72 @@ function renderChart() {
 }
 
 // Keeps the Mid Evils "painter" character's brush tip glued to the price
-// line at his position:
-//   - line ABOVE his natural reach -> stretch just the arm layer upward
-//     (see .mc-painter-arm in style.css)
-//   - line BELOW his natural reach -> never compress the arm (looked
-//     broken/squished), instead drop his WHOLE body down to meet it
-// Measured from the actual artwork:
-//   - brush tip: topmost non-transparent pixel -> 10% down the image
-//   - arm/body boundary: where the raised arm's silhouette widens into
-//     the torso -> ~28% down the image (fixed anchor the arm stretches from)
+// line at his position, in two stages:
+//   1. torso band (waist-to-shoulder) stretches first, up to a cap
+//   2. once maxed out, the hand/brush band takes over for the rest
+// This keeps any single band from stretching so far it turns to mush -
+// exactly the "head looks wonky past a point" problem being fixed here.
+//   - line BELOW his natural reach -> drop his WHOLE body down instead
+//     (never compress either band, that looked broken/squished)
+// All boundaries measured from the actual artwork:
+//   - brush tip: middle of the bristle cluster -> 15% down the image
+//   - hand/torso split: where the raised arm's silhouette widens into
+//     the torso -> ~28% down
+//   - torso/waist split (base of the stretchy region) -> ~55% down
 const PAINTER_TIP_X_FRAC = 0.655;
-const PAINTER_TIP_Y_FRAC = 0.15;  // middle of the brush bristle cluster, not the very tip
-const PAINTER_BOUNDARY_Y_FRAC = 0.55; // now the waist/torso line, not just the shoulder - more source pixels = less blur when stretched
-const PAINTER_LINE_HUG_PX = 4;    // small nudge only - the Y_FRAC change above does most of the work now
-const PAINTER_MAX_DROP_PX = 40;   // how far he's allowed to sink for very low points before we stop (keeps his feet from vanishing)
+const PAINTER_TIP_Y_FRAC = 0.15;
+const PAINTER_ARM_BOUNDARY_Y_FRAC = 0.28;   // hand band sits above this
+const PAINTER_BOUNDARY_Y_FRAC = 0.55;       // torso band's fixed anchor (waist line)
+const PAINTER_TORSO_MAX_SCALE = 2.2;        // cap before handing off to the hand band
+const PAINTER_LINE_HUG_PX = 4;
+const PAINTER_MAX_DROP_PX = 40;
 
 function positionChartPainter(canvas, minVal, range) {
     const wrap = document.getElementById('mcChartPainterWrap');
+    const torso = document.getElementById('mcChartPainterTorso');
     const arm = document.getElementById('mcChartPainterArm');
-    if (!wrap || !arm || !priceHistory.length) return;
+    if (!wrap || !torso || !arm || !priceHistory.length) return;
 
-    // IMPORTANT: read position/size off the WRAPPER, not the arm image -
-    // the arm image is absolutely positioned *inside* the wrapper, so its
-    // own offsetTop/offsetLeft are relative to the wrapper (basically
-    // always ~0), not to the chart. The wrapper is what's actually
-    // positioned relative to the chart container.
+    // Read position/size off the WRAPPER - the layered images are
+    // absolutely positioned *inside* it, so their own offset* values are
+    // relative to the wrapper (~0), not to the chart.
     const H = wrap.offsetHeight;
-    const boundaryY = wrap.offsetTop + PAINTER_BOUNDARY_Y_FRAC * H;
+    const boundaryY = wrap.offsetTop + PAINTER_BOUNDARY_Y_FRAC * H;         // torso's fixed anchor, in chart space
     const restTipX = wrap.offsetLeft + wrap.offsetWidth * PAINTER_TIP_X_FRAC;
-    const restTipDistAboveBoundary = (PAINTER_BOUNDARY_Y_FRAC - PAINTER_TIP_Y_FRAC) * H; // px, positive
-    const restTipY = boundaryY - restTipDistAboveBoundary; // his natural brush height, no stretch/drop
+    const torsoNaturalH = (PAINTER_BOUNDARY_Y_FRAC - PAINTER_ARM_BOUNDARY_Y_FRAC) * H;
+    const handNaturalH = (PAINTER_ARM_BOUNDARY_Y_FRAC - PAINTER_TIP_Y_FRAC) * H;
+    const restTipDistAboveBoundary = torsoNaturalH + handNaturalH; // = (0.55-0.15)*H
+    const restTipY = boundaryY - restTipDistAboveBoundary;
 
     const step = canvas.width / (priceHistory.length - 1 || 1);
     const i = Math.min(priceHistory.length - 1, Math.max(0, Math.round(restTipX / step)));
     const targetY = (canvas.height - ((priceHistory[i] - minVal) / range * canvas.height)) - PAINTER_LINE_HUG_PX;
 
     if (targetY <= restTipY) {
-        // Line is at or above his natural reach - stretch the arm up to it.
-        const scaleY = Math.max(1, Math.min(15, (boundaryY - targetY) / restTipDistAboveBoundary));
-        arm.style.transform = `scaleY(${scaleY.toFixed(3)})`;
+        const deltaNeeded = boundaryY - targetY; // total extra height needed above the waist anchor
+        const torsoMaxExtra = torsoNaturalH * (PAINTER_TORSO_MAX_SCALE - 1);
+
+        let torsoScale, torsoExtraPx, handScale;
+        if (deltaNeeded <= torsoNaturalH + torsoMaxExtra) {
+            torsoScale = deltaNeeded / torsoNaturalH;
+            torsoExtraPx = deltaNeeded - torsoNaturalH;
+            handScale = 1;
+        } else {
+            torsoScale = PAINTER_TORSO_MAX_SCALE;
+            torsoExtraPx = torsoMaxExtra;
+            const handDeltaNeeded = deltaNeeded - (torsoNaturalH + torsoMaxExtra);
+            handScale = Math.max(1, Math.min(10, 1 + handDeltaNeeded / handNaturalH));
+        }
+
+        torso.style.transform = `scaleY(${torsoScale.toFixed(3)})`;
+        // The hand band rides on top of however far the torso stretched,
+        // plus its own stretch on top of that once the torso is maxed out.
+        arm.style.transform = `translateY(${(-torsoExtraPx).toFixed(1)}px) scaleY(${handScale.toFixed(3)})`;
         wrap.style.transform = 'translateY(0)';
     } else {
-        // Line is below his natural reach - keep the arm at rest, drop the
-        // whole body down to meet it instead (clamped so he doesn't sink
-        // out of view).
         const drop = Math.max(0, Math.min(PAINTER_MAX_DROP_PX, targetY - restTipY));
-        arm.style.transform = 'scaleY(1)';
+        torso.style.transform = 'scaleY(1)';
+        arm.style.transform = 'translateY(0) scaleY(1)';
         wrap.style.transform = `translateY(${drop.toFixed(1)}px)`;
     }
 }
