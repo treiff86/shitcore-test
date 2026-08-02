@@ -762,9 +762,12 @@
     </section>
 
     <!-- Toast -->
-    <div id="toast" class="fixed bottom-6 right-6 z-50 bg-[#0C0F16] border-l-4 border-blue-500 px-5 py-3.5 rounded-lg shadow-2xl flex items-center space-x-3 text-sm text-gray-100 hidden max-w-sm">
-        <span id="toastIcon" class="text-blue-400"><i class="fa-solid fa-info-circle text-lg"></i></span>
-        <span id="toastMessage">Default Alert State</span>
+    <div id="toast" class="fixed bottom-6 right-6 z-50 hidden flex items-end gap-2 max-w-sm">
+        <div id="toastBubble" class="bg-white text-black px-4 py-3 rounded-2xl shadow-2xl text-sm font-semibold mb-3 relative border-[3px] border-black">
+            <span id="toastMessage">Default Alert State</span>
+            <div class="absolute -bottom-[9px] right-6 w-4 h-4 bg-white border-r-[3px] border-b-[3px] border-black" style="transform: rotate(45deg);"></div>
+        </div>
+        <img src="assets/pfp.png" alt="" class="w-16 h-16 rounded-full border-[3px] border-black shadow-2xl flex-shrink-0 bg-white">
     </div>
 
     <!-- Generic alert modal -->
