@@ -426,14 +426,23 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     background: linear-gradient(160deg, #5c8f62 0%, #3d6642 50%, #294a2c 100%) !important;
 }
 
-/* Character painting in the corner of the price chart. He's pinned to a
-   fixed resting spot (bottom-left, never moves) - only rotation around
-   his shoulder (set via transform-origin, matching the pivot used in
-   markets.js) is applied, driven by JS on every chart redraw. */
+/* Character painting in the corner of the price chart, built from two
+   stacked copies of the same image: the bottom ~72% (head/body) is
+   shown on one and never moves; the top ~28% (arm+brush) is shown on
+   the other and stretches vertically from a fixed anchor at that same
+   28% line, so it grows/shrinks to reach the price line while staying
+   seamlessly joined to the static body underneath. No new art, no
+   rotation guessing - just a clip + scale from a fixed boundary. */
 .medieval-mode .mc-chart-painter {
     display: block;
-    transform-origin: 84% 30%;
     filter: drop-shadow(3px 4px 4px rgba(0,0,0,0.6));
+}
+.mc-painter-body {
+    clip-path: inset(28% 0 0 0);
+}
+.mc-painter-arm {
+    clip-path: inset(0 0 72% 0);
+    transform-origin: 50% 28%;
     transition: transform 0.5s ease-out;
 }
 
