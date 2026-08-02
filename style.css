@@ -426,21 +426,15 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     background: linear-gradient(160deg, #5c8f62 0%, #3d6642 50%, #294a2c 100%) !important;
 }
 
-/* Character painting in the corner of the price chart. One flat image
-   (no separate arm layer), so this fakes an active-painting motion by
-   gently rocking/bobbing the whole figure from a bottom-left pivot
-   rather than isolating just the arm - a much simpler, safer effect
-   than true per-limb animation, while still reading as "he's at work". */
-@keyframes mc-paint-bob {
-    0%, 100% { transform: translateY(0) rotate(0deg); }
-    50%      { transform: translateY(-6px) rotate(-4deg); }
-}
+/* Character painting in the corner of the price chart. He's pinned to a
+   fixed resting spot (bottom-left, never moves) - only rotation around
+   his shoulder (set via transform-origin, matching the pivot used in
+   markets.js) is applied, driven by JS on every chart redraw. */
 .medieval-mode .mc-chart-painter {
     display: block;
-    transform-origin: bottom left;
-    animation: mc-paint-bob 1.1s ease-in-out infinite;
+    transform-origin: 84% 30%;
     filter: drop-shadow(3px 4px 4px rgba(0,0,0,0.6));
-    transition: top 0.5s ease-out;
+    transition: transform 0.5s ease-out;
 }
 
 /* Hand-drawn/painterly wobble on the price chart itself, via the SVG
