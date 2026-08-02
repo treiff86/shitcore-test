@@ -88,11 +88,8 @@ async function applyCosmeticThemes(addr) {
 
 /* ---------------- Wallet connect (any Solana wallet) ---------------- */
 
-// Each of these wallets injects itself onto `window` under its own key
-// when installed - this checks for all of them and only lists the ones
-// actually found on this device, in this rough popularity order. Jupiter
-// is mainly a mobile app rather than a desktop extension, so its check
-// is best-effort and may not catch every version.
+// Older/simpler wallets each inject themselves onto `window` under their
+// own key - this covers those directly.
 const KNOWN_WALLET_CHECKS = [
     { name: "Phantom",         test: () => (window.phantom?.solana?.isPhantom && window.phantom.solana) || (window.solana?.isPhantom && window.solana) },
     { name: "Solflare",        test: () => window.solflare?.isSolflare && window.solflare },
@@ -103,21 +100,47 @@ const KNOWN_WALLET_CHECKS = [
     { name: "Coinbase Wallet", test: () => window.coinbaseSolana && window.coinbaseSolana },
     { name: "Exodus",          test: () => window.exodus?.solana && window.exodus.solana },
     { name: "Clover",          test: () => window.clover_solana && window.clover_solana },
-    { name: "Jupiter",         test: () => window.jupiter?.solana && window.jupiter.solana },
 ];
+
+// Newer wallets (including MetaMask's Solana support, and anything we
+// didn't think to name above) announce themselves through the "Wallet
+// Standard" instead - a small two-event handshake, no library needed:
+// a wallet dispatches "register-wallet" with itself, and/or listens for
+// us announcing "app-ready" so wallets that loaded before this script
+// did still get a chance to register. This is the mechanism MetaMask's
+// Solana integration specifically relies on (confirmed via MetaMask's
+// own developer docs - it does not inject a plain window.metamask.solana
+// the way Phantom/Solflare/Backpack do).
+const standardWallets = []; // { name, wallet } - deduped, Solana-only
+function registerStandardWallet(wallet) {
+    if (!wallet?.chains?.some(c => c.startsWith("solana:"))) return; // not a Solana wallet
+    if (standardWallets.some(w => w.name === wallet.name)) return;   // already have it
+    standardWallets.push({ name: wallet.name, wallet });
+}
+window.addEventListener("wallet-standard:register-wallet", (event) => {
+    event.detail({ register: registerStandardWallet });
+});
+window.dispatchEvent(new CustomEvent("wallet-standard:app-ready", {
+    detail: { register: registerStandardWallet },
+}));
 
 function getInstalledWallets() {
     const found = [];
     for (const w of KNOWN_WALLET_CHECKS) {
         try {
             const provider = w.test();
-            if (provider) found.push({ name: w.name, provider });
+            if (provider) found.push({ name: w.name, kind: "legacy", provider });
         } catch (_) { /* a wallet's injected object being weirdly shaped shouldn't break the rest */ }
+    }
+    for (const { name, wallet } of standardWallets) {
+        if (found.some(w => w.name === name)) continue; // already found via the legacy check above
+        found.push({ name, kind: "standard", provider: wallet });
     }
     return found;
 }
 
-let activeProvider = null; // whichever wallet's provider object we actually connected with
+let activeProvider = null; // whichever wallet's provider/wallet object we actually connected with
+let activeProviderKind = null; // "legacy" or "standard" - connect/disconnect differ slightly
 
 async function connectWallet() {
     const wallets = getInstalledWallets();
@@ -133,12 +156,27 @@ async function connectWallet() {
     openWalletPicker(wallets);
 }
 
-async function connectToProvider({ name, provider }) {
+async function connectToProvider({ name, kind, provider }) {
     closeWalletPicker();
     try {
-        const resp = await provider.connect(); // read-only: just asks for the public address
+        let address;
+        if (kind === "standard") {
+            // Wallet Standard's connect API is shaped differently from the
+            // older per-wallet providers: it hands back an accounts array
+            // instead of a single publicKey.
+            const connectFeature = provider.features?.["standard:connect"];
+            if (!connectFeature) throw new Error("wallet doesn't support standard:connect");
+            const { accounts } = await connectFeature.connect();
+            if (!accounts?.length) throw { code: 4001 };
+            address = accounts[0].address;
+        } else {
+            const resp = await provider.connect(); // read-only: just asks for the public address
+            address = resp.publicKey.toString();
+        }
+
         activeProvider = provider;
-        walletAddress = resp.publicKey.toString();
+        activeProviderKind = kind;
+        walletAddress = address;
         updateWalletUI();
         showToast(`🔗 ${name} connected: ${shortAddr(walletAddress)}`, "success");
 
@@ -190,8 +228,13 @@ function closeWalletPicker() {
 }
 
 function disconnectWallet() {
-    if (activeProvider?.disconnect) activeProvider.disconnect();
+    if (activeProviderKind === "standard") {
+        activeProvider?.features?.["standard:disconnect"]?.disconnect?.();
+    } else if (activeProvider?.disconnect) {
+        activeProvider.disconnect();
+    }
     activeProvider = null;
+    activeProviderKind = null;
     walletAddress = null;
     walletSolDomain = null;
     clearCosmeticThemes();
