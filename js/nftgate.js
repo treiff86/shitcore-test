@@ -63,3 +63,65 @@ window.checkCollectionOwnership = async function (walletAddressStr, collectionAd
         return false;
     }
 };
+
+/* ============================================================
+   TRAIT-LEVEL CHECK (for trait-gated rewards, e.g. TRAIT_REWARDS
+   in web3.js) - same collection-ownership check, but also pulls
+   each NFT's metadata attributes and looks for a specific
+   trait_type/value pair (standard Metaplex format, e.g.
+   {"trait_type": "Clothing", "value": "Caravaggio"}).
+
+   Scans every NFT the wallet holds from that collection (limit
+   1000 - more than enough for any one wallet), not just the
+   first one found, since the matching trait could be on any of
+   them. Fails CLOSED (false) on any error, same reasoning as
+   checkCollectionOwnership above - a network hiccup should never
+   accidentally grant a reward.
+
+   window.checkTraitOwnership(walletAddress, collectionAddress, traitType, traitValue)
+   -> true/false, never throws.
+   ============================================================ */
+window.checkTraitOwnership = async function (walletAddressStr, collectionAddress, traitType, traitValue) {
+    if (!walletAddressStr || !collectionAddress || !traitType || !traitValue) return false;
+
+    try {
+        const res = await fetch(HELIUS_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                jsonrpc: "2.0",
+                id: "trait-gate-check",
+                method: "searchAssets",
+                params: {
+                    ownerAddress: walletAddressStr,
+                    grouping: ["collection", collectionAddress],
+                    page: 1,
+                    limit: 1000,
+                },
+            }),
+        });
+
+        if (!res.ok) {
+            console.warn(`[nftgate] Helius returned HTTP ${res.status} checking trait ${traitType}:${traitValue}`);
+            return false;
+        }
+
+        const data = await res.json();
+        if (data.error) {
+            console.warn("[nftgate] Helius API error:", data.error);
+            return false;
+        }
+
+        const items = data?.result?.items || [];
+        const match = items.some(item =>
+            (item?.content?.metadata?.attributes || []).some(
+                a => a.trait_type === traitType && a.value === traitValue
+            )
+        );
+        console.log(`[nftgate] ${walletAddressStr.slice(0,4)}...${walletAddressStr.slice(-4)} trait ${traitType}:${traitValue} -> ${match}`);
+        return match;
+    } catch (e) {
+        console.warn("[nftgate] trait check failed:", e);
+        return false;
+    }
+};
