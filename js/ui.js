@@ -80,13 +80,23 @@ function updateUI() {
 }
 
 function showToast(message, type = "info") {
-    const toast = document.getElementById('toast');
-    const bubble = document.getElementById('toastBubble');
-    const msgEl = document.getElementById('toastMessage');
-    msgEl.innerText = message;
+    const isMedieval = document.body.classList.contains('medieval-mode');
+    const toast = document.getElementById(isMedieval ? 'toastMedieval' : 'toastDefault');
+    const otherToast = document.getElementById(isMedieval ? 'toastDefault' : 'toastMedieval');
+    otherToast.classList.add('hidden'); // never show both at once
 
-    const borderColors = { info: '#000', success: '#16a34a', error: '#dc2626' };
-    bubble.style.borderColor = borderColors[type] || '#000';
+    if (isMedieval) {
+        document.getElementById('toastMessageMedieval').innerText = message;
+        const bubble = document.getElementById('toastBubble');
+        const borderColors = { info: '#000', success: '#16a34a', error: '#dc2626' };
+        bubble.style.borderColor = borderColors[type] || '#000';
+    } else {
+        document.getElementById('toastMessageDefault').innerText = message;
+        const icon = document.getElementById('toastIconDefault');
+        const iconClasses = { info: 'fa-info-circle text-blue-400', success: 'fa-check-circle text-emerald-400', error: 'fa-triangle-exclamation text-rose-400' };
+        icon.className = (iconClasses[type] || iconClasses.info).split(' ').slice(1).join(' ');
+        icon.innerHTML = `<i class="fa-solid ${(iconClasses[type] || iconClasses.info).split(' ')[0]} text-lg"></i>`;
+    }
 
     toast.classList.remove('hidden');
     clearTimeout(window._toastTimeout);
