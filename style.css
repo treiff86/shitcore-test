@@ -235,10 +235,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 }
 
 /* Call-out titles (chart title, orderbook header, USDSHT wordmark) -
-   red + black outline + a bit bigger, on top of whatever they already
-   get from the heading rule above. */
+   a bit bigger than normal headings, same red fill + drop shadow. */
 .medieval-mode .mc-title-accent {
-    -webkit-text-stroke: 1px #000;
     font-size: 1.15em;
 }
 
