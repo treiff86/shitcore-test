@@ -441,36 +441,54 @@ function renderChart() {
 }
 
 // Keeps the Mid Evils "painter" character's brush tip glued to the price
-// line at his position, by stretching just the arm-layer image (see
-// style.css .mc-painter-arm) from its fixed anchor at the 28% boundary
-// line - no rotation, no body movement, just a vertical scale.
+// line at his position:
+//   - line ABOVE his natural reach -> stretch just the arm layer upward
+//     (see .mc-painter-arm in style.css)
+//   - line BELOW his natural reach -> never compress the arm (looked
+//     broken/squished), instead drop his WHOLE body down to meet it
 // Measured from the actual artwork:
 //   - brush tip: topmost non-transparent pixel -> 10% down the image
 //   - arm/body boundary: where the raised arm's silhouette widens into
-//     the torso -> ~28% down the image (this is the fixed anchor both
-//     layers are clipped/scaled from)
+//     the torso -> ~28% down the image (fixed anchor the arm stretches from)
 const PAINTER_TIP_X_FRAC = 0.655;
 const PAINTER_TIP_Y_FRAC = 0.10;
 const PAINTER_BOUNDARY_Y_FRAC = 0.28;
-const PAINTER_LINE_HUG_PX = 10; // nudges the target a little higher so the brush visibly overlaps the line instead of just grazing it
+const PAINTER_LINE_HUG_PX = 10;   // nudges the target a little higher so the brush visibly overlaps the line
+const PAINTER_MAX_DROP_PX = 40;   // how far he's allowed to sink for very low points before we stop (keeps his feet from vanishing)
 
 function positionChartPainter(canvas, minVal, range) {
+    const wrap = document.getElementById('mcChartPainterWrap');
     const arm = document.getElementById('mcChartPainterArm');
-    if (!arm || !priceHistory.length) return;
+    if (!wrap || !arm || !priceHistory.length) return;
 
-    const H = arm.offsetHeight;
-    const boundaryY = arm.offsetTop + PAINTER_BOUNDARY_Y_FRAC * H;
-    const restTipX = arm.offsetLeft + arm.offsetWidth * PAINTER_TIP_X_FRAC;
-    const restTipDistAboveBoundary = (PAINTER_BOUNDARY_Y_FRAC - PAINTER_TIP_Y_FRAC) * H; // positive, in px
+    // IMPORTANT: read position/size off the WRAPPER, not the arm image -
+    // the arm image is absolutely positioned *inside* the wrapper, so its
+    // own offsetTop/offsetLeft are relative to the wrapper (basically
+    // always ~0), not to the chart. The wrapper is what's actually
+    // positioned relative to the chart container.
+    const H = wrap.offsetHeight;
+    const boundaryY = wrap.offsetTop + PAINTER_BOUNDARY_Y_FRAC * H;
+    const restTipX = wrap.offsetLeft + wrap.offsetWidth * PAINTER_TIP_X_FRAC;
+    const restTipDistAboveBoundary = (PAINTER_BOUNDARY_Y_FRAC - PAINTER_TIP_Y_FRAC) * H; // px, positive
+    const restTipY = boundaryY - restTipDistAboveBoundary; // his natural brush height, no stretch/drop
 
     const step = canvas.width / (priceHistory.length - 1 || 1);
     const i = Math.min(priceHistory.length - 1, Math.max(0, Math.round(restTipX / step)));
     const targetY = (canvas.height - ((priceHistory[i] - minVal) / range * canvas.height)) - PAINTER_LINE_HUG_PX;
 
-    let scaleY = (boundaryY - targetY) / restTipDistAboveBoundary;
-    scaleY = Math.max(0.15, Math.min(3.0, scaleY));
-
-    arm.style.transform = `scaleY(${scaleY.toFixed(3)})`;
+    if (targetY <= restTipY) {
+        // Line is at or above his natural reach - stretch the arm up to it.
+        const scaleY = Math.max(1, Math.min(3.0, (boundaryY - targetY) / restTipDistAboveBoundary));
+        arm.style.transform = `scaleY(${scaleY.toFixed(3)})`;
+        wrap.style.transform = 'translateY(0)';
+    } else {
+        // Line is below his natural reach - keep the arm at rest, drop the
+        // whole body down to meet it instead (clamped so he doesn't sink
+        // out of view).
+        const drop = Math.max(0, Math.min(PAINTER_MAX_DROP_PX, targetY - restTipY));
+        arm.style.transform = 'scaleY(1)';
+        wrap.style.transform = `translateY(${drop.toFixed(1)}px)`;
+    }
 }
 
 function renderOrderbook(midPrice) {
