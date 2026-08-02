@@ -81,11 +81,16 @@ function updateUI() {
 
 function showToast(message, type = "info") {
     const toast = document.getElementById('toast');
+    const bubble = document.getElementById('toastBubble');
     const msgEl = document.getElementById('toastMessage');
     msgEl.innerText = message;
-    
+
+    const borderColors = { info: '#000', success: '#16a34a', error: '#dc2626' };
+    bubble.style.borderColor = borderColors[type] || '#000';
+
     toast.classList.remove('hidden');
-    setTimeout(() => { toast.classList.add('hidden'); }, 5000);
+    clearTimeout(window._toastTimeout);
+    window._toastTimeout = setTimeout(() => { toast.classList.add('hidden'); }, 5000);
 }
 
 function showAlertModal(message) {
