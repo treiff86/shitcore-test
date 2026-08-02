@@ -440,6 +440,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     transform-origin: bottom left;
     animation: mc-paint-bob 1.1s ease-in-out infinite;
     filter: drop-shadow(3px 4px 4px rgba(0,0,0,0.6));
+    transition: top 0.5s ease-out;
 }
 
 /* Hand-drawn/painterly wobble on the price chart itself, via the SVG
