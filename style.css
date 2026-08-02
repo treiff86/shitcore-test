@@ -415,16 +415,6 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     text-shadow: none !important;
 }
 
-/* Perk buy buttons - keep the green (it still means "costs money / go"),
-   but carved instead of flat. */
-.medieval-mode [class*="bg-emerald-600"] {
-    background: linear-gradient(160deg, #4bb37e 0%, #1f6b45 55%, #123f29 100%) !important;
-    border: 1px solid #000 !important;
-}
-.medieval-mode [class*="bg-emerald-600"]:hover {
-    background: linear-gradient(160deg, #5fc794 0%, #2a8058 55%, #184f33 100%) !important;
-}
-
 /* Perk shop "buy" buttons - mossy stone instead of flat bright green,
    still reads as "affordable/go" without breaking the theme. */
 .medieval-mode [class*="bg-emerald-600"] {
@@ -434,4 +424,28 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 }
 .medieval-mode [class*="hover:bg-emerald-500"]:hover {
     background: linear-gradient(160deg, #5c8f62 0%, #3d6642 50%, #294a2c 100%) !important;
+}
+
+/* Character painting in the corner of the price chart. One flat image
+   (no separate arm layer), so this fakes an active-painting motion by
+   gently rocking/bobbing the whole figure from a bottom-left pivot
+   rather than isolating just the arm - a much simpler, safer effect
+   than true per-limb animation, while still reading as "he's at work". */
+@keyframes mc-paint-bob {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    50%      { transform: translateY(-6px) rotate(-4deg); }
+}
+.medieval-mode .mc-chart-painter {
+    display: block;
+    transform-origin: bottom left;
+    animation: mc-paint-bob 1.1s ease-in-out infinite;
+    filter: drop-shadow(3px 4px 4px rgba(0,0,0,0.6));
+}
+
+/* Hand-drawn/painterly wobble on the price chart itself, via the SVG
+   filter defined near the top of index.html. Works on canvas the same
+   as any other element, and re-applies automatically on every redraw
+   since it's just a persistent CSS filter reference. */
+.medieval-mode #tradingCanvas {
+    filter: url(#mc-hand-drawn);
 }
