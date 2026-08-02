@@ -207,10 +207,13 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 }
 .medieval-mode {
     animation: medieval-flicker 4s ease-in-out infinite;
-    background:
-        radial-gradient(ellipse at 20% 20%, rgba(101,67,33,0.35), transparent 55%),
-        radial-gradient(ellipse at 80% 80%, rgba(80,50,20,0.35), transparent 55%),
-        #1a1208;
+    background-color: #1a1208;
+    background-image:
+        radial-gradient(ellipse at 20% 20%, rgba(120,80,30,0.25), transparent 55%),
+        radial-gradient(ellipse at 80% 80%, rgba(100,60,20,0.25), transparent 55%),
+        url('assets/medieval-stone-floor.webp');
+    background-repeat: no-repeat, no-repeat, repeat;
+    background-size: auto, auto, 400px 400px;
 }
 /* All text in medieval-mode gets the Old English blackletter font,
    a black outline, and a drop shadow so it reads like it's carved/
