@@ -452,7 +452,7 @@ function renderChart() {
 //     the torso -> ~28% down the image (fixed anchor the arm stretches from)
 const PAINTER_TIP_X_FRAC = 0.655;
 const PAINTER_TIP_Y_FRAC = 0.15;  // middle of the brush bristle cluster, not the very tip
-const PAINTER_BOUNDARY_Y_FRAC = 0.28;
+const PAINTER_BOUNDARY_Y_FRAC = 0.55; // now the waist/torso line, not just the shoulder - more source pixels = less blur when stretched
 const PAINTER_LINE_HUG_PX = 4;    // small nudge only - the Y_FRAC change above does most of the work now
 const PAINTER_MAX_DROP_PX = 40;   // how far he's allowed to sink for very low points before we stop (keeps his feet from vanishing)
 
