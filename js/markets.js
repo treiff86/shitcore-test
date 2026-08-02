@@ -451,9 +451,9 @@ function renderChart() {
 //   - arm/body boundary: where the raised arm's silhouette widens into
 //     the torso -> ~28% down the image (fixed anchor the arm stretches from)
 const PAINTER_TIP_X_FRAC = 0.655;
-const PAINTER_TIP_Y_FRAC = 0.10;
+const PAINTER_TIP_Y_FRAC = 0.15;  // middle of the brush bristle cluster, not the very tip
 const PAINTER_BOUNDARY_Y_FRAC = 0.28;
-const PAINTER_LINE_HUG_PX = 10;   // nudges the target a little higher so the brush visibly overlaps the line
+const PAINTER_LINE_HUG_PX = 4;    // small nudge only - the Y_FRAC change above does most of the work now
 const PAINTER_MAX_DROP_PX = 40;   // how far he's allowed to sink for very low points before we stop (keeps his feet from vanishing)
 
 function positionChartPainter(canvas, minVal, range) {
@@ -478,7 +478,7 @@ function positionChartPainter(canvas, minVal, range) {
 
     if (targetY <= restTipY) {
         // Line is at or above his natural reach - stretch the arm up to it.
-        const scaleY = Math.max(1, Math.min(3.0, (boundaryY - targetY) / restTipDistAboveBoundary));
+        const scaleY = Math.max(1, Math.min(15, (boundaryY - targetY) / restTipDistAboveBoundary));
         arm.style.transform = `scaleY(${scaleY.toFixed(3)})`;
         wrap.style.transform = 'translateY(0)';
     } else {
