@@ -86,26 +86,61 @@ async function applyCosmeticThemes(addr) {
     }
 }
 
-/* ---------------- Wallet connect (Phantom) ---------------- */
+/* ---------------- Wallet connect (any Solana wallet) ---------------- */
 
-function getPhantomProvider() {
-    if (window.phantom?.solana?.isPhantom) return window.phantom.solana;
-    if (window.solana?.isPhantom) return window.solana;
-    return null;
+// Each of these wallets injects itself onto `window` under its own key
+// when installed - this checks for all of them and only lists the ones
+// actually found on this device, in this rough popularity order. Jupiter
+// is mainly a mobile app rather than a desktop extension, so its check
+// is best-effort and may not catch every version.
+const KNOWN_WALLET_CHECKS = [
+    { name: "Phantom",         test: () => (window.phantom?.solana?.isPhantom && window.phantom.solana) || (window.solana?.isPhantom && window.solana) },
+    { name: "Solflare",        test: () => window.solflare?.isSolflare && window.solflare },
+    { name: "Backpack",        test: () => window.backpack?.isBackpack && window.backpack },
+    { name: "Glow",            test: () => window.glow?.isGlow && window.glow },
+    { name: "Coin98",          test: () => window.coin98?.sol && window.coin98.sol },
+    { name: "Trust Wallet",    test: () => window.trustwallet?.solana && window.trustwallet.solana },
+    { name: "Coinbase Wallet", test: () => window.coinbaseSolana && window.coinbaseSolana },
+    { name: "Exodus",          test: () => window.exodus?.solana && window.exodus.solana },
+    { name: "Clover",          test: () => window.clover_solana && window.clover_solana },
+    { name: "Jupiter",         test: () => window.jupiter?.solana && window.jupiter.solana },
+];
+
+function getInstalledWallets() {
+    const found = [];
+    for (const w of KNOWN_WALLET_CHECKS) {
+        try {
+            const provider = w.test();
+            if (provider) found.push({ name: w.name, provider });
+        } catch (_) { /* a wallet's injected object being weirdly shaped shouldn't break the rest */ }
+    }
+    return found;
 }
 
+let activeProvider = null; // whichever wallet's provider object we actually connected with
+
 async function connectWallet() {
-    const provider = getPhantomProvider();
-    if (!provider) {
-        showToast("No Solana wallet found - install Phantom (or similar) to connect.", "error");
-        window.open("https://phantom.app/", "_blank");
+    const wallets = getInstalledWallets();
+    if (wallets.length === 0) {
+        showToast("No Solana wallet found - install Phantom, Solflare, Backpack, or similar to connect.", "error");
+        window.open("https://solana.com/ecosystem/explore?categories=wallet", "_blank");
         return;
     }
+    if (wallets.length === 1) {
+        connectToProvider(wallets[0]);
+        return;
+    }
+    openWalletPicker(wallets);
+}
+
+async function connectToProvider({ name, provider }) {
+    closeWalletPicker();
     try {
         const resp = await provider.connect(); // read-only: just asks for the public address
+        activeProvider = provider;
         walletAddress = resp.publicKey.toString();
         updateWalletUI();
-        showToast(`🔗 Wallet connected: ${shortAddr(walletAddress)}`, "success");
+        showToast(`🔗 ${name} connected: ${shortAddr(walletAddress)}`, "success");
 
         // Best-effort .sol domain resolution - purely cosmetic, never blocks anything
         if (typeof window.lookupSolDomain === "function") {
@@ -131,14 +166,32 @@ async function connectWallet() {
         await offerCloudLoadIfExists();
     } catch (e) {
         if (e?.code === 4001) return; // user closed the connect popup - not an error
-        console.error("[web3] connect failed:", e);
-        showToast("Wallet connection failed or was rejected.", "error");
+        console.error(`[web3] ${name} connect failed:`, e);
+        showToast(`${name} connection failed or was rejected.`, "error");
     }
 }
 
+let _walletPickerList = [];
+function openWalletPicker(wallets) {
+    _walletPickerList = wallets;
+    const box = document.getElementById("walletPickerButtons");
+    const modal = document.getElementById("walletPickerModal");
+    if (!box || !modal) return;
+    box.innerHTML = wallets.map((w, i) => `
+        <button onclick="connectToProvider(_walletPickerList[${i}])"
+            class="w-full py-2.5 bg-[#1C212E] hover:bg-[#252E3E] text-white font-bold rounded-lg text-sm transition text-left px-4">
+            ${w.name}
+        </button>`).join("");
+    modal.classList.remove("hidden");
+}
+
+function closeWalletPicker() {
+    document.getElementById("walletPickerModal")?.classList.add("hidden");
+}
+
 function disconnectWallet() {
-    const provider = getPhantomProvider();
-    if (provider?.disconnect) provider.disconnect();
+    if (activeProvider?.disconnect) activeProvider.disconnect();
+    activeProvider = null;
     walletAddress = null;
     walletSolDomain = null;
     clearCosmeticThemes();
