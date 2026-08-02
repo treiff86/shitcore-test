@@ -436,6 +436,29 @@ function renderChart() {
         ctx.font = '10px JetBrains Mono';
         ctx.fillText(`ENTRY ${activeTrade.entryPrice.toFixed(6)}`, 6, Math.max(10, entryY - 4));
     }
+
+    positionChartPainter(canvas, minVal, range);
+}
+
+// Keeps the Mid Evils "painter" character's brush tip glued to the price
+// line at his position. He's fixed near the left edge of the chart, so
+// this finds the line's height at that X and moves him (via `top`) so the
+// brush touches it - measured once from the actual artwork (the brush is
+// the topmost non-transparent pixel: ~65.5% across, ~10% down the image).
+const PAINTER_TIP_X_FRAC = 0.655;
+const PAINTER_TIP_Y_FRAC = 0.10;
+function positionChartPainter(canvas, minVal, range) {
+    const painter = document.getElementById('mcChartPainter');
+    if (!painter || !priceHistory.length) return;
+
+    const targetX = painter.offsetLeft + (painter.offsetWidth * PAINTER_TIP_X_FRAC);
+    const step = canvas.width / (priceHistory.length - 1 || 1);
+    const i = Math.min(priceHistory.length - 1, Math.max(0, Math.round(targetX / step)));
+    const lineY = canvas.height - ((priceHistory[i] - minVal) / range * canvas.height);
+
+    let top = lineY - (painter.offsetHeight * PAINTER_TIP_Y_FRAC);
+    top = Math.max(0, Math.min(top, canvas.height - painter.offsetHeight));
+    painter.style.top = `${top}px`;
 }
 
 function renderOrderbook(midPrice) {
