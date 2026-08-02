@@ -13,7 +13,7 @@
     <!-- FontAwesome icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Local styles (FIXED PATH) -->
-    <link rel="stylesheet" href="style.css?v=21">
+    <link rel="stylesheet" href="style.css?v=22">
 </head>
 <body class="overflow-x-hidden min-h-screen flex flex-col justify-between">
     <!-- Hand-drawn wobble filter for the chart canvas in Mid Evils mode -
@@ -296,6 +296,7 @@
                             <canvas id="tradingCanvas" class="w-full h-full block"></canvas>
                             <div id="mcChartPainterWrap" class="hidden mc-chart-painter absolute bottom-0 left-1 w-28 h-28 md:w-36 md:h-36 pointer-events-none select-none">
                                 <img src="assets/Reiffer painting.png" alt="" class="mc-painter-body absolute inset-0 w-full h-full">
+                                <img id="mcChartPainterTorso" src="assets/Reiffer painting.png" alt="" class="mc-painter-torso absolute inset-0 w-full h-full">
                                 <img id="mcChartPainterArm" src="assets/Reiffer painting.png" alt="" class="mc-painter-arm absolute inset-0 w-full h-full">
                             </div>
                         </div>
@@ -879,7 +880,7 @@
 <script src="js/audio.js" defer></script>
 <script src="js/state.js" defer></script>
 <script src="js/ui.js" defer></script>
-<script src="js/markets.js?v=6" defer></script>
+<script src="js/markets.js?v=7" defer></script>
 <script src="js/auditor.js" defer></script>
 <script src="js/deployer.js" defer></script>
 <script src="js/volatility.js" defer></script>
