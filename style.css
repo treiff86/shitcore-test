@@ -449,10 +449,14 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     background: linear-gradient(160deg, #5c8f62 0%, #3d6642 50%, #294a2c 100%) !important;
 }
 
-/* How To Play instruction cards - same aged-parchment scroll look as the
-   perk shop rows, so the whole "read this to learn the rules" panel
-   reads as parchment instead of the default dark cyber boxes. */
-.medieval-mode #howToPlaySection [class*="bg-[#070A0F]"] {
+/* How To Play, Ways To Earn, and Regulatory Heat all use the same black
+   instruction-card pattern - same aged-parchment scroll look as the perk
+   shop rows for all three, so the whole "read this to learn the rules"
+   set of panels reads as parchment instead of the default dark cyber
+   boxes. */
+.medieval-mode #howToPlaySection [class*="bg-[#070A0F]"],
+.medieval-mode #waysToEarnSection [class*="bg-[#070A0F]"],
+.medieval-mode #regulatoryHeatSection [class*="bg-[#070A0F]"] {
     background-color: #d8c9a3 !important;
     background-image: url('assets/medieval-parchment.webp') !important;
     background-repeat: repeat !important;
@@ -462,12 +466,28 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     box-shadow: inset 0 0 14px rgba(58, 36, 24, 0.4) !important;
 }
 .medieval-mode #howToPlaySection [class*="bg-[#070A0F]"],
-.medieval-mode #howToPlaySection [class*="bg-[#070A0F]"] * {
+.medieval-mode #howToPlaySection [class*="bg-[#070A0F]"] *,
+.medieval-mode #waysToEarnSection [class*="bg-[#070A0F]"],
+.medieval-mode #waysToEarnSection [class*="bg-[#070A0F]"] *,
+.medieval-mode #regulatoryHeatSection [class*="bg-[#070A0F]"],
+.medieval-mode #regulatoryHeatSection [class*="bg-[#070A0F]"] * {
     color: #2b1a10 !important;
     text-shadow: none !important;
 }
 .medieval-mode #howToPlaySection [class*="bg-[#070A0F]"] h4 {
     color: #7a3b12 !important;
+}
+/* Ways To Earn / Regulatory Heat headers keep their semantic colors
+   (green for earning, red/green for heat effects) instead of the same
+   flat amber How To Play uses - darker shades of the same hues so they
+   stay readable against light parchment instead of the original
+   bright versions made for a dark background. */
+.medieval-mode #waysToEarnSection [class*="bg-[#070A0F]"] h4.text-emerald-400,
+.medieval-mode #regulatoryHeatSection [class*="bg-[#070A0F]"] h4.text-emerald-400 {
+    color: #1a7a4a !important;
+}
+.medieval-mode #regulatoryHeatSection [class*="bg-[#070A0F]"] h4.text-rose-400 {
+    color: #a11d1d !important;
 }
 
 /* Wager amount input + the wager%/leverage buttons - same parchment
@@ -478,10 +498,19 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     background-repeat: repeat !important;
     background-size: 220px 220px !important;
     border: 2px solid #3a2418 !important;
-    color: #2b1a10 !important;
+    color: #a11d1d !important;
 }
 .medieval-mode #wagerCustomInput::placeholder {
-    color: #6b573c !important;
+    color: #b8695f !important;
+}
+
+/* The blanket "everything is white" rule applies directly to every
+   element, not just via inheritance from a colored parent - so a plain
+   id'd span sitting inside a .text-green-400 wrapper still needed its
+   own explicit color, or it'd render white instead of picking up the
+   parent's green like you'd expect. */
+.medieval-mode #ruggedSavingsDisplay {
+    color: #4ade80 !important;
 }
 .medieval-mode #wagerControlPanel button {
     background-color: #d8c9a3 !important;
