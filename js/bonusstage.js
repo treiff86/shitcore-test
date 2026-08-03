@@ -24,6 +24,11 @@ window.BonusStage = (function () {
     const FM_DH = 185;
     const FM_Y_PUSH = 0;
     const FM_HP = 5200;
+    // The last damage-state image is deliberately a tiny sliver of the HP
+    // bar - just a couple of hits from "critical" to destroyed, not an
+    // even 1/6th share like the rest. Everything else splits the
+    // remaining HP evenly. Keep this in sync with bonus_stage.py.
+    const FM_FINAL_TIER_HP = 130;
     const ROUND_T = 45.0;
 
     const P_SPD = 5.2;
@@ -69,7 +74,7 @@ window.BonusStage = (function () {
         kick_lo: ['reiffer_kick_lo.webp', 4],
         hurt: ['hit.webp', 1],
     };
-    const FRYER_FILES = ['tier_01.webp','tier_02.webp','tier_03.webp','tier_04.webp','tier_05.webp','tier_06.webp','tier_07.webp','tier_08.webp'];
+    const FRYER_FILES = ['tier_01.webp','tier_02.webp','tier_03.webp','tier_04.webp','tier_05.webp','tier_06.webp'];
     const DEBRIS_FILES = ['debris_1.webp','debris_2.webp','debris_3.webp','debris_4.webp','debris_5.webp','debris_6.webp','debris_7.webp','debris_8.webp','debris_9.webp','debris_10.webp','debris_11.webp','debris_12.webp'];
     const SPARK_FILES = ['spark_1.webp','spark_2.webp','spark_3.webp','spark_4.webp','spark_5.webp','spark_6.webp'];
 
@@ -280,9 +285,13 @@ window.BonusStage = (function () {
         idx() {
             const n = this.imgs.length;
             if (n === 0) return 0;
-            const r = this.hp / FM_HP;
-            const i = Math.floor((1.0 - r) * n);
-            return Math.min(i, n - 1);
+            if (n === 1) return 0;
+            const finalHp = Math.min(FM_FINAL_TIER_HP, FM_HP - 1);
+            const otherTiers = n - 1;
+            const chunk = (FM_HP - finalHp) / otherTiers;
+            if (this.hp <= finalHp) return n - 1;
+            const i = Math.floor((FM_HP - this.hp) / chunk);
+            return Math.min(i, n - 2);
         }
         hit(dmg, heavy) {
             if (this.stun > 0 || this.dead) return false;
@@ -499,8 +508,6 @@ window.BonusStage = (function () {
     }
 
     function drawEnd(ctx, won, score, reason) {
-        ctx.fillStyle = 'rgba(0,0,0,0.635)';
-        ctx.fillRect(0, 0, SW, SH);
         let title, col;
         if (won) { title = 'BONUS CLEAR!!'; col = COL.YL; }
         else if (reason === 'ko') { title = "KO'd BY THE FRYER"; col = COL.RD; }
@@ -668,7 +675,7 @@ window.BonusStage = (function () {
             loadReifferAnims, loadFryer, loadFxSet, loadBackground, loadStrip,
             newGame, drawHud, drawEnd, drawFallbackBg,
             constants: {
-                SW, SH, GROUND, P_H, FM_CX, FM_DW, FM_DH, FM_Y_PUSH, FM_HP, ROUND_T,
+                SW, SH, GROUND, P_H, FM_CX, FM_DW, FM_DH, FM_Y_PUSH, FM_HP, FM_FINAL_TIER_HP, ROUND_T,
                 P_SPD, P_Y, LEFT_WALL_X, RIGHT_WALL_X, WALL_COLLIDE_W,
                 DMG, ATK_DUR, HEAVY, HS_LT, HS_HV, HITSTUN, CANCEL_W, BUF_WIN,
                 SC, VICTORY_FPS, PLAYER_MAX_HP, SELF_DMG, DEBRIS_HIT_CHANCE,
