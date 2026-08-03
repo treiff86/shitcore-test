@@ -5,6 +5,7 @@
 const defaultState = {
     cash: 1000.00,
     lifetimeEarned: 0.00,
+    ruggedSavings: 0.00,   // Lambo goal money - only grows when the player manually deposits via the Deposit button, unlike lifetimeEarned which tracks everything automatically
     globalHeat: 0,
     degenLevel: 1,
     
@@ -93,6 +94,22 @@ function addCash(amount) {
     state.lifetimeEarned += amount;
     checkProgressions();
     saveGame();
+}
+
+function depositToSavings(amount) {
+    amount = Math.floor(Math.min(amount, state.cash) * 100) / 100; // never more than you actually have, round to cents
+    if (isNaN(amount) || amount <= 0) {
+        if (typeof showToast === 'function') showToast("You don't have any cash to deposit.", 'error');
+        return false;
+    }
+    state.cash -= amount;
+    state.ruggedSavings += amount;
+    if (typeof updateUI === 'function') updateUI();
+    if (typeof showToast === 'function') {
+        showToast(`Deposited $${amount.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2})} to Rugged Savings.`, 'success');
+    }
+    saveGame();
+    return true;
 }
 
 function checkProgressions() {
