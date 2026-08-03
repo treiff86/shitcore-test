@@ -13,7 +13,7 @@
     <!-- FontAwesome icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Local styles (FIXED PATH) -->
-    <link rel="stylesheet" href="style.css?v=25">
+    <link rel="stylesheet" href="style.css?v=27">
     <link rel="stylesheet" href="bonusstage.css?v=1">
 </head>
 <body class="overflow-x-hidden min-h-screen flex flex-col justify-between">
@@ -65,6 +65,9 @@
 
             <!-- Core stats -->
             <div class="flex items-center gap-3 flex-wrap text-xs md:text-sm">
+                <button onclick="openDepositModal()" class="bg-[#121926] border border-[#1E293B] text-amber-400 font-mono px-2.5 py-1.5 rounded flex items-center gap-1.5 font-bold" title="Move cash into your Rugged Savings / Lambo goal">
+                    <i class="fa-solid fa-piggy-bank text-[10px]"></i> Deposit
+                </button>
                 <span id="cashDisplayWrapper" onclick="addTestCash()" class="cursor-pointer bg-[#121926] border border-[#1E293B] text-green-400 font-mono px-2.5 py-1.5 rounded flex items-center gap-1.5" title="Testing only: click to add $4,200">
                     <i class="fa-solid fa-wallet text-[10px]"></i> $<span id="cashDisplay">1,000.00</span>
                 </span>
@@ -192,7 +195,7 @@
             </div>
 
             <!-- WAYS TO EARN -->
-            <div class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-6 shadow-lg">
+            <div id="waysToEarnSection" class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-6 shadow-lg">
                 <h3 class="text-white font-bold text-lg mb-4 flex items-center gap-2"><i class="fa-solid fa-sack-dollar text-emerald-400"></i> Ways To Earn Money</h3>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-300 font-light leading-relaxed">
                     <div class="bg-[#070A0F] p-4 rounded-lg border border-[#131924]">
@@ -231,7 +234,7 @@
             </div>
 
             <!-- REGULATORY HEAT -->
-            <div class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-6 shadow-lg">
+            <div id="regulatoryHeatSection" class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-6 shadow-lg">
                 <h3 class="text-white font-bold text-lg mb-2 flex items-center gap-2"><i class="fa-solid fa-temperature-high text-amber-400"></i> Regulatory Heat</h3>
                 <p class="text-sm text-gray-300 font-light leading-relaxed mb-4">Heat is account-wide and separate from any single token's Audit Threat. Hit 100% and it's instant game over — every asset you have gets seized.</p>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-300 font-light leading-relaxed">
@@ -316,7 +319,6 @@
                     <div>
                         <div class="border-b border-[#1A2232] pb-3 mb-3 flex items-center justify-between">
                             <h3 class="font-bold text-sm text-gray-200 mc-title-accent">Live Orderbook</h3>
-                            <span class="text-[10px] bg-amber-500/10 text-amber-500 px-1.5 py-0.5 rounded font-mono">Sim</span>
                         </div>
                         <div class="space-y-1 text-[11px] mono">
                             <div class="space-y-0.5" id="orderBookAsks"></div>
@@ -739,8 +741,8 @@
                     <h4 class="font-bold text-xs uppercase text-amber-500 tracking-widest mb-2"><i class="fa-solid fa-car"></i> Lambo Target Tracker</h4>
                     <div class="bg-[#10141D] p-4 rounded-lg border border-[#1A2232] space-y-3 mc-inset-panel">
                         <div class="flex justify-between items-center text-xs">
-                            <span class="text-gray-400">Lifetime Stolen:</span>
-                            <span class="text-green-400 font-bold font-mono">$<span id="lifetimeEarnedDisplay">0.00</span> / $1,000,000</span>
+                            <span class="text-gray-400">Rugged Savings:</span>
+                            <span class="text-green-400 font-bold font-mono">$<span id="ruggedSavingsDisplay">0.00</span> / $1,000,000</span>
                         </div>
                         <div class="flex justify-between items-center text-xs">
                             <span class="text-gray-400">Current Lambo Tier:</span>
@@ -846,6 +848,26 @@
         </div>
     </div>
 
+    <!-- Deposit to Rugged Savings -->
+    <div id="depositModal" class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 hidden p-4">
+        <div class="bg-[#0C0F16] border border-amber-500/40 max-w-sm w-full p-6 rounded-xl shadow-2xl space-y-3">
+            <div class="flex items-center justify-between">
+                <h3 class="text-amber-400 font-black text-lg tracking-tight"><i class="fa-solid fa-piggy-bank mr-1.5"></i>Deposit to Savings</h3>
+                <button onclick="closeDepositModal()" class="text-gray-500 hover:text-white text-xl leading-none">&times;</button>
+            </div>
+            <p class="text-[10px] text-gray-500">Move cash out of your spendable balance and into Rugged Savings, toward your $1,000,000 Lambo goal. Available: $<span id="depositAvailableCash">0.00</span></p>
+            <div class="grid grid-cols-3 gap-2">
+                <button onclick="depositPercent(25)" class="py-2.5 bg-[#1C212E] hover:bg-[#252E3E] text-gray-200 text-sm font-bold rounded transition">25%</button>
+                <button onclick="depositPercent(50)" class="py-2.5 bg-[#1C212E] hover:bg-[#252E3E] text-gray-200 text-sm font-bold rounded transition">50%</button>
+                <button onclick="depositPercent(100)" class="py-2.5 bg-[#1C212E] hover:bg-[#252E3E] text-gray-200 text-sm font-bold rounded transition">100%</button>
+            </div>
+            <div class="flex items-center gap-2">
+                <input id="depositCustomInput" type="number" min="0" step="1" placeholder="Custom $" class="flex-1 bg-[#10141D] text-white text-sm font-mono px-3 py-2 rounded border border-[#1A2232] focus:outline-none focus:border-amber-500">
+                <button onclick="depositCustom()" class="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white text-sm font-bold rounded transition">Deposit</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Bonus Stage mini-game - Windows 95 style window, Mid Evils exclusive -->
     <div id="bonusStageOverlay" class="fixed inset-0 bg-black/70 hidden items-center justify-center z-[100] p-4">
         <div class="win95-window">
@@ -906,16 +928,16 @@
     <!-- ============================================================ -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>
 <script src="js/audio.js" defer></script>
-<script src="js/state.js?v=1" defer></script>
-<script src="js/ui.js" defer></script>
+<script src="js/state.js?v=2" defer></script>
+<script src="js/ui.js?v=1" defer></script>
 <script src="js/markets.js?v=16" defer></script>
 <script src="js/auditor.js" defer></script>
 <script src="js/deployer.js" defer></script>
 <script src="js/volatility.js" defer></script>
 <script src="js/staking.js" defer></script>
 <script src="js/perks.js" defer></script>
-<script src="js/bonusstage.js?v=4" defer></script>
-<script src="js/web3.js?v=7" defer></script>
+<script src="js/bonusstage.js?v=5" defer></script>
+<script src="js/web3.js?v=8" defer></script>
 <script type="module" src="js/sns.js?v=5"></script>
 <script type="module" src="js/nftgate.js?v=2"></script>
 <script src="js/gate.js" defer></script>
