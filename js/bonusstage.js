@@ -622,11 +622,15 @@ window.BonusStage = (function () {
                 if (g.fm.dead) {
                     g.score.value += SC.bonus; shakeObj.hit(22); g.phase = 'won';
                     g.player.state = 'victory'; g.player.fr = 0; g.player.frT = 0.0;
+                    g.player.hurtT = 0.0;  // don't let a lingering hurt-flash mask the victory pose
+                    g.fm.flash = 0.0; g.fm.shkT = 0.0; g.fm.shkX = 0;  // fm.update() stops running once won - freeze it clean, not mid-flash
                 } else if (g.player.hp <= 0) {
                     g.phase = 'lost'; g.reason = 'ko';
                     g.player.state = 'idle'; g.player.fr = 0; g.player.frT = 0.0;
+                    g.fm.flash = 0.0; g.fm.shkT = 0.0; g.fm.shkX = 0;
                 } else if (g.timer <= 0) {
                     g.timer = 0.0; g.phase = 'lost'; g.reason = 'time';
+                    g.fm.flash = 0.0; g.fm.shkT = 0.0; g.fm.shkX = 0;
                 }
             } else if (g.phase === 'won') {
                 g.player._adv(dt, VICTORY_FPS);
