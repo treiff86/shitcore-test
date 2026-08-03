@@ -472,8 +472,8 @@ function renderChart() {
 //   - hand/torso split: where the raised arm's silhouette widens into
 //     the torso -> ~28% down
 //   - torso/waist split (base of the stretchy region) -> ~55% down
-const PAINTER_TIP_X_FRAC = 0.69;
-const PAINTER_TIP_Y_FRAC = 0.12;
+const PAINTER_TIP_X_FRAC = 0.71;
+const PAINTER_TIP_Y_FRAC = 0.11;
 const PAINTER_ARM_BOUNDARY_Y_FRAC = 0.28;   // hand band sits above this
 const PAINTER_BOUNDARY_Y_FRAC = 0.55;       // torso band's fixed anchor (waist line)
 const PAINTER_TORSO_MAX_SCALE = 2.2;        // cap before handing off to the hand band
@@ -526,21 +526,6 @@ function positionChartPainter(canvas, minVal, range, lineRightEdge) {
         arm.style.transform = 'translateY(0) scaleY(1)';
         wrap.style.transform = `translateY(${drop.toFixed(1)}px)`;
     }
-
-    // TEMP DEBUG MARKER - draws a small magenta dot on the canvas at the
-    // exact point the code is aiming for (restTipX, targetY). Compare
-    // this dot against the brush tip AND the blue line in a screenshot:
-    //   - dot NOT on the line -> the sampling/X-position math is wrong
-    //   - dot ON the line but brush tip isn't on the dot -> the
-    //     stretch/transform math is wrong
-    // Safe to delete this whole block once calibration is confirmed.
-    const dbgCtx = canvas.getContext('2d');
-    dbgCtx.save();
-    dbgCtx.fillStyle = '#ff00ff';
-    dbgCtx.beginPath();
-    dbgCtx.arc(restTipX, targetY, 4, 0, Math.PI * 2);
-    dbgCtx.fill();
-    dbgCtx.restore();
 }
 
 function renderOrderbook(midPrice) {
