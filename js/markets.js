@@ -472,8 +472,8 @@ function renderChart() {
 //   - hand/torso split: where the raised arm's silhouette widens into
 //     the torso -> ~28% down
 //   - torso/waist split (base of the stretchy region) -> ~55% down
-const PAINTER_TIP_X_FRAC = 0.655;
-const PAINTER_TIP_Y_FRAC = 0.15;
+const PAINTER_TIP_X_FRAC = 0.69;
+const PAINTER_TIP_Y_FRAC = 0.12;
 const PAINTER_ARM_BOUNDARY_Y_FRAC = 0.28;   // hand band sits above this
 const PAINTER_BOUNDARY_Y_FRAC = 0.55;       // torso band's fixed anchor (waist line)
 const PAINTER_TORSO_MAX_SCALE = 2.2;        // cap before handing off to the hand band
