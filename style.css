@@ -535,6 +535,30 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     transform: translate(-1px, 1px);
 }
 
+/* Y Social feed, Mid Evils only - same plain parchment treatment as
+   every other black box (How To Play, Ways To Earn, etc), nothing fancy. */
+.medieval-mode #ySocialFeedPanel {
+    background-color: #d8c9a3 !important;
+    background-image: url('assets/medieval-parchment.webp') !important;
+    background-repeat: repeat !important;
+    background-size: 260px 260px !important;
+    border: 2px solid #3a2418 !important;
+    box-shadow: inset 0 0 14px rgba(58, 36, 24, 0.4) !important;
+}
+.medieval-mode #ySocialFeedPanel * {
+    background-color: transparent !important;
+    background-image: none !important;
+    border-color: rgba(58,36,24,0.3) !important;
+    color: #2b1a10 !important;
+    text-shadow: none !important;
+}
+.medieval-mode #ySocialFeedPanel .text-green-400 {
+    color: #1a7a4a !important;
+}
+.medieval-mode #ySocialFeedPanel .animate-ping {
+    background-color: #1a7a4a !important;
+}
+
 /* Every field you can actually type into across OpenShit, Rug Creator,
    and the AI Solidity Auditor - same parchment look as the rest of the
    theme, but with red "ink" text instead of the usual dark brown, since
