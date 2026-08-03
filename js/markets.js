@@ -55,6 +55,7 @@ function randomFrom(arr) {
 function initMarkets() {
     setupWagerControls();
     setupMevButton();
+    updateMarketTick();   // fire once immediately - setInterval alone waits a full second before its first call, leaving the chart/orderbook/chain feed empty until then
     setInterval(updateMarketTick, 1000);
 }
 
