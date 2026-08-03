@@ -482,9 +482,7 @@ function positionChartPainter(canvas, minVal, range) {
     const restTipDistAboveBoundary = torsoNaturalH + handNaturalH; // = (0.55-0.15)*H
     const restTipY = boundaryY - restTipDistAboveBoundary;
 
-    const step = canvas.width / (priceHistory.length - 1 || 1);
-    const i = Math.min(priceHistory.length - 1, Math.max(0, Math.round(restTipX / step)));
-    const targetY = (canvas.height - ((priceHistory[i] - minVal) / range * canvas.height)) - PAINTER_LINE_HUG_PX;
+    const targetY = (canvas.height - ((priceHistory[priceHistory.length - 1] - minVal) / range * canvas.height)) - PAINTER_LINE_HUG_PX;
 
     if (targetY <= restTipY) {
         const deltaNeeded = boundaryY - targetY; // total extra height needed above the waist anchor
@@ -513,6 +511,21 @@ function positionChartPainter(canvas, minVal, range) {
         arm.style.transform = 'translateY(0) scaleY(1)';
         wrap.style.transform = `translateY(${drop.toFixed(1)}px)`;
     }
+
+    // TEMP DEBUG MARKER - draws a small magenta dot on the canvas at the
+    // exact point the code is aiming for (restTipX, targetY). Compare
+    // this dot against the brush tip AND the blue line in a screenshot:
+    //   - dot NOT on the line -> the sampling/X-position math is wrong
+    //   - dot ON the line but brush tip isn't on the dot -> the
+    //     stretch/transform math is wrong
+    // Safe to delete this whole block once calibration is confirmed.
+    const dbgCtx = canvas.getContext('2d');
+    dbgCtx.save();
+    dbgCtx.fillStyle = '#ff00ff';
+    dbgCtx.beginPath();
+    dbgCtx.arc(restTipX, targetY, 4, 0, Math.PI * 2);
+    dbgCtx.fill();
+    dbgCtx.restore();
 }
 
 function renderOrderbook(midPrice) {
