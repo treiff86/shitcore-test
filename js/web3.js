@@ -252,6 +252,41 @@ function closeWalletPicker() {
     document.getElementById("walletPickerModal")?.classList.add("hidden");
 }
 
+/* ---------------- Deposit to Rugged Savings ---------------- */
+
+function openDepositModal() {
+    const avail = document.getElementById("depositAvailableCash");
+    if (avail) avail.innerText = (state.cash || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const input = document.getElementById("depositCustomInput");
+    if (input) input.value = "";
+    document.getElementById("depositModal")?.classList.remove("hidden");
+}
+
+function closeDepositModal() {
+    document.getElementById("depositModal")?.classList.add("hidden");
+}
+
+function depositPercent(pct) {
+    const amount = (state.cash || 0) * (pct / 100);
+    if (typeof depositToSavings === "function" && depositToSavings(amount)) {
+        playSound("click");
+        closeDepositModal();
+    }
+}
+
+function depositCustom() {
+    const input = document.getElementById("depositCustomInput");
+    const amount = parseFloat(input?.value);
+    if (isNaN(amount) || amount <= 0) {
+        showToast("Enter a real amount first.", "error");
+        return;
+    }
+    if (typeof depositToSavings === "function" && depositToSavings(amount)) {
+        playSound("click");
+        closeDepositModal();
+    }
+}
+
 function disconnectWallet() {
     if (activeProviderKind === "standard") {
         activeProvider?.features?.["standard:disconnect"]?.disconnect?.();
