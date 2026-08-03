@@ -46,8 +46,9 @@ window.BonusStage = (function () {
     const CANCEL_W = 0.18;
     const BUF_WIN = 0.13;
 
-    const SC = { punch_lo: 100, kick_lo: 150, bonus: 2500 };
     const WIN_CASH_REWARD = 2500;  // real Shitcore account cash awarded on winning, via window.addCash()
+    // in-game SCORE now mirrors live progress toward that same $2500 -
+    // no more open-ended point piling, it's capped here to match
     const VICTORY_FPS = 8;
 
     const PLAYER_MAX_HP = 100;
@@ -436,7 +437,6 @@ window.BonusStage = (function () {
                         fm.stun = this.stop / 60;
                         shake.hit(heavy ? 8.0 : 3.8);
                         spawnHitFx(fx, cx, cy, heavy, debrisImgs || [], sparkImgs || []);
-                        scoreRef.value += SC[this.state] || 100;
                         this.hp = Math.max(0, this.hp - randInt(SELF_DMG[0], SELF_DMG[1]));
                         this.streak += 1; this.streakT = STREAK_RESET_T;
                         if (Math.random() < DEBRIS_HIT_CHANCE) {
@@ -482,7 +482,7 @@ window.BonusStage = (function () {
         ctx.textBaseline = 'top';
         ctx.font = "24px 'BonusStagePixel', monospace";
         ctx.fillStyle = COL.YL;
-        ctx.fillText(`SCORE  ${String(score).padStart(7, '0')}`, 22, 10);
+        ctx.fillText(`SCORE  $${score}`, 22, 10);
 
         const sec = Math.max(0, Math.ceil(t));
         const secStr = String(sec).padStart(2, '0');
@@ -532,7 +532,7 @@ window.BonusStage = (function () {
         ctx.fillText(title, SW / 2 - t1w / 2, SH / 2 - 72);
 
         ctx.font = "14px 'BonusStagePixel', monospace";
-        const t2 = won ? `BONUS  +${SC.bonus.toLocaleString()}` : `SCORE  ${String(score).padStart(7, '0')}`;
+        const t2 = won ? `BONUS  +$${WIN_CASH_REWARD.toLocaleString()}` : `SCORE  $${score}`;
         ctx.fillStyle = won ? COL.OR : COL.LG;
         const t2w = ctx.measureText(t2).width;
         ctx.fillText(t2, SW / 2 - t2w / 2, SH / 2 + 10);
@@ -632,8 +632,9 @@ window.BonusStage = (function () {
                 g.player.update(dt, keys, g.fm, g.fx, shakeObj, g.score, debrisImgs, sparkImgs);
                 g.fm.update(dt);
                 g.fx = g.fx.filter((e) => e.update(dt));
+                g.score.value = Math.round(WIN_CASH_REWARD * (1.0 - g.fm.hp / FM_HP));
                 if (g.fm.dead) {
-                    g.score.value += SC.bonus; shakeObj.hit(22); g.phase = 'won';
+                    shakeObj.hit(22); g.phase = 'won';
                     g.player.state = 'victory'; g.player.fr = 0; g.player.frT = 0.0;
                     g.player.hurtT = 0.0;  // don't let a lingering hurt-flash mask the victory pose
                     g.fm.flash = 0.0; g.fm.shkT = 0.0; g.fm.shkX = 0;  // fm.update() stops running once won - freeze it clean, not mid-flash
@@ -707,7 +708,7 @@ window.BonusStage = (function () {
                 SW, SH, GROUND, P_H, FM_CX, FM_DW, FM_DH, FM_Y_PUSH, FM_HP, FM_FINAL_TIER_HP, ROUND_T,
                 P_SPD, P_Y, LEFT_WALL_X, RIGHT_WALL_X, WALL_COLLIDE_W,
                 DMG, ATK_DUR, HEAVY, HS_LT, HS_HV, HITSTUN, CANCEL_W, BUF_WIN,
-                SC, VICTORY_FPS, PLAYER_MAX_HP, SELF_DMG, DEBRIS_HIT_CHANCE,
+                VICTORY_FPS, PLAYER_MAX_HP, SELF_DMG, DEBRIS_HIT_CHANCE, WIN_CASH_REWARD,
                 DEBRIS_DMG_LIGHT, DEBRIS_DMG_HEAVY, HEAVY_BASE, HEAVY_PER_STREAK,
                 HEAVY_CAP, STREAK_RESET_T, HURT_FLASH_T,
             },
