@@ -405,9 +405,13 @@ function renderChart() {
     // right edge - otherwise there's a stretch of line already drawn past
     // where he actually stands, which breaks the "he's creating it live"
     // effect. Falls back to the full canvas width when he's not showing.
+    // IMPORTANT: check the actual rendered display state, not the
+    // "hidden" class - that class stays in the element's class list at
+    // all times, it's only overridden visually by .medieval-mode CSS, so
+    // classList.contains('hidden') is always true and useless here.
     const painterWrap = document.getElementById('mcChartPainterWrap');
     let lineRightEdge = canvas.width;
-    if (painterWrap && !painterWrap.classList.contains('hidden')) {
+    if (painterWrap && getComputedStyle(painterWrap).display !== 'none') {
         lineRightEdge = painterWrap.offsetLeft + painterWrap.offsetWidth * PAINTER_TIP_X_FRAC;
     }
 
