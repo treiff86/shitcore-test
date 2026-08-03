@@ -506,6 +506,49 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     transform: translate(-1px, 1px);
 }
 
+/* Every field you can actually type into across OpenShit, Rug Creator,
+   and the AI Solidity Auditor - same parchment look as the rest of the
+   theme, but with red "ink" text instead of the usual dark brown, since
+   these are the spots you're actively writing into rather than just
+   reading. Targeted by ID on purpose (not a broad class match) so this
+   doesn't bleed into the Markets wager input or staking/mining fields,
+   which already have their own treatment or weren't asked about. */
+.medieval-mode #nftPrompt,
+.medieval-mode #nftCollectionName,
+.medieval-mode #nftTicker,
+.medieval-mode #nftMintPrice,
+.medieval-mode #deployName,
+.medieval-mode #deployTicker,
+.medieval-mode #deployLiquidity,
+.medieval-mode #contractInput {
+    background-color: #d8c9a3 !important;
+    background-image: url('assets/medieval-parchment.webp') !important;
+    background-repeat: repeat !important;
+    background-size: 220px 220px !important;
+    border: 2px solid #3a2418 !important;
+    color: #a11d1d !important;
+    caret-color: #a11d1d !important;
+}
+.medieval-mode #nftPrompt::placeholder,
+.medieval-mode #nftCollectionName::placeholder,
+.medieval-mode #nftTicker::placeholder,
+.medieval-mode #nftMintPrice::placeholder,
+.medieval-mode #deployName::placeholder,
+.medieval-mode #deployTicker::placeholder,
+.medieval-mode #deployLiquidity::placeholder,
+.medieval-mode #contractInput::placeholder {
+    color: #b8695f !important;
+}
+
+/* Toxicity tax slider - not typeable so no red text applies, just
+   pulling the track out of flat black to match everything around it. */
+.medieval-mode #toxicityTaxSlider {
+    background-color: #3a2418 !important;
+    background-image: url('assets/medieval-wood-fill.png') !important;
+    background-repeat: repeat !important;
+    background-size: 140px 140px !important;
+}
+
 /* Character painting in the corner of the price chart, built from two
    stacked copies of the same image: the bottom ~72% (head/body) is
    shown on one and never moves; the top ~28% (arm+brush) is shown on
