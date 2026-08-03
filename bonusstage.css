@@ -1,0 +1,135 @@
+/* ============================================================
+   BONUS STAGE - Windows 95 style window
+   ============================================================
+   Classic beveled-3D look, built from real Win95 conventions:
+   raised bevel = light on top/left, dark on bottom/right.
+   sunken bevel = the reverse. Nothing here is a generic modal -
+   every border pair below is doing that specific job.
+   ============================================================ */
+
+@font-face {
+    font-family: 'BonusStagePixel';
+    src: url('assets/bonus_stage/PressStart2P-Regular.ttf') format('truetype');
+    font-display: swap;
+}
+
+#bonusStageOverlay {
+    font-family: 'Tahoma', 'Segoe UI', Geneva, Verdana, sans-serif;
+}
+
+#bonusStageOverlay.hidden { display: none !important; }
+
+.win95-window {
+    background: #c0c0c0;
+    width: min(980px, 96vw);
+    box-shadow:
+        inset -1px -1px 0 #0a0a0a,
+        inset 1px 1px 0 #dfdfdf,
+        inset -2px -2px 0 #808080,
+        inset 2px 2px 0 #ffffff;
+    padding: 3px;
+    user-select: none;
+}
+
+.win95-titlebar {
+    background: linear-gradient(90deg, #000080 0%, #1084d0 100%);
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 3px 3px 3px 6px;
+    font-weight: bold;
+    font-size: 13px;
+    letter-spacing: 0.2px;
+}
+
+.win95-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.win95-controls {
+    display: flex;
+    gap: 2px;
+    flex-shrink: 0;
+}
+
+.win95-btn {
+    width: 18px;
+    height: 16px;
+    background: #c0c0c0;
+    border: none;
+    box-shadow:
+        inset -1px -1px 0 #0a0a0a,
+        inset 1px 1px 0 #ffffff,
+        inset -2px -2px 0 #808080,
+        inset 2px 2px 0 #dfdfdf;
+    font-family: 'Tahoma', sans-serif;
+    font-size: 11px;
+    font-weight: bold;
+    line-height: 1;
+    color: #000000;
+    cursor: pointer;
+    padding: 0;
+}
+.win95-btn:active {
+    box-shadow:
+        inset 1px 1px 0 #0a0a0a,
+        inset -1px -1px 0 #ffffff,
+        inset 2px 2px 0 #808080,
+        inset -2px -2px 0 #dfdfdf;
+}
+.win95-btn[disabled] { color: #808080; text-shadow: 1px 1px 0 #ffffff; cursor: default; }
+.win95-close:hover { background: #d0d0d0; }
+
+.win95-menubar {
+    background: #c0c0c0;
+    padding: 3px 8px;
+    font-size: 12px;
+    color: #000000;
+    display: flex;
+    gap: 14px;
+}
+.win95-menubar span { cursor: default; }
+.win95-menubar span:hover { background: #000080; color: #fff; padding: 0 2px; margin: 0 -2px; }
+
+.win95-content {
+    background: #000000;
+    box-shadow:
+        inset 1px 1px 0 #0a0a0a,
+        inset -1px -1px 0 #ffffff,
+        inset 2px 2px 0 #808080,
+        inset -2px -2px 0 #dfdfdf;
+    margin: 4px;
+    padding: 2px;
+    line-height: 0; /* kill the canvas's inline-element gap */
+}
+
+#bonusStageCanvas {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 960 / 540;
+    image-rendering: pixelated;
+    background: #000;
+    cursor: crosshair;
+}
+
+.win95-statusbar {
+    display: flex;
+    justify-content: space-between;
+    padding: 3px 8px 4px;
+    font-size: 11px;
+    color: #000000;
+}
+.win95-statusfield {
+    background: #c0c0c0;
+    box-shadow:
+        inset 1px 1px 0 #808080,
+        inset -1px -1px 0 #ffffff;
+    padding: 1px 8px;
+}
