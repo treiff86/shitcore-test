@@ -46,7 +46,8 @@ window.BonusStage = (function () {
     const CANCEL_W = 0.18;
     const BUF_WIN = 0.13;
 
-    const SC = { punch_lo: 100, kick_lo: 150, bonus: 5000 };
+    const SC = { punch_lo: 100, kick_lo: 150, bonus: 2500 };
+    const WIN_CASH_REWARD = 2500;  // real Shitcore account cash awarded on winning, via window.addCash()
     const VICTORY_FPS = 8;
 
     const PLAYER_MAX_HP = 100;
@@ -279,6 +280,7 @@ window.BonusStage = (function () {
             this.y = GROUND - FM_DH + FM_Y_PUSH;
             this.dead = false;
             this.stun = 0.0; this.flash = 0.0;
+            this.flashX = FM_CX; this.flashY = this.y + FM_DH / 2;  // where the glow renders - set per-hit in hit()
             this.shkT = 0.0; this.shkA = 0.0; this.shkX = 0;
         }
         rect() { return { x: this.x, y: this.y, w: FM_DW, h: FM_DH }; }
@@ -293,10 +295,12 @@ window.BonusStage = (function () {
             const i = Math.floor((FM_HP - this.hp) / chunk);
             return Math.min(i, n - 2);
         }
-        hit(dmg, heavy) {
+        hit(dmg, heavy, hitX, hitY) {
             if (this.stun > 0 || this.dead) return false;
             this.hp = Math.max(0, this.hp - dmg);
             this.stun = HITSTUN; this.flash = 0.10;
+            if (hitX !== undefined) this.flashX = hitX;
+            if (hitY !== undefined) this.flashY = hitY;
             this.shkT = heavy ? 0.17 : 0.08;
             this.shkA = heavy ? 10.0 : 5.0;
             if (this.hp === 0) this.dead = true;
@@ -317,11 +321,19 @@ window.BonusStage = (function () {
                 ctx.drawImage(img, ox, oy);
             }
             if (this.flash > 0) {
-                const ox = Math.round(this.x + so[0]), oy = Math.round(this.y + so[1]);
+                // small glow right at the point of impact instead of
+                // lighting up the whole machine
+                const t = Math.min(1, this.flash / 0.10);
+                const fx = this.flashX + so[0], fy = this.flashY + so[1];
+                const r = 50;
                 ctx.save();
-                ctx.globalAlpha = Math.min(1, 200 * (this.flash / 0.10) / 255);
-                ctx.fillStyle = '#ffffff';
-                ctx.fillRect(ox, oy, FM_DW, FM_DH);
+                const grad = ctx.createRadialGradient(fx, fy, 0, fx, fy, r);
+                grad.addColorStop(0, `rgba(255,255,255,${0.85 * t})`);
+                grad.addColorStop(1, 'rgba(255,255,255,0)');
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.arc(fx, fy, r, 0, Math.PI * 2);
+                ctx.fill();
                 ctx.restore();
             }
         }
@@ -416,13 +428,13 @@ window.BonusStage = (function () {
                 const hb = this._hb();
                 if (hb && !this.hitReg && rectsOverlap(hb, fm.rect())) {
                     const heavy = HEAVY.has(this.state);
-                    if (fm.hit(DMG[this.state] || 55, heavy)) {
+                    const cx = hb.x + hb.w / 2 + randInt(-8, 8);
+                    const cy = hb.y + hb.h / 2 + randInt(-8, 8);
+                    if (fm.hit(DMG[this.state] || 55, heavy, cx, cy)) {
                         this.hitReg = true;
                         this.stop = heavy ? HS_HV : HS_LT;
                         fm.stun = this.stop / 60;
                         shake.hit(heavy ? 8.0 : 3.8);
-                        const cx = hb.x + hb.w / 2 + randInt(-8, 8);
-                        const cy = hb.y + hb.h / 2 + randInt(-8, 8);
                         spawnHitFx(fx, cx, cy, heavy, debrisImgs || [], sparkImgs || []);
                         scoreRef.value += SC[this.state] || 100;
                         this.hp = Math.max(0, this.hp - randInt(SELF_DMG[0], SELF_DMG[1]));
@@ -563,6 +575,7 @@ window.BonusStage = (function () {
             phase: 'playing',
             fx: [],
             reason: null,
+            rewardGiven: false,
         };
     }
 
@@ -624,6 +637,18 @@ window.BonusStage = (function () {
                     g.player.state = 'victory'; g.player.fr = 0; g.player.frT = 0.0;
                     g.player.hurtT = 0.0;  // don't let a lingering hurt-flash mask the victory pose
                     g.fm.flash = 0.0; g.fm.shkT = 0.0; g.fm.shkX = 0;  // fm.update() stops running once won - freeze it clean, not mid-flash
+                    if (!g.rewardGiven) {
+                        g.rewardGiven = true;
+                        if (typeof window.addCash === 'function') {
+                            window.addCash(WIN_CASH_REWARD);
+                            if (typeof window.updateUI === 'function') window.updateUI();
+                            if (typeof window.showToast === 'function') {
+                                window.showToast(`Bonus Stage cleared! +$${WIN_CASH_REWARD.toLocaleString()} added to your account.`, 'success');
+                            }
+                        } else {
+                            console.warn('[bonusstage] window.addCash() not found - main game cash was not credited');
+                        }
+                    }
                 } else if (g.player.hp <= 0) {
                     g.phase = 'lost'; g.reason = 'ko';
                     g.player.state = 'idle'; g.player.fr = 0; g.player.frT = 0.0;
