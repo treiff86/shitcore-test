@@ -27,7 +27,7 @@ function switchTab(tabId) {
 function updateUI() {
     // Formatted Core Stats
     document.getElementById('cashDisplay').innerText = state.cash.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    document.getElementById('lifetimeEarnedDisplay').innerText = state.lifetimeEarned.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    document.getElementById('ruggedSavingsDisplay').innerText = state.ruggedSavings.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     document.getElementById('heatPct').innerText = `${state.globalHeat.toFixed(2)}%`;
     document.getElementById('heatBarFill').style.width = `${state.globalHeat}%`;
 
@@ -41,15 +41,16 @@ function updateUI() {
     const levelPct = Math.min(100, (state.lifetimeEarned / nextTarget) * 100);
     document.getElementById('levelProgressBar').style.width = `${levelPct}%`;
 
-    // Lambo Tier Tracking
+    // Lambo Tier Tracking - now driven by manually-deposited Rugged
+    // Savings, not everything you've ever earned
     let currentLambo = LAMBO_TIERS[0].name;
     for (let i = 0; i < LAMBO_TIERS.length; i++) {
-        if (state.lifetimeEarned >= LAMBO_TIERS[i].cost) {
+        if (state.ruggedSavings >= LAMBO_TIERS[i].cost) {
             currentLambo = LAMBO_TIERS[i].name;
         }
     }
     document.getElementById('lamboTierDisplay').innerText = currentLambo;
-    const lamboPct = Math.min(100, (state.lifetimeEarned / 1000000) * 100);
+    const lamboPct = Math.min(100, (state.ruggedSavings / 1000000) * 100);
     document.getElementById('lamboProgressBar').style.width = `${lamboPct}%`;
 
     // Unlocking mechanics via permissions
