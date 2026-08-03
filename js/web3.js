@@ -102,6 +102,9 @@ async function applyCosmeticThemes(addr) {
             clearCosmeticThemes();
             document.body.classList.add(theme.cssClass);
             showToast(theme.toastMsg, "success");
+            if (theme.id === "midevils") {
+                document.getElementById("bonusStageBtn")?.classList.remove("hidden");
+            }
             return; // first match wins, these don't stack
         }
     }
@@ -219,6 +222,7 @@ async function connectToProvider({ name, kind, provider }) {
         // of) normal real-ownership detection above
         if (walletAddress === MASTER_WALLET) {
             document.getElementById("themePreviewBtn")?.classList.remove("hidden");
+            document.getElementById("bonusStageBtn")?.classList.remove("hidden");
             openThemePreview();
         }
 
@@ -260,6 +264,7 @@ function disconnectWallet() {
     walletSolDomain = null;
     clearCosmeticThemes();
     document.getElementById("themePreviewBtn")?.classList.add("hidden");
+    document.getElementById("bonusStageBtn")?.classList.add("hidden");
     updateWalletUI();
     showToast("Wallet disconnected. Still playing locally.", "info");
 }
@@ -429,6 +434,37 @@ function openThemePreview() {
 }
 function closeThemePreview() {
     document.getElementById("themePreviewModal")?.classList.add("hidden");
+}
+
+/* ---------------- Bonus Stage mini-game (Mid Evils exclusive) ---------------- */
+
+function _bonusStageEscHandler(ev) {
+    if (ev.key === "Escape") closeBonusStage();
+}
+
+function openBonusStage() {
+    const overlay = document.getElementById("bonusStageOverlay");
+    const canvas = document.getElementById("bonusStageCanvas");
+    if (!overlay || !canvas) return;
+    if (typeof window.BonusStage === "undefined") {
+        console.error("[bonusstage] js/bonusstage.js didn't load - check the <script> tag in index.html");
+        showToast("Mini-game failed to load. Try refreshing the page.", "error");
+        return;
+    }
+    overlay.classList.remove("hidden");
+    overlay.classList.add("flex");
+    document.addEventListener("keydown", _bonusStageEscHandler);
+    window.BonusStage.start(canvas);
+}
+
+function closeBonusStage() {
+    const overlay = document.getElementById("bonusStageOverlay");
+    if (overlay) {
+        overlay.classList.add("hidden");
+        overlay.classList.remove("flex");
+    }
+    document.removeEventListener("keydown", _bonusStageEscHandler);
+    if (typeof window.BonusStage !== "undefined") window.BonusStage.stop();
 }
 
 /* ---------------- Init ---------------- */
