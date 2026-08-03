@@ -1044,7 +1044,7 @@ function injectOpenShitHTML() {
       </div>
 
       <!-- Y Feed — always visible -->
-      <div class="bg-black border border-[#2F3336] rounded-2xl overflow-hidden shadow-2xl">
+      <div id="ySocialFeedPanel" class="bg-black border border-[#2F3336] rounded-2xl overflow-hidden shadow-2xl">
 
         <!-- Y Header -->
         <div class="bg-black/95 border-b border-[#2F3336] px-4 py-3 flex items-center gap-3 sticky top-0 backdrop-blur-sm z-10">
