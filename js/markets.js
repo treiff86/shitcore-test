@@ -400,6 +400,17 @@ function renderChart() {
     canvas.height = canvas.parentElement.clientHeight;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+    // When the Mid Evils painter is active, the line needs to stop right
+    // at his brush instead of running all the way to the canvas's true
+    // right edge - otherwise there's a stretch of line already drawn past
+    // where he actually stands, which breaks the "he's creating it live"
+    // effect. Falls back to the full canvas width when he's not showing.
+    const painterWrap = document.getElementById('mcChartPainterWrap');
+    let lineRightEdge = canvas.width;
+    if (painterWrap && !painterWrap.classList.contains('hidden')) {
+        lineRightEdge = painterWrap.offsetLeft + painterWrap.offsetWidth * PAINTER_TIP_X_FRAC;
+    }
+
     // Pull the entry price into the visible range so the reference line
     // is never clipped off the top or bottom of the chart.
     let displayMin = Math.min(...priceHistory);
@@ -416,7 +427,7 @@ function renderChart() {
     ctx.lineWidth = 2.5;
     ctx.beginPath();
     for (let i = 0; i < priceHistory.length; i++) {
-        let x = (canvas.width / (priceHistory.length - 1)) * i;
+        let x = (lineRightEdge / (priceHistory.length - 1)) * i;
         let y = canvas.height - ((priceHistory[i] - minVal) / range * canvas.height);
         if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
     }
@@ -441,7 +452,7 @@ function renderChart() {
         ctx.fillText(`ENTRY ${activeTrade.entryPrice.toFixed(6)}`, 6, Math.max(10, entryY - 4));
     }
 
-    positionChartPainter(canvas, minVal, range);
+    positionChartPainter(canvas, minVal, range, lineRightEdge);
 }
 
 // Keeps the Mid Evils "painter" character's brush tip glued to the price
@@ -465,7 +476,7 @@ const PAINTER_TORSO_MAX_SCALE = 2.2;        // cap before handing off to the han
 const PAINTER_LINE_HUG_PX = 0;
 const PAINTER_MAX_DROP_PX = 40;
 
-function positionChartPainter(canvas, minVal, range) {
+function positionChartPainter(canvas, minVal, range, lineRightEdge) {
     const wrap = document.getElementById('mcChartPainterWrap');
     const torso = document.getElementById('mcChartPainterTorso');
     const arm = document.getElementById('mcChartPainterArm');
@@ -476,7 +487,7 @@ function positionChartPainter(canvas, minVal, range) {
     // relative to the wrapper (~0), not to the chart.
     const H = wrap.offsetHeight;
     const boundaryY = wrap.offsetTop + PAINTER_BOUNDARY_Y_FRAC * H;         // torso's fixed anchor, in chart space
-    const restTipX = wrap.offsetLeft + wrap.offsetWidth * PAINTER_TIP_X_FRAC;
+    const restTipX = lineRightEdge; // same X the line itself now stops at - see renderChart
     const torsoNaturalH = (PAINTER_BOUNDARY_Y_FRAC - PAINTER_ARM_BOUNDARY_Y_FRAC) * H;
     const handNaturalH = (PAINTER_ARM_BOUNDARY_Y_FRAC - PAINTER_TIP_Y_FRAC) * H;
     const restTipDistAboveBoundary = torsoNaturalH + handNaturalH; // = (0.55-0.15)*H
