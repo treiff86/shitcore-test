@@ -14,6 +14,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Local styles (FIXED PATH) -->
     <link rel="stylesheet" href="style.css?v=23">
+    <link rel="stylesheet" href="bonusstage.css?v=1">
 </head>
 <body class="overflow-x-hidden min-h-screen flex flex-col justify-between">
     <!-- Hand-drawn wobble filter for the chart canvas in Mid Evils mode -
@@ -54,6 +55,9 @@
                         <span class="text-white font-extrabold text-base md:text-lg uppercase flex items-center gap-1.5">
                             <span class="mc-title-accent">USDSHT</span> <span class="text-[10px] bg-[#1B2130] text-amber-500 px-1.5 py-0.5 rounded font-bold normal-case">Layer 1 Shitcoin Tycoon ▾</span>
                         </span>
+                        <button id="bonusStageBtn" onclick="openBonusStage()" title="Mid Evils holders: play the Bonus Stage mini-game" class="hidden items-center gap-1 text-[10px] bg-gradient-to-b from-amber-500 to-amber-700 hover:from-amber-400 hover:to-amber-600 text-black px-2 py-0.5 rounded font-bold normal-case shadow">
+                            <i class="fa-solid fa-gamepad"></i> Play mini game
+                        </button>
                     </div>
                     <div id="levelBadge" class="text-[11px] text-amber-400 font-mono mt-0.5">LVL 1 — The Basement Dev</div>
                 </div>
@@ -842,6 +846,30 @@
         </div>
     </div>
 
+    <!-- Bonus Stage mini-game - Windows 95 style window, Mid Evils exclusive -->
+    <div id="bonusStageOverlay" class="fixed inset-0 bg-black/70 hidden items-center justify-center z-[100] p-4">
+        <div class="win95-window">
+            <div class="win95-titlebar">
+                <span class="win95-title"><i class="fa-solid fa-gamepad"></i> BONUS_STAGE.EXE</span>
+                <div class="win95-controls">
+                    <button class="win95-btn" disabled title="Minimize (not implemented)">_</button>
+                    <button class="win95-btn" disabled title="Maximize (not implemented)">&#9633;</button>
+                    <button class="win95-btn win95-close" onclick="closeBonusStage()" title="Close">&times;</button>
+                </div>
+            </div>
+            <div class="win95-menubar">
+                <span>File</span><span>Edit</span><span>View</span><span>Help</span>
+            </div>
+            <div class="win95-content">
+                <canvas id="bonusStageCanvas" width="960" height="540"></canvas>
+            </div>
+            <div class="win95-statusbar">
+                <span class="win95-statusfield">Ready</span>
+                <span class="win95-statusfield">Mid Evils Exclusive</span>
+            </div>
+        </div>
+    </div>
+
     <!-- WIN modal -->
     <div id="winModal" class="fixed inset-0 bg-black/85 flex items-center justify-center z-50 hidden p-4">
         <div class="bg-[#0C0F16] border-2 border-emerald-500/60 neon-glow-green max-w-md w-full p-7 rounded-xl shadow-2xl text-center space-y-4">
@@ -886,6 +914,7 @@
 <script src="js/volatility.js" defer></script>
 <script src="js/staking.js" defer></script>
 <script src="js/perks.js" defer></script>
+<script src="js/bonusstage.js?v=1" defer></script>
 <script src="js/web3.js?v=6" defer></script>
 <script type="module" src="js/sns.js?v=5"></script>
 <script type="module" src="js/nftgate.js?v=2"></script>
