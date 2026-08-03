@@ -462,7 +462,7 @@ const PAINTER_TIP_Y_FRAC = 0.15;
 const PAINTER_ARM_BOUNDARY_Y_FRAC = 0.28;   // hand band sits above this
 const PAINTER_BOUNDARY_Y_FRAC = 0.55;       // torso band's fixed anchor (waist line)
 const PAINTER_TORSO_MAX_SCALE = 2.2;        // cap before handing off to the hand band
-const PAINTER_LINE_HUG_PX = 12;
+const PAINTER_LINE_HUG_PX = 0;
 const PAINTER_MAX_DROP_PX = 40;
 
 function positionChartPainter(canvas, minVal, range) {
