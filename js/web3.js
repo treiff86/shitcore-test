@@ -30,13 +30,6 @@ const MASTER_WALLET = "AUrTSsPC2hqZB71QDPn1iHCtTpdFqk4uzk1eRmJDnmGs";
 // in; nothing else needs to change to support another.
 const COSMETIC_THEMES = [
     {
-        id: "doopies",
-        label: "Doopies - Rainbow",
-        collectionAddress: "7ifrcfFwVLBUKCo8smEK44npokR1xK8KHopRV98Moj8f", // verified via Solscan
-        cssClass: "rainbow-mode",
-        toastMsg: "🌈 Doopie detected! Rainbow mode activated.",
-    },
-    {
         id: "midevils",
         label: "Mid Evils - Medieval",
         collectionAddress: "w44WvLKRdLGye2ghhDJBxcmnWpBo31A1tCBko2G6DgW", // verified via Solscan (MidEvil #3592's collection.key)
@@ -46,7 +39,7 @@ const COSMETIC_THEMES = [
     {
         id: "conmen",
         label: "Conmen - Cell Block",
-        collectionAddress: "", // FILL IN after the Aug 5 mint - collection address, not one NFT's mint address (same rule as CONMEN_COLLECTION_ADDRESS in gate.js)
+        collectionAddress: "9DqJWp9jF2M7F5Be8Sxs1GSJz7HZYVcyFgyMU9CBLmUQ", // verified via Solscan
         cssClass: "conmen-mode",
         toastMsg: "🔒 Conman detected! Welcome to the cell block.",
     },
