@@ -71,5 +71,18 @@ function closeConmenLauncher() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Escape hatch for a real CSS gotcha: .medieval-mode/.conmen-mode animate
+    // `filter` directly on <body> for the flicker effect, and any element
+    // with a `filter` becomes the containing block for its position:fixed
+    // descendants. That silently turns "fixed to the browser window" into
+    // "fixed to the whole scrollable page", so the popup drifted around
+    // with scroll position instead of pinning to the actual corner.
+    // Moving these two elements to be children of <html> instead of <body>
+    // sidesteps it entirely, since <html> never gets that filter.
+    const popupEl = document.getElementById('conmenEggPopup');
+    if (popupEl) document.documentElement.appendChild(popupEl);
+    const launcherEl = document.getElementById('conmenLauncherOverlay');
+    if (launcherEl) document.documentElement.appendChild(launcherEl);
+
     setTimeout(_conmenEggTick, _conmenEggRandomGap());
 });
