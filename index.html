@@ -14,7 +14,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Local styles (FIXED PATH) -->
     <link rel="stylesheet" href="style.css?v=40">
-    <link rel="stylesheet" href="bonusstage.css?v=1">
+    <link rel="stylesheet" href="bonusstage.css?v=2">
 </head>
 <body class="overflow-x-hidden min-h-screen flex flex-col justify-between">
     <!-- Hand-drawn wobble filter for the chart canvas in Mid Evils mode -
@@ -906,6 +906,43 @@
         </div>
     </div>
 
+    <!-- Conmen easter egg: roaming clickable popup (Conmen-mode only, see js/conmen-egg.js) -->
+    <div id="conmenEggPopup" onclick="openConmenLauncher()">
+        <span class="conmen-egg-tag">psst...</span>
+        <img src="assets/conmen-easteregg.png" alt="">
+    </div>
+
+    <!-- Conmen easter egg: full-screen Win95-style launcher for the marketplace link -->
+    <div id="conmenLauncherOverlay" class="fixed inset-0 bg-black hidden z-[110]">
+        <div class="win95-window-full">
+            <div class="win95-titlebar">
+                <span class="win95-title"><i class="fa-solid fa-store"></i> CONMEN_MARKET.EXE</span>
+                <div class="win95-controls">
+                    <button class="win95-btn" disabled title="Minimize (not implemented)">_</button>
+                    <button class="win95-btn" disabled title="Maximize (not implemented)">&#9633;</button>
+                    <button class="win95-btn win95-close" onclick="closeConmenLauncher()" title="Close">&times;</button>
+                </div>
+            </div>
+            <div class="win95-menubar">
+                <span>File</span><span>Edit</span><span>View</span><span>Help</span>
+            </div>
+            <div class="win95-content-full">
+                <div class="conmen-launcher-inner">
+                    <img src="assets/conmen-easteregg.png" alt="">
+                    <h2>The Conmen Marketplace</h2>
+                    <p>Buy, sell, and trade Conmen straight from Tensor - the Solana marketplace that aggregates liquidity across the board, so you're seeing the real market, not just one corner of it.</p>
+                    <a class="conmen-launcher-btn" href="https://www.tensor.trade/trade/theconmen" target="_blank" rel="noopener noreferrer">
+                        <i class="fa-solid fa-arrow-up-right-from-square"></i> Open Tensor Marketplace
+                    </a>
+                </div>
+            </div>
+            <div class="win95-statusbar">
+                <span class="win95-statusfield">Ready</span>
+                <span class="win95-statusfield">Conmen Exclusive</span>
+            </div>
+        </div>
+    </div>
+
     <!-- WIN modal -->
     <div id="winModal" class="fixed inset-0 bg-black/85 flex items-center justify-center z-50 hidden p-4">
         <div class="bg-[#0C0F16] border-2 border-emerald-500/60 neon-glow-green max-w-md w-full p-7 rounded-xl shadow-2xl text-center space-y-4">
@@ -951,6 +988,7 @@
 <script src="js/staking.js" defer></script>
 <script src="js/perks.js" defer></script>
 <script src="js/bonusstage.js?v=7" defer></script>
+<script src="js/conmen-egg.js?v=1" defer></script>
 <script src="js/web3.js?v=14" defer></script>
 <script type="module" src="js/sns.js?v=5"></script>
 <script type="module" src="js/nftgate.js?v=2"></script>
