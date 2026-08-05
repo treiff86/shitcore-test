@@ -93,13 +93,14 @@ function resetGame() {
     window.location.reload();
 }
 
-// Zeroes out spendable cash only - Degen Level, Rugged Savings, perks,
-// and everything else stay exactly as they are. No page reload.
-function refreshFundsToZero() {
-    state.cash = 0;
+// Resets spendable cash back to the $1,000 starting amount only - Degen
+// Level, Rugged Savings, perks, and everything else stay exactly as they
+// are. No page reload.
+function refreshFundsToStart() {
+    state.cash = 1000;
     playSound('click');
     if (typeof updateUI === "function") updateUI();
-    if (typeof showToast === "function") showToast("💸 Funds refreshed to $0.", "info");
+    if (typeof showToast === "function") showToast("💸 Funds refreshed to $1,000.", "info");
 }
 
 function addCash(amount) {
