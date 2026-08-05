@@ -612,7 +612,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     border-image-width: 28px !important;
     border-image-repeat: round !important;
     border-style: solid !important;
-    background-color: #e5dcc5 !important;
+    background-color: #a8a8a2 !important;
 }
 
 /* Header + nav bar + footer get the same wood-and-stone frame as the
@@ -628,7 +628,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     border-image-width: 16px !important;
     border-image-repeat: round !important;
     border-style: solid !important;
-    background-color: #e5dcc5 !important;
+    background-color: #a8a8a2 !important;
 }
 .conmen-mode footer * {
     color: #e8d9b8 !important;
@@ -651,7 +651,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     border-image-width: 12px !important;
     border-image-repeat: round !important;
     border-style: solid !important;
-    background-color: #e5dcc5 !important;
+    background-color: #a8a8a2 !important;
 }
 
 /* Medieval-styled scrollbar for every scrollable box on the page while
@@ -734,7 +734,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     border-image-width: 12px !important;
     border-image-repeat: round !important;
     border-style: solid !important;
-    background-color: #e5dcc5 !important;
+    background-color: #a8a8a2 !important;
 }
 
 /* Perk shop rows get an aged-parchment scroll look instead of reusing
@@ -742,7 +742,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
    out from the panels around it. Text is forced dark here since
    parchment is light-colored, unlike everywhere else in medieval-mode. */
 .conmen-mode .perk-row {
-    background-color: #e5dcc5 !important;
+    background-color: #a8a8a2 !important;
     background-repeat: repeat !important;
     background-size: 260px 260px !important;
     border: 2px solid #3a3f45 !important;
@@ -774,7 +774,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .conmen-mode #howToPlaySection [class*="bg-[#070A0F]"],
 .conmen-mode #waysToEarnSection [class*="bg-[#070A0F]"],
 .conmen-mode #regulatoryHeatSection [class*="bg-[#070A0F]"] {
-    background-color: #e5dcc5 !important;
+    background-color: #a8a8a2 !important;
     background-repeat: repeat !important;
     background-size: 260px 260px !important;
     border: 2px solid #3a3f45 !important;
@@ -809,7 +809,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 /* Wager amount input + the wager%/leverage buttons - same parchment
    treatment instead of the flat black input/button look. */
 .conmen-mode #wagerCustomInput {
-    background-color: #e5dcc5 !important;
+    background-color: #a8a8a2 !important;
     background-repeat: repeat !important;
     background-size: 220px 220px !important;
     border: 2px solid #3a3f45 !important;
@@ -828,7 +828,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     color: #4ade80 !important;
 }
 .conmen-mode #wagerControlPanel button {
-    background-color: #e5dcc5 !important;
+    background-color: #a8a8a2 !important;
     background-repeat: repeat !important;
     background-size: 180px 180px !important;
     border: 2px solid #3a3f45 !important;
@@ -852,7 +852,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 /* Y Social feed, Mid Evils only - same plain parchment treatment as
    every other black box (How To Play, Ways To Earn, etc), nothing fancy. */
 .conmen-mode #ySocialFeedPanel {
-    background-color: #e5dcc5 !important;
+    background-color: #a8a8a2 !important;
     background-repeat: repeat !important;
     background-size: 260px 260px !important;
     border: 2px solid #3a3f45 !important;
@@ -887,7 +887,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .conmen-mode #deployTicker,
 .conmen-mode #deployLiquidity,
 .conmen-mode #contractInput {
-    background-color: #e5dcc5 !important;
+    background-color: #a8a8a2 !important;
     background-repeat: repeat !important;
     background-size: 220px 220px !important;
     border: 2px solid #3a3f45 !important;
@@ -908,7 +908,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 /* Toxicity tax slider - not typeable so no red text applies, just
    pulling the track out of flat black to match everything around it. */
 .conmen-mode #toxicityTaxSlider {
-    background-color: #e5dcc5 !important;
+    background-color: #a8a8a2 !important;
 }
 
 
