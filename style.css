@@ -606,9 +606,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
    selector as before - requires the exact panel bg AND border color
    together, confirmed to exclude header/nav/modals. */
 .conmen-mode [class*="bg-[#0C0F16]"][class*="border-[#1A2232]"] {
-    border-image-source: url('assets/conmen-panel-border.png') !important;
+    border-image-source: url('assets/conmen-panel-border.png?v=2') !important;
     background-clip: padding-box !important;
-    border-image-slice: 24 !important;
+    border-image-slice: 26 18 22 28 !important;
     border-image-width: 28px !important;
     border-image-repeat: round !important;
     border-style: solid !important;
@@ -618,9 +618,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 /* Top header bar only - grey, per the requested look. Nav bar and
    footer keep the tan wood-and-stone frame like the rest of the page. */
 .conmen-mode header {
-    border-image-source: url('assets/conmen-panel-border.png') !important;
+    border-image-source: url('assets/conmen-panel-border.png?v=2') !important;
     background-clip: padding-box !important;
-    border-image-slice: 24 !important;
+    border-image-slice: 26 18 22 28 !important;
     border-image-width: 16px !important;
     border-image-repeat: round !important;
     border-style: solid !important;
@@ -628,9 +628,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 }
 .conmen-mode nav,
 .conmen-mode footer {
-    border-image-source: url('assets/conmen-panel-border.png') !important;
+    border-image-source: url('assets/conmen-panel-border.png?v=2') !important;
     background-clip: padding-box !important;
-    border-image-slice: 24 !important;
+    border-image-slice: 26 18 22 28 !important;
     border-image-width: 16px !important;
     border-image-repeat: round !important;
     border-style: solid !important;
@@ -653,9 +653,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
    How to Play etc.) stay tan. */
 .conmen-mode .mc-inset-panel,
 .conmen-mode #wagerControlPanel {
-    border-image-source: url('assets/conmen-panel-border.png') !important;
+    border-image-source: url('assets/conmen-panel-border.png?v=2') !important;
     background-clip: padding-box !important;
-    border-image-slice: 24 !important;
+    border-image-slice: 26 18 22 28 !important;
     border-image-width: 12px !important;
     border-image-repeat: round !important;
     border-style: solid !important;
@@ -736,9 +736,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
    Ponzi Yield Pools cards - both use their own custom classes rather
    than the bg-[#10141D] Tailwind pattern, so they need their own rule. */
 .conmen-mode .pool-card {
-    border-image-source: url('assets/conmen-panel-border.png') !important;
+    border-image-source: url('assets/conmen-panel-border.png?v=2') !important;
     background-clip: padding-box !important;
-    border-image-slice: 24 !important;
+    border-image-slice: 26 18 22 28 !important;
     border-image-width: 12px !important;
     border-image-repeat: round !important;
     border-style: solid !important;
