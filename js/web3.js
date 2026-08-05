@@ -226,6 +226,7 @@ async function connectToProvider({ name, kind, provider }) {
         if (walletAddress === MASTER_WALLET) {
             document.getElementById("themePreviewBtn")?.classList.remove("hidden");
             document.getElementById("bonusStageBtn")?.classList.remove("hidden");
+            document.getElementById("conmenEggTestBtn")?.classList.remove("hidden");
             openThemePreview();
         }
 
@@ -303,6 +304,7 @@ function disconnectWallet() {
     clearCosmeticThemes();
     document.getElementById("themePreviewBtn")?.classList.add("hidden");
     document.getElementById("bonusStageBtn")?.classList.add("hidden");
+    document.getElementById("conmenEggTestBtn")?.classList.add("hidden");
     updateWalletUI();
     showToast("Wallet disconnected. Still playing locally.", "info");
 }
