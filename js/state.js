@@ -93,6 +93,15 @@ function resetGame() {
     window.location.reload();
 }
 
+// Zeroes out spendable cash only - Degen Level, Rugged Savings, perks,
+// and everything else stay exactly as they are. No page reload.
+function refreshFundsToZero() {
+    state.cash = 0;
+    playSound('click');
+    if (typeof updateUI === "function") updateUI();
+    if (typeof showToast === "function") showToast("💸 Funds refreshed to $0.", "info");
+}
+
 function addCash(amount) {
     if (isNaN(amount) || amount <= 0) return;
     state.cash += amount;
