@@ -144,7 +144,7 @@
 #conmenEggPopup {
     position: fixed;
     right: 24px;
-    bottom: 6px;
+    bottom: -14px;
     z-index: 90;
     cursor: pointer;
     width: 110px;
