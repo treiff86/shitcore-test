@@ -38,7 +38,7 @@ function updateUI() {
     
     const nextTarget = currentLevelInfo.target;
     document.getElementById('levelProgressNext').innerText = state.degenLevel >= 4 ? "MAX LEVEL" : `Next: $${nextTarget.toLocaleString()}`;
-    const levelPct = Math.min(100, (state.lifetimeEarned / nextTarget) * 100);
+    const levelPct = Math.min(100, (state.ruggedSavings / nextTarget) * 100);
     document.getElementById('levelProgressBar').style.width = `${levelPct}%`;
 
     // Lambo Tier Tracking - now driven by manually-deposited Rugged
