@@ -612,14 +612,20 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     border-image-width: 28px !important;
     border-image-repeat: round !important;
     border-style: solid !important;
-    background-color: #a8a8a2 !important;
+    background-color: #e5dcc5 !important;
 }
 
-/* Header + nav bar + footer get the same wood-and-stone frame as the
-   panels, deliberately left out of the selector above (that one's scoped
-   tight on purpose). Thinner border since these are shallow strips, not
-   boxes. */
-.conmen-mode header,
+/* Top header bar only - grey, per the requested look. Nav bar and
+   footer keep the tan wood-and-stone frame like the rest of the page. */
+.conmen-mode header {
+    border-image-source: url('assets/conmen-panel-border.png') !important;
+    background-clip: padding-box !important;
+    border-image-slice: 24 !important;
+    border-image-width: 16px !important;
+    border-image-repeat: round !important;
+    border-style: solid !important;
+    background-color: #a8a8a2 !important;
+}
 .conmen-mode nav,
 .conmen-mode footer {
     border-image-source: url('assets/conmen-panel-border.png') !important;
@@ -628,7 +634,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     border-image-width: 16px !important;
     border-image-repeat: round !important;
     border-style: solid !important;
-    background-color: #a8a8a2 !important;
+    background-color: #e5dcc5 !important;
 }
 .conmen-mode footer * {
     color: #e8d9b8 !important;
@@ -641,8 +647,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 }
 
 /* Smaller inset boxes that sit inside the main panels (Spread strip,
-   Wager/Leverage controls) - same wood-and-stone treatment, scaled
-   down so the frame doesn't overwhelm a small element. */
+   Wager/Leverage controls, Rugged Savings, Level progress, the Victim
+   Hall of Fame list) and the perk-shop rows - grey, per the requested
+   look. The bigger surrounding panels (card frames, Live Orderbook,
+   How to Play etc.) stay tan. */
 .conmen-mode .mc-inset-panel,
 .conmen-mode #wagerControlPanel {
     border-image-source: url('assets/conmen-panel-border.png') !important;
@@ -734,7 +742,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     border-image-width: 12px !important;
     border-image-repeat: round !important;
     border-style: solid !important;
-    background-color: #a8a8a2 !important;
+    background-color: #e5dcc5 !important;
 }
 
 /* Perk shop rows get an aged-parchment scroll look instead of reusing
@@ -774,7 +782,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .conmen-mode #howToPlaySection [class*="bg-[#070A0F]"],
 .conmen-mode #waysToEarnSection [class*="bg-[#070A0F]"],
 .conmen-mode #regulatoryHeatSection [class*="bg-[#070A0F]"] {
-    background-color: #a8a8a2 !important;
+    background-color: #e5dcc5 !important;
     background-repeat: repeat !important;
     background-size: 260px 260px !important;
     border: 2px solid #3a3f45 !important;
@@ -809,7 +817,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 /* Wager amount input + the wager%/leverage buttons - same parchment
    treatment instead of the flat black input/button look. */
 .conmen-mode #wagerCustomInput {
-    background-color: #a8a8a2 !important;
+    background-color: #e5dcc5 !important;
     background-repeat: repeat !important;
     background-size: 220px 220px !important;
     border: 2px solid #3a3f45 !important;
@@ -828,7 +836,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     color: #4ade80 !important;
 }
 .conmen-mode #wagerControlPanel button {
-    background-color: #a8a8a2 !important;
+    background-color: #e5dcc5 !important;
     background-repeat: repeat !important;
     background-size: 180px 180px !important;
     border: 2px solid #3a3f45 !important;
@@ -852,7 +860,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 /* Y Social feed, Mid Evils only - same plain parchment treatment as
    every other black box (How To Play, Ways To Earn, etc), nothing fancy. */
 .conmen-mode #ySocialFeedPanel {
-    background-color: #a8a8a2 !important;
+    background-color: #e5dcc5 !important;
     background-repeat: repeat !important;
     background-size: 260px 260px !important;
     border: 2px solid #3a3f45 !important;
@@ -887,7 +895,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .conmen-mode #deployTicker,
 .conmen-mode #deployLiquidity,
 .conmen-mode #contractInput {
-    background-color: #a8a8a2 !important;
+    background-color: #e5dcc5 !important;
     background-repeat: repeat !important;
     background-size: 220px 220px !important;
     border: 2px solid #3a3f45 !important;
@@ -908,7 +916,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 /* Toxicity tax slider - not typeable so no red text applies, just
    pulling the track out of flat black to match everything around it. */
 .conmen-mode #toxicityTaxSlider {
-    background-color: #a8a8a2 !important;
+    background-color: #e5dcc5 !important;
 }
 
 
