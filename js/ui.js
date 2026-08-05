@@ -82,13 +82,23 @@ function updateUI() {
 
 function showToast(message, type = "info") {
     const isMedieval = document.body.classList.contains('medieval-mode');
-    const toast = document.getElementById(isMedieval ? 'toastMedieval' : 'toastDefault');
-    const otherToast = document.getElementById(isMedieval ? 'toastDefault' : 'toastMedieval');
-    otherToast.classList.add('hidden'); // never show both at once
+    const isConmen = document.body.classList.contains('conmen-mode');
+    const activeId = isMedieval ? 'toastMedieval' : (isConmen ? 'toastConmen' : 'toastDefault');
+    const allToastIds = ['toastMedieval', 'toastConmen', 'toastDefault'];
+
+    const toast = document.getElementById(activeId);
+    allToastIds.filter(id => id !== activeId).forEach(id => {
+        document.getElementById(id).classList.add('hidden'); // never show more than one at once
+    });
 
     if (isMedieval) {
         document.getElementById('toastMessageMedieval').innerText = message;
         const bubble = document.getElementById('toastBubble');
+        const borderColors = { info: '#000', success: '#16a34a', error: '#dc2626' };
+        bubble.style.borderColor = borderColors[type] || '#000';
+    } else if (isConmen) {
+        document.getElementById('toastMessageConmen').innerText = message;
+        const bubble = document.getElementById('toastBubbleConmen');
         const borderColors = { info: '#000', success: '#16a34a', error: '#dc2626' };
         bubble.style.borderColor = borderColors[type] || '#000';
     } else {
