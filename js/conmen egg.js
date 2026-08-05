@@ -64,6 +64,13 @@ function openConmenLauncher() {
     }
 }
 
+// Manual test hook for the "Easter Egg" button, master-wallet-only (see
+// web3.js). Skips both the conmen-mode check and the random schedule so
+// it always fires immediately on click, regardless of theme or timing.
+function testConmenEgg() {
+    _conmenEggShow();
+}
+
 function closeConmenLauncher() {
     const overlay = document.getElementById('conmenLauncherOverlay');
     if (overlay) {
