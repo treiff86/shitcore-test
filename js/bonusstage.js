@@ -76,6 +76,16 @@ window.BonusStage = (function () {
         kick_lo: ['reiffer_kick_lo.webp', 4],
         hurt: ['hit.webp', 1],
     };
+    // Conmen holders get their own character - same animation states, own
+    // art and frame counts (this set has fewer frames per animation, which
+    // is fine, loadStrip just divides each strip's width by its own count).
+    const CONMEN_ANIM_FILES = {
+        walk: ['conmen_walk.webp', 4],
+        victory: ['conmen_victory.webp', 4],
+        punch_lo: ['conmen_punch_lo.webp', 3],
+        kick_lo: ['conmen_kick_lo.webp', 3],
+        hurt: ['conmen_hit.webp', 1],
+    };
     const FRYER_FILES = ['tier_01.webp','tier_02.webp','tier_03.webp','tier_04.webp','tier_05.webp','tier_06.webp'];
     const DEBRIS_FILES = ['debris_1.webp','debris_2.webp','debris_3.webp','debris_4.webp','debris_5.webp','debris_6.webp','debris_7.webp','debris_8.webp','debris_9.webp','debris_10.webp','debris_11.webp','debris_12.webp'];
     const SPARK_FILES = ['spark_1.webp','spark_2.webp','spark_3.webp','spark_4.webp','spark_5.webp','spark_6.webp'];
@@ -123,9 +133,11 @@ window.BonusStage = (function () {
     }
 
     async function loadReifferAnims() {
+        const isConmen = document.body.classList.contains('conmen-mode');
+        const files = isConmen ? CONMEN_ANIM_FILES : ANIM_FILES;
         const anims = {};
-        for (const state in ANIM_FILES) {
-            const [fname, count] = ANIM_FILES[state];
+        for (const state in files) {
+            const [fname, count] = files[state];
             anims[state] = await loadStrip(fname, count, P_H);
         }
         anims.idle = anims.walk.length ? [anims.walk[0]] : [];
@@ -565,6 +577,8 @@ window.BonusStage = (function () {
     let rafId = null;
     let keydownHandler = null;
     let assetsPromise = null;
+    let reifferAnimsPromise = null;
+    let conmenAnimsPromise = null;
 
     function newGame(reifferAnims, fryerImgs) {
         return {
@@ -605,13 +619,27 @@ window.BonusStage = (function () {
         if (!assetsPromise) {
             assetsPromise = Promise.all([
                 loadBackground(),
-                loadReifferAnims(),
                 loadFryer(),
                 loadFxSet(DEBRIS_FILES, 'fx'),
                 loadFxSet(SPARK_FILES, 'fx'),
             ]);
         }
-        const [bg, reifferAnims, fryerImgs, debrisImgs, sparkImgs] = await assetsPromise;
+        // Character art is cached separately, keyed by theme - loadBackground/
+        // loadFryer/loadFxSet never change, but which wallet (and therefore
+        // which cosmetic theme) is connected can change between plays, so this
+        // can't be folded into the assetsPromise cache above without serving
+        // stale art after a wallet switch.
+        const isConmen = document.body.classList.contains('conmen-mode');
+        let characterAnimsPromise;
+        if (isConmen) {
+            if (!conmenAnimsPromise) conmenAnimsPromise = loadReifferAnims();
+            characterAnimsPromise = conmenAnimsPromise;
+        } else {
+            if (!reifferAnimsPromise) reifferAnimsPromise = loadReifferAnims();
+            characterAnimsPromise = reifferAnimsPromise;
+        }
+
+        const [[bg, fryerImgs, debrisImgs, sparkImgs], reifferAnims] = await Promise.all([assetsPromise, characterAnimsPromise]);
 
         const shakeObj = new Shake();
         let g = newGame(reifferAnims, fryerImgs);
