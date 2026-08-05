@@ -3,8 +3,10 @@
    ============================================================ */
 
 document.addEventListener('DOMContentLoaded', () => {
-    // 1. Initial State Sync
-    loadGame();
+    // 1. Initial State Sync - deliberately NOT calling loadGame() here.
+    // Without a connected wallet, every page open starts fresh at $1,000;
+    // connecting a wallet is what pulls in a saved cloud state (see
+    // offerCloudLoadIfExists() in web3.js), not a local restore.
 
     // 2. Interface Render Triggers
     renderPoolCards();
