@@ -43,8 +43,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const resetBtn = document.getElementById('resetGameBtn');
     if(resetBtn) {
         resetBtn.addEventListener('click', () => {
-            if(confirm("Are you sure you want to exit your criminal enterprise and wipe your progress entirely?")) {
-                resetGame();
+            if(confirm("Refresh your funds back to $0? Your Degen Level, Rugged Savings, and perks stay as they are.")) {
+                refreshFundsToZero();
             }
         });
     }
