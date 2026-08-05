@@ -579,11 +579,28 @@ window.BonusStage = (function () {
         };
     }
 
+    let themeMusic = null;
+    function getThemeMusic() {
+        if (typeof Audio === 'undefined') return null;
+        if (!themeMusic) {
+            themeMusic = new Audio('assets/bonus_stage/bonus-stage-theme.mp3');
+            themeMusic.loop = true;
+            themeMusic.volume = 0.5;
+        }
+        return themeMusic;
+    }
+
     async function start(canvas) {
         stop(); // safety: never run two loops at once
 
         const ctx = canvas.getContext('2d');
         canvas.width = SW; canvas.height = SH;
+
+        const music = getThemeMusic();
+        if (music) {
+            music.currentTime = 0;
+            music.play().catch(() => {}); // browsers can block autoplay w/ sound until a user gesture - fine, it just won't play silently instead of throwing
+        }
 
         if (!assetsPromise) {
             assetsPromise = Promise.all([
@@ -691,6 +708,7 @@ window.BonusStage = (function () {
             if (keydownHandler._keyupPair) window.removeEventListener('keyup', keydownHandler._keyupPair);
             keydownHandler = null;
         }
+        if (themeMusic) { themeMusic.pause(); themeMusic.currentTime = 0; }
     }
 
     return {
