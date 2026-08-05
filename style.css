@@ -610,7 +610,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     background-clip: padding-box !important;
     border-image-slice: 26 18 22 28 !important;
     border-image-width: 28px !important;
-    border-image-repeat: round !important;
+    border-image-repeat: stretch !important;
     border-style: solid !important;
     background-color: #e5dcc5 !important;
 }
@@ -622,7 +622,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     background-clip: padding-box !important;
     border-image-slice: 26 18 22 28 !important;
     border-image-width: 16px !important;
-    border-image-repeat: round !important;
+    border-image-repeat: stretch !important;
     border-style: solid !important;
     background-color: #a8a8a2 !important;
 }
@@ -632,7 +632,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     background-clip: padding-box !important;
     border-image-slice: 26 18 22 28 !important;
     border-image-width: 16px !important;
-    border-image-repeat: round !important;
+    border-image-repeat: stretch !important;
     border-style: solid !important;
     background-color: #e5dcc5 !important;
 }
@@ -657,7 +657,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     background-clip: padding-box !important;
     border-image-slice: 26 18 22 28 !important;
     border-image-width: 12px !important;
-    border-image-repeat: round !important;
+    border-image-repeat: stretch !important;
     border-style: solid !important;
     background-color: #a8a8a2 !important;
 }
@@ -740,7 +740,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     background-clip: padding-box !important;
     border-image-slice: 26 18 22 28 !important;
     border-image-width: 12px !important;
-    border-image-repeat: round !important;
+    border-image-repeat: stretch !important;
     border-style: solid !important;
     background-color: #e5dcc5 !important;
 }
