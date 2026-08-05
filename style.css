@@ -172,9 +172,12 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 
 /* Toast bubble background is white, so the global white-text rule above
    would make the message invisible - force black text here regardless,
-   and drop the drop-shadow since it doesn't read well on a light bubble. */
+   and drop the drop-shadow since it doesn't read well on a light bubble.
+   Covers both Mid Evils' and Conmen's toast bubbles. */
 #toastBubble,
-#toastBubble * {
+#toastBubble *,
+#toastBubbleConmen,
+#toastBubbleConmen * {
     color: #000 !important;
     text-shadow: none !important;
 }
@@ -184,7 +187,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     from { transform: translateY(80px); opacity: 0; }
     to   { transform: translateY(0);    opacity: 1; }
 }
-#toastMedieval img {
+#toastMedieval img,
+#toastConmen img {
     animation: toastCharSlideUp 0.45s ease-out;
 }
 
