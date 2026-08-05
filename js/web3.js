@@ -486,6 +486,7 @@ function openBonusStage() {
         showToast("Mini-game failed to load. Try refreshing the page.", "error");
         return;
     }
+    if (typeof pauseMainThemeForBonusStage === "function") pauseMainThemeForBonusStage();
     overlay.classList.remove("hidden");
     overlay.classList.add("flex");
     document.addEventListener("keydown", _bonusStageEscHandler);
@@ -500,6 +501,7 @@ function closeBonusStage() {
     }
     document.removeEventListener("keydown", _bonusStageEscHandler);
     if (typeof window.BonusStage !== "undefined") window.BonusStage.stop();
+    if (typeof resumeMainThemeAfterBonusStage === "function") resumeMainThemeAfterBonusStage();
 }
 
 /* ---------------- Init ---------------- */
