@@ -49,6 +49,10 @@ const LAMBO_TIERS = [
     { name: "Real SVJ Roadster (Victory)", cost: 1000000 }
 ];
 
+// Deliberately NOT restoring from localStorage anymore - without a
+// connected wallet, every fresh page load starts clean at $1,000. Kept as
+// a function (rather than deleted outright) in case a local-only save mode
+// gets reintroduced later; it just isn't called from anywhere right now.
 function loadGame() {
     try {
         const saved = localStorage.getItem('shitcore_tycoon_save');
@@ -63,12 +67,13 @@ function loadGame() {
     return false;
 }
 
+// No-op by design - progress without a connected wallet is meant to be
+// ephemeral (lost on refresh/close), and a connected wallet's progress is
+// saved to Supabase via saveToCloud() instead (see web3.js). This is kept
+// as a callable stub rather than removed so every existing saveGame() call
+// site throughout the codebase still works without touching each one.
 function saveGame() {
-    try {
-        localStorage.setItem('shitcore_tycoon_save', JSON.stringify(state));
-    } catch (e) {
-        console.error("Save failed:", e);
-    }
+    // intentionally does nothing - see comment above
 }
 
 // TESTING ONLY - click the wallet balance in the header to add $4,200.
@@ -83,7 +88,7 @@ function addTestCash() {
 
 function resetGame() {
     state = JSON.parse(JSON.stringify(defaultState));
-    localStorage.removeItem('shitcore_tycoon_save');
+    localStorage.removeItem('shitcore_tycoon_save'); // harmless cleanup of any pre-existing save from before this change
     playSound('click');
     window.location.reload();
 }
