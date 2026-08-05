@@ -353,7 +353,7 @@ async function applyTraitRewards(addr, isNewSave) {
         }
 
         showToast(`✨ Reward unlocked permanently from ${reward.traitValue}.`, "success");
-        saveGame(); // keep localStorage in sync immediately, cloud save happens right after this in offerCloudLoadIfExists
+        saveGame(); // no-op now, but harmless to leave - actual cloud save happens right after this in offerCloudLoadIfExists
         updateUI();
     }
 }
@@ -378,7 +378,7 @@ async function offerCloudLoadIfExists() {
     // Always resume the cloud save automatically - no prompt. This wallet's
     // last session is the source of truth the moment it connects.
     state = { ...defaultState, ...data.game_state };
-    saveGame();     // keep localStorage in sync too
+    saveGame();     // no-op now, harmless leftover call
     updateUI();
     showToast("☁️ Welcome back - resumed where you left off.", "success");
     await applyTraitRewards(walletAddress, false); // existing save - can still earn permanent perks (e.g. luck), no cash bonus though
