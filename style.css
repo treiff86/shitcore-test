@@ -669,15 +669,15 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     width: 10px;
 }
 .conmen-mode ::-webkit-scrollbar-track {
-    background: #1a1208;
+    background: #2a2e33;
 }
 .conmen-mode ::-webkit-scrollbar-thumb {
-    background: #6b4423;
-    border: 2px solid #000;
+    background: #6e737a;
+    border: 2px solid #1a1d20;
     border-radius: 4px;
 }
 .conmen-mode ::-webkit-scrollbar-thumb:hover {
-    background: #8a5a2e;
+    background: #8a9096;
 }
 
 /* The blanket font-family override above also hijacked Font Awesome's
