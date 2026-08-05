@@ -133,3 +133,139 @@
         inset -1px -1px 0 #ffffff;
     padding: 1px 8px;
 }
+
+/* ============================================================
+   CONMEN EASTER EGG - roaming popup + full-screen Win95 launcher
+   ============================================================ */
+
+/* Small clickable teaser that appears at a random spot on screen,
+   Conmen-mode only. Auto-hides itself after a few seconds unless
+   clicked - see js/conmen-egg.js for the timing logic. */
+#conmenEggPopup {
+    position: fixed;
+    z-index: 90;
+    cursor: pointer;
+    width: 110px;
+    opacity: 0;
+    transform: translateY(16px) scale(0.9);
+    transition: opacity 0.35s ease, transform 0.35s ease;
+    pointer-events: none;
+    filter: drop-shadow(0 6px 14px rgba(0,0,0,0.5));
+}
+#conmenEggPopup.show {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    pointer-events: auto;
+}
+#conmenEggPopup img {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+#conmenEggPopup .conmen-egg-tag {
+    position: absolute;
+    top: -10px;
+    right: -6px;
+    background: #1a1d20;
+    color: #fff;
+    border: 2px solid #6e737a;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 800;
+    padding: 2px 7px;
+    white-space: nowrap;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+}
+
+/* Full-screen Win95 window - same bevel language as the Bonus Stage
+   window, just scaled up to take over the viewport instead of sitting
+   in a centered dialog. */
+#conmenLauncherOverlay { font-family: 'Tahoma', 'Segoe UI', Geneva, Verdana, sans-serif; }
+#conmenLauncherOverlay.hidden { display: none !important; }
+
+.win95-window-full {
+    background: #c0c0c0;
+    width: 100vw;
+    height: 100vh;
+    box-shadow:
+        inset -1px -1px 0 #0a0a0a,
+        inset 1px 1px 0 #dfdfdf,
+        inset -2px -2px 0 #808080,
+        inset 2px 2px 0 #ffffff;
+    padding: 3px;
+    user-select: none;
+    display: flex;
+    flex-direction: column;
+}
+
+.win95-content-full {
+    background: #000000;
+    box-shadow:
+        inset 1px 1px 0 #0a0a0a,
+        inset -1px -1px 0 #ffffff,
+        inset 2px 2px 0 #808080,
+        inset -2px -2px 0 #dfdfdf;
+    margin: 4px;
+    padding: 2px;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.conmen-launcher-inner {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(160deg, #0d1117 0%, #1a1d20 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    padding: 24px;
+    text-align: center;
+    overflow-y: auto;
+}
+.conmen-launcher-inner img {
+    max-height: 38vh;
+    width: auto;
+    filter: drop-shadow(0 8px 20px rgba(0,0,0,0.6));
+}
+.conmen-launcher-inner h2 {
+    color: #fff;
+    font-weight: 900;
+    font-size: clamp(20px, 3vw, 32px);
+    letter-spacing: 0.5px;
+}
+.conmen-launcher-inner p {
+    color: #b8bcc2;
+    font-size: clamp(12px, 1.4vw, 15px);
+    max-width: 480px;
+    line-height: 1.5;
+}
+.conmen-launcher-btn {
+    background: linear-gradient(180deg, #8a9096 0%, #6e737a 100%);
+    color: #0d1117;
+    font-weight: 800;
+    font-size: 15px;
+    padding: 12px 28px;
+    border: none;
+    box-shadow:
+        inset -1px -1px 0 #0a0a0a,
+        inset 1px 1px 0 #dfdfdf,
+        inset -2px -2px 0 #4a4e52,
+        inset 2px 2px 0 #ffffff;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+.conmen-launcher-btn:active {
+    box-shadow:
+        inset 1px 1px 0 #0a0a0a,
+        inset -1px -1px 0 #ffffff,
+        inset 2px 2px 0 #4a4e52,
+        inset -2px -2px 0 #dfdfdf;
+}
