@@ -104,6 +104,7 @@ function depositToSavings(amount) {
     }
     state.cash -= amount;
     state.ruggedSavings += amount;
+    checkProgressions();
     if (typeof updateUI === 'function') updateUI();
     if (typeof showToast === 'function') {
         showToast(`Deposited $${amount.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2})} to Rugged Savings.`, 'success');
@@ -113,17 +114,21 @@ function depositToSavings(amount) {
 }
 
 function checkProgressions() {
-    // Level Up Check
+    // Level Up Check - now driven by Rugged Savings (money actually
+    // deposited/saved), not total lifetime earnings. Earning cash alone
+    // no longer levels you up; you have to bank it.
     let currentTier = DEGEN_LEVELS[state.degenLevel];
-    while (currentTier && state.lifetimeEarned >= currentTier.target && state.degenLevel < 4) {
+    while (currentTier && state.ruggedSavings >= currentTier.target && state.degenLevel < 4) {
         state.degenLevel++;
         currentTier = DEGEN_LEVELS[state.degenLevel];
         showToast(`🎉 LEVELED UP! You are now: ${currentTier.name}`, "success");
         playSound('buy');
     }
     
-    // Win Condition Check
-    if (state.lifetimeEarned >= 1000000) {
+    // Win Condition Check - matches Level 4's target and the Lambo
+    // Tracker's top tier, both of which are Rugged-Savings-based, so the
+    // win now means "actually saved $1,000,000", not just earned it.
+    if (state.ruggedSavings >= 1000000) {
         document.getElementById('winModal').classList.remove('hidden');
         playSound('lambo');
     }
