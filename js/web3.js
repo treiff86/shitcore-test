@@ -380,15 +380,12 @@ async function offerCloudLoadIfExists() {
         return;
     }
 
-    const when = new Date(data.updated_at).toLocaleString();
-    if (confirm(`Found a cloud save for this wallet from ${when}. Load it? (Cancel keeps your current local progress and overwrites the cloud save with it instead.)`)) {
-        state = { ...defaultState, ...data.game_state };
-        saveGame();     // keep localStorage in sync too
-        updateUI();
-        showToast("☁️ Cloud save loaded.", "success");
-    } else {
-        await saveToCloud();
-    }
+    // Always resume the cloud save automatically - no prompt. This wallet's
+    // last session is the source of truth the moment it connects.
+    state = { ...defaultState, ...data.game_state };
+    saveGame();     // keep localStorage in sync too
+    updateUI();
+    showToast("☁️ Welcome back - resumed where you left off.", "success");
     await applyTraitRewards(walletAddress, false); // existing save - can still earn permanent perks (e.g. luck), no cash bonus though
 }
 
