@@ -16,6 +16,7 @@ let bgMusicMuted = true;
 let bgMusicEl = null;
 let bgMusicWasPlayingBeforeBonusStage = false;
 function toggleBgMusic() {
+    if (!document.body.classList.contains('medieval-mode')) return; // main theme is Mid Evils exclusive, full stop
     if (!bgMusicEl) bgMusicEl = document.getElementById('bgMusicEl');
     bgMusicMuted = !bgMusicMuted;
     const icon = document.getElementById('audioToggleIcon');
@@ -28,6 +29,20 @@ function toggleBgMusic() {
         if (bgMusicMuted) bgMusicEl.pause();
         else bgMusicEl.play().catch(() => {});
     }
+}
+
+// Called when the theme switches away from Mid Evils (disconnect, wallet
+// swap, theme preview reset) so music doesn't keep playing under a theme
+// it's not supposed to exist in.
+function stopMainThemeIfPlaying() {
+    if (!bgMusicEl) bgMusicEl = document.getElementById('bgMusicEl');
+    bgMusicMuted = true;
+    const icon = document.getElementById('audioToggleIcon');
+    if (icon) {
+        icon.classList.remove('fa-volume-high');
+        icon.classList.add('fa-volume-xmark');
+    }
+    if (bgMusicEl) bgMusicEl.pause();
 }
 
 // Handoff with the bonus stage's own theme track - only one plays at a
