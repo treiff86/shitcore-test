@@ -43,6 +43,13 @@ const COSMETIC_THEMES = [
         cssClass: "medieval-mode",
         toastMsg: "🏰 Mid Evil detected! The realm grows old.",
     },
+    {
+        id: "conmen",
+        label: "Conmen - Cell Block",
+        collectionAddress: "", // FILL IN after the Aug 5 mint - collection address, not one NFT's mint address (same rule as CONMEN_COLLECTION_ADDRESS in gate.js)
+        cssClass: "conmen-mode",
+        toastMsg: "🔒 Conman detected! Welcome to the cell block.",
+    },
 ];
 
 // Trait-gated rewards - checked against the specific NFT's metadata
@@ -91,6 +98,8 @@ function initSupabase() {
 
 function clearCosmeticThemes() {
     COSMETIC_THEMES.forEach((t) => document.body.classList.remove(t.cssClass));
+    document.getElementById("audioToggleBtn")?.classList.add("hidden");
+    if (typeof stopMainThemeIfPlaying === "function") stopMainThemeIfPlaying();
 }
 
 async function applyCosmeticThemes(addr) {
@@ -104,6 +113,7 @@ async function applyCosmeticThemes(addr) {
             showToast(theme.toastMsg, "success");
             if (theme.id === "midevils") {
                 document.getElementById("bonusStageBtn")?.classList.remove("hidden");
+                document.getElementById("audioToggleBtn")?.classList.remove("hidden");
             }
             return; // first match wins, these don't stack
         }
