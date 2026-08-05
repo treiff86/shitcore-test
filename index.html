@@ -13,7 +13,7 @@
     <!-- FontAwesome icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Local styles (FIXED PATH) -->
-    <link rel="stylesheet" href="style.css?v=39">
+    <link rel="stylesheet" href="style.css?v=40">
     <link rel="stylesheet" href="bonusstage.css?v=1">
 </head>
 <body class="overflow-x-hidden min-h-screen flex flex-col justify-between">
@@ -800,6 +800,16 @@
         </div>
     </div>
 
+    <!-- Conmen toast - same slide-up-from-bottom-left treatment as Mid Evils, own character art -->
+    <div id="toastConmen" class="fixed bottom-0 left-6 z-50 hidden flex items-end gap-2 max-w-md">
+        <img src="assets/conmen-pfp.png" alt="" class="w-48 h-auto flex-shrink-0 drop-shadow-2xl">
+        <div id="toastBubbleConmen" class="bg-white text-black px-4 py-3 rounded-2xl shadow-2xl text-sm font-semibold mb-6 relative border-[3px] border-black">
+            <span id="toastMessageConmen">Default Alert State</span>
+            <div class="absolute -bottom-[9px] left-6 w-4 h-4 bg-white border-l-[3px] border-b-[3px] border-black" style="transform: rotate(45deg);"></div>
+        </div>
+    </div>
+
+
     <!-- Generic alert modal -->
     <div id="customAlertModal" class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 hidden p-4">
         <div class="bg-[#0C0F16] border border-rose-500/40 max-w-md w-full p-6 rounded-xl shadow-2xl text-center space-y-4">
@@ -933,7 +943,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>
 <script src="js/audio.js?v=3" defer></script>
 <script src="js/state.js?v=2" defer></script>
-<script src="js/ui.js?v=1" defer></script>
+<script src="js/ui.js?v=2" defer></script>
 <script src="js/markets.js?v=17" defer></script>
 <script src="js/auditor.js" defer></script>
 <script src="js/deployer.js" defer></script>
