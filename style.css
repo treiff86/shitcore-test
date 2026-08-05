@@ -635,3 +635,374 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .medieval-mode #tradingCanvas {
     filter: url(#mc-hand-drawn);
 }
+
+/* ==================================================================
+   CONMEN THEME - jail/cell-block reskin, mirrors medieval-mode's
+   structure and selectors, different palette/textures/fonts.
+   Real assets wired in: your jail background + fixed box border.
+   ================================================================== */
+.conmen-mode {
+    animation: medieval-flicker 4s ease-in-out infinite;
+    background-color: #1a1208;
+    background-image:
+        radial-gradient(ellipse at 20% 20%, rgba(120,80,30,0.25), transparent 55%),
+        radial-gradient(ellipse at 80% 80%, rgba(100,60,20,0.25), transparent 55%),
+        url('assets/conmen-wall-fill.webp');
+    background-repeat: no-repeat, no-repeat, repeat;
+    background-size: auto, auto, 400px 400px;
+}
+/* All text in medieval-mode gets the Old English blackletter font and
+   a soft drop shadow so it reads like it's floating above the wood.
+   White fill by default; headings override to red fill just below. */
+.conmen-mode,
+.conmen-mode * {
+    font-family: 'Special Elite', monospace !important;
+    color: #ffffff !important;
+    text-shadow: 3px 4px 5px rgba(0,0,0,0.75);
+}
+.conmen-mode h1,
+.conmen-mode h2,
+.conmen-mode h3,
+.conmen-mode .font-black {
+    font-family: 'Rye', 'Special Elite', monospace !important;
+    color: #c62828 !important;
+    text-shadow: 4px 5px 6px rgba(0,0,0,0.8);
+    letter-spacing: 0.5px;
+}
+
+/* Call-out titles (chart title, orderbook header, USDSHT wordmark) -
+   a bit bigger than normal headings, same red fill + drop shadow. */
+.conmen-mode .mc-title-accent {
+    font-size: 1.15em;
+}
+
+/* Mid Evils panel backgrounds - one wood-and-stone panel per element,
+   not a repeating wallpaper of the whole framed image. Uses CSS
+   border-image to take just the stone-border portion of the artwork
+   and stretch it along the panel's actual edges (keeping corners
+   intact, standard technique for exactly this "picture frame" effect),
+   with a separate wood-only interior tile (cropped from the artwork's
+   own center, no stone in it) filling the middle. Same verified-safe
+   selector as before - requires the exact panel bg AND border color
+   together, confirmed to exclude header/nav/modals. */
+.conmen-mode [class*="bg-[#0C0F16]"][class*="border-[#1A2232]"] {
+    border-image-source: url('assets/conmen-panel-border.png') !important;
+    border-image-slice: 24 !important;
+    border-image-width: 28px !important;
+    border-image-repeat: round !important;
+    border-style: solid !important;
+    background-color: #3a3f45 !important;
+    background-image: url('assets/conmen-wall-fill.webp') !important;
+    background-repeat: repeat !important;
+    background-size: 220px 220px !important;
+}
+
+/* Header + nav bar + footer get the same wood-and-stone frame as the
+   panels, deliberately left out of the selector above (that one's scoped
+   tight on purpose). Thinner border since these are shallow strips, not
+   boxes. */
+.conmen-mode header,
+.conmen-mode nav,
+.conmen-mode footer {
+    border-image-source: url('assets/conmen-panel-border.png') !important;
+    border-image-slice: 24 !important;
+    border-image-width: 16px !important;
+    border-image-repeat: round !important;
+    border-style: solid !important;
+    background-color: #3a3f45 !important;
+    background-image: url('assets/conmen-wall-fill.webp') !important;
+    background-repeat: repeat !important;
+    background-size: 220px 220px !important;
+}
+.conmen-mode footer * {
+    color: #e8d9b8 !important;
+}
+.conmen-mode footer .text-green-400 {
+    color: #8fd694 !important;
+}
+.conmen-mode footer .text-amber-500 {
+    color: #f0b95e !important;
+}
+
+/* Smaller inset boxes that sit inside the main panels (Spread strip,
+   Wager/Leverage controls) - same wood-and-stone treatment, scaled
+   down so the frame doesn't overwhelm a small element. */
+.conmen-mode .mc-inset-panel,
+.conmen-mode #wagerControlPanel {
+    border-image-source: url('assets/conmen-panel-border.png') !important;
+    border-image-slice: 24 !important;
+    border-image-width: 12px !important;
+    border-image-repeat: round !important;
+    border-style: solid !important;
+    background-color: #3a3f45 !important;
+    background-image: url('assets/conmen-wall-fill.webp') !important;
+    background-repeat: repeat !important;
+    background-size: 140px 140px !important;
+}
+
+/* Medieval-styled scrollbar for every scrollable box on the page while
+   this theme is active (Chrome/Edge/Safari only - Firefox has no
+   equivalent styling hook, it'll just show its default scrollbar). */
+.conmen-mode ::-webkit-scrollbar {
+    width: 10px;
+}
+.conmen-mode ::-webkit-scrollbar-track {
+    background: #1a1208;
+}
+.conmen-mode ::-webkit-scrollbar-thumb {
+    background: #6b4423;
+    border: 2px solid #000;
+    border-radius: 4px;
+}
+.conmen-mode ::-webkit-scrollbar-thumb:hover {
+    background: #8a5a2e;
+}
+
+/* The blanket font-family override above also hijacked Font Awesome's
+   icon font, since icons render via a special font where specific
+   characters map to glyphs - forcing Special Elite on them left blank
+   boxes where every icon used to be. Restore FA's own font per icon
+   style so they render again. */
+.conmen-mode .fa-solid,
+.conmen-mode .fas {
+    font-family: "Font Awesome 6 Free" !important;
+    font-weight: 900 !important;
+}
+.conmen-mode .fa-regular,
+.conmen-mode .far {
+    font-family: "Font Awesome 6 Free" !important;
+    font-weight: 400 !important;
+}
+.conmen-mode .fa-brands,
+.conmen-mode .fab {
+    font-family: "Font Awesome 6 Brands" !important;
+    font-weight: 400 !important;
+}
+
+/* The blanket white-text override also wiped out the site's existing
+   color coding (green cash, red/rose danger, amber warnings, blue
+   info, etc). Restore each utility class to its normal Tailwind shade
+   so money/status colors read correctly again in medieval mode too. */
+.conmen-mode .text-green-400   { color: #4ade80 !important; }
+.conmen-mode .text-green-500   { color: #22c55e !important; }
+.conmen-mode .text-emerald-400 { color: #34d399 !important; }
+.conmen-mode .text-rose-400    { color: #fb7185 !important; }
+.conmen-mode .text-rose-500    { color: #f43f5e !important; }
+.conmen-mode .text-red-500     { color: #ef4444 !important; }
+.conmen-mode .text-amber-400   { color: #fbbf24 !important; }
+.conmen-mode .text-amber-500   { color: #f59e0b !important; }
+.conmen-mode .text-blue-400    { color: #60a5fa !important; }
+.conmen-mode .text-purple-400  { color: #c084fc !important; }
+.conmen-mode .text-purple-300  { color: #d8b4fe !important; }
+.conmen-mode .text-fuchsia-400 { color: #e879f9 !important; }
+
+/* Remaining small dark badges/buttons (Layer 1 badge, LOCAL tag,
+   10%/50%/Custom wager buttons, leverage buttons, cash display pill)
+   get a carved-stone tint instead of staying flat black. */
+.conmen-mode [class*="bg-[#1C212E]"],
+.conmen-mode [class*="bg-[#1B2130]"],
+.conmen-mode [class*="bg-[#121926]"] {
+    background: linear-gradient(160deg, #6b6b63 0%, #4a4a44 45%, #38382f 100%) !important;
+    border: 1px solid #000 !important;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08) !important;
+}
+.conmen-mode [class*="hover:bg-[#252E3E]"]:hover {
+    background: linear-gradient(160deg, #7d7d74 0%, #5a5a52 45%, #46463c 100%) !important;
+}
+
+/* Same wood-and-stone inset treatment for the perk shop rows and the
+   Ponzi Yield Pools cards - both use their own custom classes rather
+   than the bg-[#10141D] Tailwind pattern, so they need their own rule. */
+.conmen-mode .pool-card {
+    border-image-source: url('assets/conmen-panel-border.png') !important;
+    border-image-slice: 24 !important;
+    border-image-width: 12px !important;
+    border-image-repeat: round !important;
+    border-style: solid !important;
+    background-color: #3a3f45 !important;
+    background-image: url('assets/conmen-wall-fill.webp') !important;
+    background-repeat: repeat !important;
+    background-size: 140px 140px !important;
+}
+
+/* Perk shop rows get an aged-parchment scroll look instead of reusing
+   the wood texture everywhere - reads as "upgrade scroll" and stands
+   out from the panels around it. Text is forced dark here since
+   parchment is light-colored, unlike everywhere else in medieval-mode. */
+.conmen-mode .perk-row {
+    background-color: #e5dcc5 !important;
+    background-repeat: repeat !important;
+    background-size: 260px 260px !important;
+    border: 2px solid #3a3f45 !important;
+    border-radius: 8px !important;
+    box-shadow: inset 0 0 14px rgba(58, 36, 24, 0.4) !important;
+}
+.conmen-mode .perk-row,
+.conmen-mode .perk-row * {
+    color: #2a2620 !important;
+    text-shadow: none !important;
+}
+
+/* Perk shop "buy" buttons - mossy stone instead of flat bright green,
+   still reads as "affordable/go" without breaking the theme. */
+.conmen-mode [class*="bg-emerald-600"] {
+    background: linear-gradient(160deg, #4d7a52 0%, #2f5233 50%, #1f3722 100%) !important;
+    border: 1px solid #000 !important;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08) !important;
+}
+.conmen-mode [class*="hover:bg-emerald-500"]:hover {
+    background: linear-gradient(160deg, #5c8f62 0%, #3d6642 50%, #294a2c 100%) !important;
+}
+
+/* How To Play, Ways To Earn, and Regulatory Heat all use the same black
+   instruction-card pattern - same aged-parchment scroll look as the perk
+   shop rows for all three, so the whole "read this to learn the rules"
+   set of panels reads as parchment instead of the default dark cyber
+   boxes. */
+.conmen-mode #howToPlaySection [class*="bg-[#070A0F]"],
+.conmen-mode #waysToEarnSection [class*="bg-[#070A0F]"],
+.conmen-mode #regulatoryHeatSection [class*="bg-[#070A0F]"] {
+    background-color: #e5dcc5 !important;
+    background-repeat: repeat !important;
+    background-size: 260px 260px !important;
+    border: 2px solid #3a3f45 !important;
+    border-radius: 8px !important;
+    box-shadow: inset 0 0 14px rgba(58, 36, 24, 0.4) !important;
+}
+.conmen-mode #howToPlaySection [class*="bg-[#070A0F]"],
+.conmen-mode #howToPlaySection [class*="bg-[#070A0F]"] *,
+.conmen-mode #waysToEarnSection [class*="bg-[#070A0F]"],
+.conmen-mode #waysToEarnSection [class*="bg-[#070A0F]"] *,
+.conmen-mode #regulatoryHeatSection [class*="bg-[#070A0F]"],
+.conmen-mode #regulatoryHeatSection [class*="bg-[#070A0F]"] * {
+    color: #2a2620 !important;
+    text-shadow: none !important;
+}
+.conmen-mode #howToPlaySection [class*="bg-[#070A0F]"] h4 {
+    color: #5a4a2e !important;
+}
+/* Ways To Earn / Regulatory Heat headers keep their semantic colors
+   (green for earning, red/green for heat effects) instead of the same
+   flat amber How To Play uses - darker shades of the same hues so they
+   stay readable against light parchment instead of the original
+   bright versions made for a dark background. */
+.conmen-mode #waysToEarnSection [class*="bg-[#070A0F]"] h4.text-emerald-400,
+.conmen-mode #regulatoryHeatSection [class*="bg-[#070A0F]"] h4.text-emerald-400 {
+    color: #2f6b4f !important;
+}
+.conmen-mode #regulatoryHeatSection [class*="bg-[#070A0F]"] h4.text-rose-400 {
+    color: #7a1f1f !important;
+}
+
+/* Wager amount input + the wager%/leverage buttons - same parchment
+   treatment instead of the flat black input/button look. */
+.conmen-mode #wagerCustomInput {
+    background-color: #e5dcc5 !important;
+    background-repeat: repeat !important;
+    background-size: 220px 220px !important;
+    border: 2px solid #3a3f45 !important;
+    color: #7a1f1f !important;
+}
+.conmen-mode #wagerCustomInput::placeholder {
+    color: #8f8578 !important;
+}
+
+/* The blanket "everything is white" rule applies directly to every
+   element, not just via inheritance from a colored parent - so a plain
+   id'd span sitting inside a .text-green-400 wrapper still needed its
+   own explicit color, or it'd render white instead of picking up the
+   parent's green like you'd expect. */
+.conmen-mode #ruggedSavingsDisplay {
+    color: #4ade80 !important;
+}
+.conmen-mode #wagerControlPanel button {
+    background-color: #e5dcc5 !important;
+    background-repeat: repeat !important;
+    background-size: 180px 180px !important;
+    border: 2px solid #3a3f45 !important;
+    color: #2a2620 !important;
+    text-shadow: none !important;
+}
+.conmen-mode #wagerControlPanel button:hover {
+    background-color: #e6d8b5 !important;
+}
+
+/* Give every button a bit of hand-drawn 3D lift - a soft shadow toward
+   the bottom-left instead of Tailwind's flat fills. */
+.conmen-mode button {
+    box-shadow: -3px 3px 0 rgba(0,0,0,0.45) !important;
+}
+.conmen-mode button:active {
+    box-shadow: -1px 1px 0 rgba(0,0,0,0.45) !important;
+    transform: translate(-1px, 1px);
+}
+
+/* Y Social feed, Mid Evils only - same plain parchment treatment as
+   every other black box (How To Play, Ways To Earn, etc), nothing fancy. */
+.conmen-mode #ySocialFeedPanel {
+    background-color: #e5dcc5 !important;
+    background-repeat: repeat !important;
+    background-size: 260px 260px !important;
+    border: 2px solid #3a3f45 !important;
+    box-shadow: inset 0 0 14px rgba(58, 36, 24, 0.4) !important;
+}
+.conmen-mode #ySocialFeedPanel * {
+    background-color: transparent !important;
+    background-image: none !important;
+    border-color: rgba(58,36,24,0.3) !important;
+    color: #2a2620 !important;
+    text-shadow: none !important;
+}
+.conmen-mode #ySocialFeedPanel .text-green-400 {
+    color: #2f6b4f !important;
+}
+.conmen-mode #ySocialFeedPanel .animate-ping {
+    background-color: #2f6b4f !important;
+}
+
+/* Every field you can actually type into across OpenShit, Rug Creator,
+   and the AI Solidity Auditor - same parchment look as the rest of the
+   theme, but with red "ink" text instead of the usual dark brown, since
+   these are the spots you're actively writing into rather than just
+   reading. Targeted by ID on purpose (not a broad class match) so this
+   doesn't bleed into the Markets wager input or staking/mining fields,
+   which already have their own treatment or weren't asked about. */
+.conmen-mode #nftPrompt,
+.conmen-mode #nftCollectionName,
+.conmen-mode #nftTicker,
+.conmen-mode #nftMintPrice,
+.conmen-mode #deployName,
+.conmen-mode #deployTicker,
+.conmen-mode #deployLiquidity,
+.conmen-mode #contractInput {
+    background-color: #e5dcc5 !important;
+    background-repeat: repeat !important;
+    background-size: 220px 220px !important;
+    border: 2px solid #3a3f45 !important;
+    color: #7a1f1f !important;
+    caret-color: #7a1f1f !important;
+}
+.conmen-mode #nftPrompt::placeholder,
+.conmen-mode #nftCollectionName::placeholder,
+.conmen-mode #nftTicker::placeholder,
+.conmen-mode #nftMintPrice::placeholder,
+.conmen-mode #deployName::placeholder,
+.conmen-mode #deployTicker::placeholder,
+.conmen-mode #deployLiquidity::placeholder,
+.conmen-mode #contractInput::placeholder {
+    color: #8f8578 !important;
+}
+
+/* Toxicity tax slider - not typeable so no red text applies, just
+   pulling the track out of flat black to match everything around it. */
+.conmen-mode #toxicityTaxSlider {
+    background-color: #3a3f45 !important;
+    background-image: url('assets/conmen-wall-fill.webp') !important;
+    background-repeat: repeat !important;
+    background-size: 140px 140px !important;
+}
+
+
+.conmen-mode #tradingCanvas {
+    filter: url(#mc-hand-drawn);
+}
