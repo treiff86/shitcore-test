@@ -101,7 +101,12 @@ function clearCosmeticThemes() {
 // later without having to reconnect.
 let ownedThemesList = [];
 
-async function applyCosmeticThemes(addr) {
+// showChoiceIfMultiple=false is used specifically for the master wallet's
+// TEST Play path, where Theme Preview is about to open right after and
+// would just fight with this modal for attention. Every other caller -
+// including LIVE Play, which is deliberately meant to be indistinguishable
+// from a real connection - leaves it true.
+async function applyCosmeticThemes(addr, showChoiceIfMultiple = true) {
     if (typeof window.checkCollectionOwnership !== "function") return;
 
     const owned = [];
@@ -113,7 +118,7 @@ async function applyCosmeticThemes(addr) {
     ownedThemesList = owned;
 
     const switchBtn = document.getElementById("themeSwitchBtn");
-    if (owned.length > 1 && addr !== MASTER_WALLET) {
+    if (owned.length > 1) {
         switchBtn?.classList.remove("hidden");
     } else {
         switchBtn?.classList.add("hidden");
@@ -127,11 +132,11 @@ async function applyCosmeticThemes(addr) {
         return;
     }
     // Owns more than one gated collection - let them pick rather than
-    // silently defaulting to whichever happens to be checked first. Master
-    // wallet already has the strictly more powerful Theme Preview panel
-    // (previews any theme, owned or not) opening right after this, so
-    // don't also pop this modal and cause two panels to fight for attention.
-    if (addr === MASTER_WALLET) return;
+    // silently defaulting to whichever happens to be checked first.
+    if (!showChoiceIfMultiple) {
+        applyTheme(owned[0]); // baseline pick; caller has its own way to let them override (Theme Preview)
+        return;
+    }
     renderThemeChoiceButtons();
     document.getElementById("themeChoiceModal")?.classList.remove("hidden");
 }
@@ -187,6 +192,7 @@ function choosePlayMode(mode) {
     document.getElementById("playModeModal")?.classList.add("hidden");
     if (mode === "test") {
         isTestPlayMode = true;
+        applyCosmeticThemes(walletAddress, false); // real theme still applies as a baseline; Theme Preview (below) is what actually lets you override it, so skip the separate dual-choice popup here
         document.getElementById("themePreviewBtn")?.classList.remove("hidden");
         document.getElementById("bonusStageBtn")?.classList.remove("hidden");
         document.getElementById("audioToggleBtn")?.classList.remove("hidden");
@@ -196,6 +202,11 @@ function choosePlayMode(mode) {
         showToast("🧪 TEST PLAY active - all testing tools unlocked.", "info");
     } else {
         isTestPlayMode = false;
+        // Genuinely re-runs the exact same real-connection flow any other
+        // wallet gets - including the dual-theme picker if this wallet
+        // holds more than one gated collection. Nothing about this call
+        // is different for the master wallet.
+        applyCosmeticThemes(walletAddress, true);
         showToast("▶️ LIVE PLAY active - this is exactly what a real player sees.", "info");
     }
 }
@@ -384,14 +395,15 @@ async function connectToProvider({ name, kind, provider }) {
         }
 
         // Real holder detection - checks every theme in COSMETIC_THEMES.
-        // Runs for every wallet including the master one - real ownership
-        // always applies regardless of which play mode gets picked below.
-        applyCosmeticThemes(walletAddress);
-
-        // Master wallet: ask which mode before unlocking anything extra,
-        // rather than silently bypassing everything every time it connects.
+        // For every normal wallet this runs immediately, same as always.
+        // For the master wallet it's deliberately deferred until LIVE/TEST
+        // is picked below, so choosing LIVE genuinely re-runs this exact
+        // same real-connection sequence rather than something already
+        // having happened moments earlier.
         if (walletAddress === MASTER_WALLET) {
             document.getElementById("playModeModal")?.classList.remove("hidden");
+        } else {
+            applyCosmeticThemes(walletAddress);
         }
 
         await offerCloudLoadIfExists();
