@@ -77,7 +77,7 @@ window.BonusStage = (function () {
         punch_lo: ['reiffer_punch_lo.webp', 6],
         kick_lo: ['reiffer_kick_lo.webp', 4],
         hurt: ['hit.webp', 1],
-        defeat: ['midevils_defeat.webp', 3],
+        defeat: ['midevils_defeat.webp?v=2', 3],
     };
     // Conmen holders get their own character - same animation states, own
     // art and frame counts (this set has fewer frames per animation, which
@@ -88,7 +88,7 @@ window.BonusStage = (function () {
         punch_lo: ['conmen_punch_lo.webp', 3],
         kick_lo: ['conmen_kick_lo.webp', 3],
         hurt: ['conmen_hit.webp', 1],
-        defeat: ['conmen_defeat.webp', 4],
+        defeat: ['conmen_defeat.webp?v=2', 4],
     };
     const FRYER_FILES = ['tier_01.webp','tier_02.webp','tier_03.webp','tier_04.webp','tier_05.webp','tier_06.webp'];
     const DEBRIS_FILES = ['debris_1.webp','debris_2.webp','debris_3.webp','debris_4.webp','debris_5.webp','debris_6.webp','debris_7.webp','debris_8.webp','debris_9.webp','debris_10.webp','debris_11.webp','debris_12.webp'];
