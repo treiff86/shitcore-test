@@ -6,6 +6,31 @@
     <title>Shitcore (USDSHT) — The Ultimate L1 for Absolute Rugs</title>
     <meta name="description" content="A satirical idle-tycoon game about meme-coin rug pulls. 100% fake money, 100% fake blockchain, 100% real bad decisions.">
 
+    <!-- Debug error catcher - deliberately the FIRST script on the page,
+         before anything else that could throw, so the TEST PLAY debug
+         menu (master wallet only) can show a real error log instead of
+         guessing. Always installed, harmless no-op if TEST PLAY is never
+         opened. -->
+    <script>
+        window._debugErrorLog = [];
+        window.addEventListener('error', function (e) {
+            window._debugErrorLog.push({
+                type: 'error',
+                message: e.message,
+                source: (e.filename || '').split('/').pop() + (e.lineno ? ':' + e.lineno : ''),
+                time: new Date().toLocaleTimeString(),
+            });
+        });
+        window.addEventListener('unhandledrejection', function (e) {
+            window._debugErrorLog.push({
+                type: 'promise rejection',
+                message: String(e.reason && e.reason.message ? e.reason.message : e.reason),
+                source: '',
+                time: new Date().toLocaleTimeString(),
+            });
+        });
+    </script>
+
     <!-- Tailwind CSS (CDN, no build step needed) -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Google Fonts -->
@@ -94,6 +119,9 @@
                 </button>
                 <button id="themeSwitchBtn" onclick="openThemeChoice()" title="Switch cosmetic theme (this wallet holds more than one)" class="hidden text-gray-500 hover:text-emerald-400 transition text-xs border border-[#1A2232] rounded px-2 py-1.5">
                     <i class="fa-solid fa-shuffle"></i>
+                </button>
+                <button id="debugMenuBtn" onclick="openDebugMenu()" title="Debug menu (TEST Play only)" class="hidden text-gray-500 hover:text-amber-400 transition text-xs border border-[#1A2232] rounded px-2 py-1.5">
+                    <i class="fa-solid fa-bug"></i>
                 </button>
                 <button id="walletConnectBtn" title="Connect a wallet to save your progress and appear on the leaderboard - read-only, never asks you to sign a transaction" class="text-gray-400 hover:text-emerald-400 transition text-[10px] font-bold border border-[#1A2232] rounded px-2 py-1.5 whitespace-nowrap">
                     Connect Wallet
@@ -893,6 +921,60 @@
         </div>
     </div>
 
+    <!-- Play Mode choice - master wallet only, shown every time it connects.
+         LIVE PLAY = exactly what any real player experiences, no bypasses.
+         TEST PLAY = every testing tool unlocked, plus the debug menu. -->
+    <div id="playModeModal" class="fixed inset-0 bg-black/90 flex items-center justify-center z-[60] hidden p-4">
+        <div class="bg-[#0C0F16] border border-cyan-500/40 max-w-md w-full p-6 rounded-xl shadow-2xl space-y-4">
+            <div class="flex items-center justify-between">
+                <h3 class="text-cyan-400 font-black text-lg tracking-tight"><i class="fa-solid fa-user-shield mr-1.5"></i>Master Wallet Detected</h3>
+            </div>
+            <p class="text-xs text-gray-400">Choose how you want to play this session.</p>
+            <button onclick="choosePlayMode('live')" class="w-full text-left p-4 bg-emerald-600/10 hover:bg-emerald-600/25 border border-emerald-500/30 rounded-lg transition group">
+                <div class="text-emerald-400 font-black text-sm mb-1"><i class="fa-solid fa-play mr-1.5"></i>LIVE Play</div>
+                <div class="text-[11px] text-gray-400">The exact experience every real player gets. No test buttons, no cheats, no bypasses - only what your real NFT holdings actually unlock.</div>
+            </button>
+            <button onclick="choosePlayMode('test')" class="w-full text-left p-4 bg-amber-600/10 hover:bg-amber-600/25 border border-amber-500/30 rounded-lg transition group">
+                <div class="text-amber-400 font-black text-sm mb-1"><i class="fa-solid fa-flask mr-1.5"></i>TEST Play</div>
+                <div class="text-[11px] text-gray-400">Every testing tool unlocked - Theme Preview, Bonus Stage, the Easter Egg trigger - plus a debug menu for tracking down errors.</div>
+            </button>
+        </div>
+    </div>
+
+    <!-- Debug menu - TEST PLAY only. Surfaces exactly the kind of info
+         that's slow to dig out through DevTools by hand: which script
+         versions are actually loaded, what theme is active, and any JS
+         errors caught since page load. "Copy Debug Report" packages all
+         of it as plain text to hand over for troubleshooting. -->
+    <div id="debugMenuModal" class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 hidden p-4">
+        <div class="bg-[#0C0F16] border border-amber-500/40 max-w-lg w-full p-6 rounded-xl shadow-2xl space-y-3 max-h-[85vh] overflow-y-auto">
+            <div class="flex items-center justify-between">
+                <h3 class="text-amber-400 font-black text-lg tracking-tight"><i class="fa-solid fa-bug mr-1.5"></i>Debug Menu</h3>
+                <button onclick="closeDebugMenu()" class="text-gray-500 hover:text-white text-xl leading-none">&times;</button>
+            </div>
+            <div>
+                <div class="text-[10px] uppercase tracking-wide text-gray-500 mb-1">Current State</div>
+                <div id="debugStateBox" class="bg-black/40 border border-[#1A2232] rounded p-3 text-[11px] font-mono text-gray-300 space-y-0.5"></div>
+            </div>
+            <div>
+                <div class="text-[10px] uppercase tracking-wide text-gray-500 mb-1">Loaded Script Versions</div>
+                <div id="debugVersionsBox" class="bg-black/40 border border-[#1A2232] rounded p-3 text-[11px] font-mono text-gray-300 space-y-0.5"></div>
+            </div>
+            <div>
+                <div class="text-[10px] uppercase tracking-wide text-gray-500 mb-1">Caught Errors (this page load)</div>
+                <div id="debugErrorsBox" class="bg-black/40 border border-[#1A2232] rounded p-3 text-[11px] font-mono text-rose-300 space-y-1 max-h-40 overflow-y-auto"></div>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="refreshDebugInfo()" class="flex-1 py-2 border border-[#1A2232] hover:border-gray-500 text-gray-400 hover:text-white rounded text-xs transition">
+                    <i class="fa-solid fa-rotate mr-1"></i>Refresh
+                </button>
+                <button onclick="copyDebugReport()" class="flex-1 py-2 bg-amber-600/20 hover:bg-amber-600/40 border border-amber-500/30 text-amber-300 rounded text-xs font-bold transition">
+                    <i class="fa-solid fa-copy mr-1"></i>Copy Debug Report
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Deposit to Rugged Savings -->
     <div id="depositModal" class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 hidden p-4">
         <div class="bg-[#0C0F16] border border-amber-500/40 max-w-sm w-full p-6 rounded-xl shadow-2xl space-y-3">
@@ -1020,8 +1102,8 @@
 <script src="js/perks.js" defer></script>
 <script src="js/bonusstage.js?v=12" defer></script>
 <script src="js/conmen-egg.js?v=4" defer></script>
-<script src="js/mcdonalds-egg.js?v=2" defer></script>
-<script src="js/web3.js?v=18" defer></script>
+<script src="js/mcdonalds-egg.js?v=3" defer></script>
+<script src="js/web3.js?v=19" defer></script>
 <script type="module" src="js/sns.js?v=5"></script>
 <script type="module" src="js/nftgate.js?v=2"></script>
 <script src="js/gate.js?v=2" defer></script>
