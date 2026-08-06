@@ -104,7 +104,7 @@ async function applyCosmeticThemes(addr) {
             clearCosmeticThemes();
             document.body.classList.add(theme.cssClass);
             showToast(theme.toastMsg, "success");
-            if (theme.id === "midevils") {
+            if (theme.id === "midevils" || theme.id === "conmen") {
                 document.getElementById("bonusStageBtn")?.classList.remove("hidden");
                 document.getElementById("audioToggleBtn")?.classList.remove("hidden");
             }
@@ -226,6 +226,7 @@ async function connectToProvider({ name, kind, provider }) {
         if (walletAddress === MASTER_WALLET) {
             document.getElementById("themePreviewBtn")?.classList.remove("hidden");
             document.getElementById("bonusStageBtn")?.classList.remove("hidden");
+            document.getElementById("audioToggleBtn")?.classList.remove("hidden");
             document.getElementById("conmenEggTestBtn")?.classList.remove("hidden");
             openThemePreview();
         }
