@@ -189,6 +189,48 @@ function playSound(type) {
             gain.gain.setValueAtTime(0.08, now);
             gain.gain.exponentialRampToValueAtTime(0.001, now + 0.95);
             osc.start(now); osc.stop(now + 0.95);
+        } else if (type === 'fryer_hit') {
+            // Metallic clang - short bright thud with a quick pitch drop,
+            // plus a burst of filtered noise for the "hit something metal" bite.
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(320, now);
+            osc.frequency.exponentialRampToValueAtTime(90, now + 0.12);
+            gain.gain.setValueAtTime(0.12, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+            osc.start(now); osc.stop(now + 0.14);
+
+            const bufferSize = ctx.sampleRate * 0.1;
+            const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+            const noise = ctx.createBufferSource();
+            noise.buffer = buffer;
+            const noiseFilter = ctx.createBiquadFilter();
+            noiseFilter.type = 'bandpass';
+            noiseFilter.frequency.setValueAtTime(1800, now);
+            noiseFilter.Q.value = 1.2;
+            const noiseGain = ctx.createGain();
+            noiseGain.gain.setValueAtTime(0.18, now);
+            noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+            noise.connect(noiseFilter);
+            noiseFilter.connect(noiseGain);
+            noiseGain.connect(ctx.destination);
+            noise.start(now); noise.stop(now + 0.1);
+        } else if (type === 'player_hurt') {
+            // Short pained grunt - a falling, slightly rough tone.
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(260, now);
+            osc.frequency.exponentialRampToValueAtTime(110, now + 0.18);
+            const filter = ctx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(1200, now);
+            filter.frequency.exponentialRampToValueAtTime(300, now + 0.18);
+            osc.disconnect(gain);
+            osc.connect(filter);
+            filter.connect(gain);
+            gain.gain.setValueAtTime(0.14, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+            osc.start(now); osc.stop(now + 0.2);
         }
     } catch (e) {
         console.warn('Audio blocked or unsupported:', e);
