@@ -173,13 +173,24 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 /* Toast bubble background is white, so the global white-text rule above
    would make the message invisible - force black text here regardless,
    and drop the drop-shadow since it doesn't read well on a light bubble.
-   Covers both Mid Evils' and Conmen's toast bubbles. */
+   Covers Mid Evils', Conmen's, and the McDonald's mini-game promo bubbles. */
 #toastBubble,
 #toastBubble *,
 #toastBubbleConmen,
-#toastBubbleConmen * {
+#toastBubbleConmen *,
+#mcdEggBubble,
+#mcdEggBubble * {
     color: #000 !important;
     text-shadow: none !important;
+}
+
+/* The "fries" hyperlink styling inside the McDonald's bubble needs to win
+   over the blanket black-text rule above - it's declared after it, but
+   !important vs !important still goes to source order, so this must come
+   later in the file than the block above. */
+#mcdEggBubble .mcd-fries-link {
+    color: #1d4ed8 !important;
+    text-decoration: underline !important;
 }
 
 /* Character slides up from off-screen instead of just popping in. */
@@ -188,7 +199,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     to   { transform: translateY(0);    opacity: 1; }
 }
 #toastMedieval img,
-#toastConmen img {
+#toastConmen img,
+#mcdEggPopup img {
     animation: toastCharSlideUp 0.45s ease-out;
 }
 
@@ -612,7 +624,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .conmen-mode [class*="bg-[#0C0F16]"][class*="border-[#1A2232]"] {
     border-image-source: url('assets/conmen-panel-border.png?v=2') !important;
     background-clip: padding-box !important;
-    border-image-slice: 26 18 22 28 !important;
+    border-image-slice: 18 !important;
     border-image-width: 28px !important;
     border-image-repeat: stretch !important;
     border-style: solid !important;
@@ -624,7 +636,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .conmen-mode header {
     border-image-source: url('assets/conmen-panel-border.png?v=2') !important;
     background-clip: padding-box !important;
-    border-image-slice: 26 18 22 28 !important;
+    border-image-slice: 18 !important;
     border-image-width: 16px !important;
     border-image-repeat: stretch !important;
     border-style: solid !important;
@@ -634,7 +646,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .conmen-mode footer {
     border-image-source: url('assets/conmen-panel-border.png?v=2') !important;
     background-clip: padding-box !important;
-    border-image-slice: 26 18 22 28 !important;
+    border-image-slice: 18 !important;
     border-image-width: 16px !important;
     border-image-repeat: stretch !important;
     border-style: solid !important;
@@ -659,7 +671,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .conmen-mode #wagerControlPanel {
     border-image-source: url('assets/conmen-panel-border.png?v=2') !important;
     background-clip: padding-box !important;
-    border-image-slice: 26 18 22 28 !important;
+    border-image-slice: 18 !important;
     border-image-width: 12px !important;
     border-image-repeat: stretch !important;
     border-style: solid !important;
@@ -742,7 +754,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .conmen-mode .pool-card {
     border-image-source: url('assets/conmen-panel-border.png?v=2') !important;
     background-clip: padding-box !important;
-    border-image-slice: 26 18 22 28 !important;
+    border-image-slice: 18 !important;
     border-image-width: 12px !important;
     border-image-repeat: stretch !important;
     border-style: solid !important;
