@@ -8,16 +8,34 @@
 
 let audioCtx = null;
 
-// Background music toggle - wired up to a real <audio> element and track
-// once the main-site theme track is settled on. For now this just flips
-// the icon/mute state so the button is functional the moment the track
-// lands, without needing another HTML/JS round-trip.
+// Background music toggle - wired up to a real <audio> element. Mid
+// Evils and Conmen each have their own track; the element's src gets
+// swapped to match whichever theme is currently active.
 let bgMusicMuted = true;
 let bgMusicEl = null;
 let bgMusicWasPlayingBeforeBonusStage = false;
+
+const THEME_MUSIC_TRACKS = {
+    'medieval-mode': 'assets/midevil-theme.mp3',
+    'conmen-mode': 'assets/conmen-theme.mp3',
+};
+
+// Returns the music file for whichever cosmetic theme is currently active
+// on <body>, or null if the current theme (or lack of one) has no track.
+function _bgMusicSrcForCurrentTheme() {
+    for (const cls in THEME_MUSIC_TRACKS) {
+        if (document.body.classList.contains(cls)) return THEME_MUSIC_TRACKS[cls];
+    }
+    return null;
+}
+
 function toggleBgMusic() {
-    if (!document.body.classList.contains('medieval-mode')) return; // main theme is Mid Evils exclusive, full stop
+    const src = _bgMusicSrcForCurrentTheme();
+    if (!src) return; // current theme (if any) has no music track, full stop
     if (!bgMusicEl) bgMusicEl = document.getElementById('bgMusicEl');
+    if (bgMusicEl && !bgMusicEl.src.endsWith(src)) {
+        bgMusicEl.src = src; // switch track if the active theme changed since last play
+    }
     bgMusicMuted = !bgMusicMuted;
     const icon = document.getElementById('audioToggleIcon');
     if (icon) {
@@ -31,9 +49,9 @@ function toggleBgMusic() {
     }
 }
 
-// Called when the theme switches away from Mid Evils (disconnect, wallet
-// swap, theme preview reset) so music doesn't keep playing under a theme
-// it's not supposed to exist in.
+// Called when the theme switches away from one with music (disconnect,
+// wallet swap, theme preview reset) so a track doesn't keep playing under
+// a theme it's not supposed to exist in.
 function stopMainThemeIfPlaying() {
     if (!bgMusicEl) bgMusicEl = document.getElementById('bgMusicEl');
     bgMusicMuted = true;
