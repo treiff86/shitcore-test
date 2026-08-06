@@ -38,9 +38,21 @@ function _mcdEggAnotherToastVisible() {
     });
 }
 
+// Each theme gets its own McDonald's crew member - Reiffer in uniform for
+// Mid Evils, the Conmen character in uniform for Conmen. Falls back to the
+// Conmen art if somehow neither theme class is present (shouldn't happen,
+// since this popup only ever fires while the Bonus Stage is available).
+function _mcdEggCharacterSrc() {
+    if (document.body.classList.contains('medieval-mode')) return 'assets/midevils-mcdonalds-pfp.png';
+    return 'assets/mcdonalds-pfp.png';
+}
+
 function _mcdEggShow() {
     const el = document.getElementById('mcdEggPopup');
     if (!el) return;
+
+    const img = el.querySelector('img');
+    if (img) img.src = _mcdEggCharacterSrc();
 
     el.classList.remove('hidden');
     el.classList.add('flex');
