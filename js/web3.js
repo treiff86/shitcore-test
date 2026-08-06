@@ -95,22 +95,86 @@ function clearCosmeticThemes() {
     if (typeof stopMainThemeIfPlaying === "function") stopMainThemeIfPlaying();
 }
 
+// Themes the currently-connected wallet actually owns (real ownership,
+// not a preview) - populated by applyCosmeticThemes(), read by the
+// "switch theme" button so a dual (or more) holder can change their mind
+// later without having to reconnect.
+let ownedThemesList = [];
+
 async function applyCosmeticThemes(addr) {
     if (typeof window.checkCollectionOwnership !== "function") return;
+
+    const owned = [];
     for (const theme of COSMETIC_THEMES) {
         if (!theme.collectionAddress) continue;
         const owns = await window.checkCollectionOwnership(addr, theme.collectionAddress);
-        if (owns) {
-            clearCosmeticThemes();
-            document.body.classList.add(theme.cssClass);
-            showToast(theme.toastMsg, "success");
-            if (theme.id === "midevils" || theme.id === "conmen") {
-                document.getElementById("bonusStageBtn")?.classList.remove("hidden");
-                document.getElementById("audioToggleBtn")?.classList.remove("hidden");
-            }
-            return; // first match wins, these don't stack
-        }
+        if (owns) owned.push(theme);
     }
+    ownedThemesList = owned;
+
+    const switchBtn = document.getElementById("themeSwitchBtn");
+    if (owned.length > 1 && addr !== MASTER_WALLET) {
+        switchBtn?.classList.remove("hidden");
+    } else {
+        switchBtn?.classList.add("hidden");
+    }
+
+    if (owned.length === 0) {
+        return; // no gated collection owned, normal look
+    }
+    if (owned.length === 1) {
+        applyTheme(owned[0]);
+        return;
+    }
+    // Owns more than one gated collection - let them pick rather than
+    // silently defaulting to whichever happens to be checked first. Master
+    // wallet already has the strictly more powerful Theme Preview panel
+    // (previews any theme, owned or not) opening right after this, so
+    // don't also pop this modal and cause two panels to fight for attention.
+    if (addr === MASTER_WALLET) return;
+    renderThemeChoiceButtons();
+    document.getElementById("themeChoiceModal")?.classList.remove("hidden");
+}
+
+// Actually applies a theme's visuals/features - shared by the single-owner
+// auto-apply path above and the manual picker below, so they can never
+// drift out of sync with each other.
+function applyTheme(theme) {
+    clearCosmeticThemes();
+    document.body.classList.add(theme.cssClass);
+    showToast(theme.toastMsg, "success");
+    if (theme.id === "midevils" || theme.id === "conmen") {
+        document.getElementById("bonusStageBtn")?.classList.remove("hidden");
+        document.getElementById("audioToggleBtn")?.classList.remove("hidden");
+    }
+}
+
+function renderThemeChoiceButtons() {
+    const box = document.getElementById("themeChoiceButtons");
+    if (!box) return;
+    box.innerHTML = ownedThemesList.map((t) => `
+        <button onclick="selectOwnedTheme('${t.id}')"
+            class="w-full py-2 bg-emerald-600/20 hover:bg-emerald-600/40 border border-emerald-500/30 text-emerald-300 rounded text-xs font-bold transition">
+            ${t.label}
+        </button>
+    `).join("");
+}
+
+function selectOwnedTheme(themeId) {
+    const theme = ownedThemesList.find((t) => t.id === themeId);
+    if (!theme) return;
+    applyTheme(theme);
+    closeThemeChoice();
+}
+
+function openThemeChoice() {
+    if (!ownedThemesList.length) return;
+    renderThemeChoiceButtons();
+    document.getElementById("themeChoiceModal")?.classList.remove("hidden");
+}
+
+function closeThemeChoice() {
+    document.getElementById("themeChoiceModal")?.classList.add("hidden");
 }
 
 /* ---------------- Wallet connect (any Solana wallet) ---------------- */
@@ -303,7 +367,9 @@ function disconnectWallet() {
     walletAddress = null;
     walletSolDomain = null;
     clearCosmeticThemes();
+    ownedThemesList = [];
     document.getElementById("themePreviewBtn")?.classList.add("hidden");
+    document.getElementById("themeSwitchBtn")?.classList.add("hidden");
     document.getElementById("bonusStageBtn")?.classList.add("hidden");
     document.getElementById("conmenEggTestBtn")?.classList.add("hidden");
     updateWalletUI();
