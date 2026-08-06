@@ -77,6 +77,7 @@ window.BonusStage = (function () {
         punch_lo: ['reiffer_punch_lo.webp', 6],
         kick_lo: ['reiffer_kick_lo.webp', 4],
         hurt: ['hit.webp', 1],
+        defeat: ['midevils_defeat.webp', 3],
     };
     // Conmen holders get their own character - same animation states, own
     // art and frame counts (this set has fewer frames per animation, which
@@ -717,14 +718,12 @@ window.BonusStage = (function () {
                     g.player.hurtT = 0.0;  // don't let a lingering hurt-flash mask the defeat pose
                     g.fm.flash = 0.0; g.fm.shkT = 0.0; g.fm.shkX = 0;
                     g.closeCountdown = AUTO_CLOSE_SECONDS;
-                    console.log('[bonusstage] KO -> defeat state set. anims.defeat:', g.player.anims.defeat ? `${g.player.anims.defeat.length} frames loaded` : 'MISSING/undefined');
                 } else if (g.timer <= 0) {
                     g.timer = 0.0; g.phase = 'lost'; g.reason = 'time';
                     g.player.state = 'defeat'; g.player.fr = 0; g.player.frT = 0.0;
                     g.player.hurtT = 0.0;
                     g.closeCountdown = AUTO_CLOSE_SECONDS;
                     g.fm.flash = 0.0; g.fm.shkT = 0.0; g.fm.shkX = 0;
-                    console.log('[bonusstage] time out -> defeat state set. anims.defeat:', g.player.anims.defeat ? `${g.player.anims.defeat.length} frames loaded` : 'MISSING/undefined');
                 }
             } else if (g.phase === 'won') {
                 g.player._adv(dt, VICTORY_FPS);
@@ -732,8 +731,9 @@ window.BonusStage = (function () {
                 // Play through once and freeze on the last (down-for-the-count)
                 // frame, rather than looping like victory does - a defeat
                 // animation that repeats forever looks like he keeps getting
-                // back up and falling again. Mid Evils has no 'defeat' set,
-                // so this just no-ops safely (idle's single frame stays put).
+                // back up and falling again. Both Mid Evils and Conmen have
+                // their own defeat set now; the (|| 1) fallback just protects
+                // against any future character that doesn't.
                 const defeatN = (g.player.anims.defeat && g.player.anims.defeat.length) || 1;
                 if (g.player.fr < defeatN - 1) {
                     g.player.frT += dt;
