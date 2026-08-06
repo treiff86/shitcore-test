@@ -177,6 +177,107 @@ function closeThemeChoice() {
     document.getElementById("themeChoiceModal")?.classList.add("hidden");
 }
 
+/* ---------------- Master wallet: LIVE Play vs TEST Play ---------------- */
+
+// True only after the master wallet explicitly picks TEST Play this
+// session - never true for a real player, never true by default.
+let isTestPlayMode = false;
+
+function choosePlayMode(mode) {
+    document.getElementById("playModeModal")?.classList.add("hidden");
+    if (mode === "test") {
+        isTestPlayMode = true;
+        document.getElementById("themePreviewBtn")?.classList.remove("hidden");
+        document.getElementById("bonusStageBtn")?.classList.remove("hidden");
+        document.getElementById("audioToggleBtn")?.classList.remove("hidden");
+        document.getElementById("conmenEggTestBtn")?.classList.remove("hidden");
+        document.getElementById("debugMenuBtn")?.classList.remove("hidden");
+        openThemePreview();
+        showToast("🧪 TEST PLAY active - all testing tools unlocked.", "info");
+    } else {
+        isTestPlayMode = false;
+        showToast("▶️ LIVE PLAY active - this is exactly what a real player sees.", "info");
+    }
+}
+
+/* ---------------- Debug menu (TEST Play only) ---------------- */
+
+function _scriptVersionList() {
+    return Array.from(document.querySelectorAll('script[src]'))
+        .map((s) => s.getAttribute('src'))
+        .filter((src) => src && !src.startsWith('http'))
+        .map((src) => {
+            const [path, ver] = src.split('?v=');
+            return `${path.split('/').pop()}  →  ${ver ? 'v' + ver : '(no version tag)'}`;
+        });
+}
+
+function _activeThemeLabel() {
+    if (document.body.classList.contains('medieval-mode')) return 'medieval-mode (Mid Evils)';
+    if (document.body.classList.contains('conmen-mode')) return 'conmen-mode (Conmen)';
+    return 'none (default look)';
+}
+
+function refreshDebugInfo() {
+    const stateBox = document.getElementById('debugStateBox');
+    if (stateBox) {
+        stateBox.innerHTML = [
+            `Wallet: ${walletAddress || '(not connected)'}`,
+            `Play mode: ${isTestPlayMode ? 'TEST PLAY' : 'LIVE PLAY'}`,
+            `Active theme: ${_activeThemeLabel()}`,
+            `Owned themes (real): ${ownedThemesList.length ? ownedThemesList.map(t => t.label).join(', ') : 'none'}`,
+            `Page URL: ${window.location.href}`,
+        ].map(line => `<div>${line}</div>`).join('');
+    }
+
+    const versionsBox = document.getElementById('debugVersionsBox');
+    if (versionsBox) {
+        versionsBox.innerHTML = _scriptVersionList().map(line => `<div>${line}</div>`).join('');
+    }
+
+    const errorsBox = document.getElementById('debugErrorsBox');
+    if (errorsBox) {
+        const log = window._debugErrorLog || [];
+        errorsBox.innerHTML = log.length
+            ? log.slice().reverse().map(e => `<div>[${e.time}] ${e.type}${e.source ? ' @ ' + e.source : ''}: ${e.message}</div>`).join('')
+            : '<div class="text-gray-500">No errors caught since page load. 🎉</div>';
+    }
+}
+
+function openDebugMenu() {
+    refreshDebugInfo();
+    document.getElementById("debugMenuModal")?.classList.remove("hidden");
+}
+
+function closeDebugMenu() {
+    document.getElementById("debugMenuModal")?.classList.add("hidden");
+}
+
+function copyDebugReport() {
+    const log = window._debugErrorLog || [];
+    const report = [
+        '=== SHITCORE DEBUG REPORT ===',
+        new Date().toString(),
+        '',
+        `Wallet: ${walletAddress || '(not connected)'}`,
+        `Play mode: ${isTestPlayMode ? 'TEST PLAY' : 'LIVE PLAY'}`,
+        `Active theme: ${_activeThemeLabel()}`,
+        `Owned themes (real): ${ownedThemesList.length ? ownedThemesList.map(t => t.label).join(', ') : 'none'}`,
+        `Page URL: ${window.location.href}`,
+        `User agent: ${navigator.userAgent}`,
+        '',
+        '--- Loaded Script Versions ---',
+        ..._scriptVersionList(),
+        '',
+        '--- Caught Errors ---',
+        log.length ? log.map(e => `[${e.time}] ${e.type}${e.source ? ' @ ' + e.source : ''}: ${e.message}`).join('\n') : '(none)',
+    ].join('\n');
+
+    navigator.clipboard.writeText(report)
+        .then(() => showToast('📋 Debug report copied - paste it in chat.', 'success'))
+        .catch(() => showToast('Could not copy automatically - select the text manually.', 'error'));
+}
+
 /* ---------------- Wallet connect (any Solana wallet) ---------------- */
 
 // Older/simpler wallets each inject themselves onto `window` under their
@@ -282,17 +383,15 @@ async function connectToProvider({ name, kind, provider }) {
             });
         }
 
-        // Real holder detection - checks every theme in COSMETIC_THEMES
+        // Real holder detection - checks every theme in COSMETIC_THEMES.
+        // Runs for every wallet including the master one - real ownership
+        // always applies regardless of which play mode gets picked below.
         applyCosmeticThemes(walletAddress);
 
-        // Master wallet gets the preview panel, in addition to (not instead
-        // of) normal real-ownership detection above
+        // Master wallet: ask which mode before unlocking anything extra,
+        // rather than silently bypassing everything every time it connects.
         if (walletAddress === MASTER_WALLET) {
-            document.getElementById("themePreviewBtn")?.classList.remove("hidden");
-            document.getElementById("bonusStageBtn")?.classList.remove("hidden");
-            document.getElementById("audioToggleBtn")?.classList.remove("hidden");
-            document.getElementById("conmenEggTestBtn")?.classList.remove("hidden");
-            openThemePreview();
+            document.getElementById("playModeModal")?.classList.remove("hidden");
         }
 
         await offerCloudLoadIfExists();
@@ -368,10 +467,12 @@ function disconnectWallet() {
     walletSolDomain = null;
     clearCosmeticThemes();
     ownedThemesList = [];
+    isTestPlayMode = false;
     document.getElementById("themePreviewBtn")?.classList.add("hidden");
     document.getElementById("themeSwitchBtn")?.classList.add("hidden");
     document.getElementById("bonusStageBtn")?.classList.add("hidden");
     document.getElementById("conmenEggTestBtn")?.classList.add("hidden");
+    document.getElementById("debugMenuBtn")?.classList.add("hidden");
     updateWalletUI();
     showToast("Wallet disconnected. Still playing locally.", "info");
 }
@@ -476,6 +577,7 @@ async function renderLeaderboard() {
     const { data, error } = await sb
         .from("players")
         .select("wallet_address, display_name, lifetime_earned, degen_level")
+        .neq("wallet_address", MASTER_WALLET) // the dev/testing wallet should never show up on a real players' leaderboard
         .order("lifetime_earned", { ascending: false })
         .limit(25);
 
