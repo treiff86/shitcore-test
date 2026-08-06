@@ -51,6 +51,7 @@ window.BonusStage = (function () {
     // no more open-ended point piling, it's capped here to match
     const VICTORY_FPS = 8;
     const DEFEAT_FPS = 7;
+    const AUTO_CLOSE_SECONDS = 3.0;
 
     const PLAYER_MAX_HP = 100;
     const SELF_DMG = [0, 1];
@@ -451,6 +452,7 @@ window.BonusStage = (function () {
                         fm.stun = this.stop / 60;
                         shake.hit(heavy ? 8.0 : 3.8);
                         spawnHitFx(fx, cx, cy, heavy, debrisImgs || [], sparkImgs || []);
+                        if (typeof window.playSound === 'function') window.playSound('fryer_hit');
                         this.hp = Math.max(0, this.hp - randInt(SELF_DMG[0], SELF_DMG[1]));
                         this.streak += 1; this.streakT = STREAK_RESET_T;
                         if (Math.random() < DEBRIS_HIT_CHANCE) {
@@ -460,6 +462,7 @@ window.BonusStage = (function () {
                             else dmg = randInt(DEBRIS_DMG_LIGHT[0], DEBRIS_DMG_LIGHT[1]);
                             this.hp = Math.max(0, this.hp - dmg);
                             this.hurtT = HURT_FLASH_T;
+                            if (typeof window.playSound === 'function') window.playSound('player_hurt');
                             shake.hit(5.0);
                         }
                     }
@@ -533,7 +536,7 @@ window.BonusStage = (function () {
         ctx.strokeRect(bx, by, bw, bh);
     }
 
-    function drawEnd(ctx, won, score, reason) {
+    function drawEnd(ctx, won, score, reason, closeCountdown) {
         let title, col;
         if (won) { title = 'BONUS CLEAR!!'; col = COL.YL; }
         else if (reason === 'ko') { title = "KO'd BY THE FRYER"; col = COL.RD; }
@@ -556,6 +559,15 @@ window.BonusStage = (function () {
         const h = 'ENTER = Replay    ESC = Quit';
         const hw = ctx.measureText(h).width;
         ctx.fillText(h, SW / 2 - hw / 2, SH / 2 + 76);
+
+        if (closeCountdown !== null && closeCountdown !== undefined) {
+            ctx.font = "12px 'BonusStagePixel', monospace";
+            ctx.fillStyle = COL.GY;
+            const secs = Math.max(0, Math.ceil(closeCountdown));
+            const c = `Closing in ${secs}...`;
+            const cw = ctx.measureText(c).width;
+            ctx.fillText(c, SW / 2 - cw / 2, SH / 2 + 100);
+        }
     }
 
     function drawFallbackBg(ctx) {
@@ -592,6 +604,7 @@ window.BonusStage = (function () {
             fx: [],
             reason: null,
             rewardGiven: false,
+            closeCountdown: null, // set to AUTO_CLOSE_SECONDS the instant the round ends (won or lost)
         };
     }
 
@@ -685,6 +698,7 @@ window.BonusStage = (function () {
                     g.player.state = 'victory'; g.player.fr = 0; g.player.frT = 0.0;
                     g.player.hurtT = 0.0;  // don't let a lingering hurt-flash mask the victory pose
                     g.fm.flash = 0.0; g.fm.shkT = 0.0; g.fm.shkX = 0;  // fm.update() stops running once won - freeze it clean, not mid-flash
+                    g.closeCountdown = AUTO_CLOSE_SECONDS;
                     if (!g.rewardGiven) {
                         g.rewardGiven = true;
                         if (typeof window.addCash === 'function') {
@@ -702,10 +716,12 @@ window.BonusStage = (function () {
                     g.player.state = 'defeat'; g.player.fr = 0; g.player.frT = 0.0;
                     g.player.hurtT = 0.0;  // don't let a lingering hurt-flash mask the defeat pose
                     g.fm.flash = 0.0; g.fm.shkT = 0.0; g.fm.shkX = 0;
+                    g.closeCountdown = AUTO_CLOSE_SECONDS;
                 } else if (g.timer <= 0) {
                     g.timer = 0.0; g.phase = 'lost'; g.reason = 'time';
                     g.player.state = 'defeat'; g.player.fr = 0; g.player.frT = 0.0;
                     g.player.hurtT = 0.0;
+                    g.closeCountdown = AUTO_CLOSE_SECONDS;
                     g.fm.flash = 0.0; g.fm.shkT = 0.0; g.fm.shkX = 0;
                 }
             } else if (g.phase === 'won') {
@@ -726,6 +742,16 @@ window.BonusStage = (function () {
                 }
             }
 
+            if (g.phase === 'won' || g.phase === 'lost') {
+                if (g.closeCountdown !== null) {
+                    g.closeCountdown -= dt;
+                    if (g.closeCountdown <= 0) {
+                        if (typeof window.closeBonusStage === 'function') window.closeBonusStage();
+                        return; // stop here - the canvas/overlay are already torn down by closeBonusStage()
+                    }
+                }
+            }
+
             if (bg) ctx.drawImage(bg, Math.round(so[0]), Math.round(so[1]));
             else drawFallbackBg(ctx);
 
@@ -734,7 +760,7 @@ window.BonusStage = (function () {
             for (const e of g.fx) e.draw(ctx, so[0], so[1]);
 
             drawHud(ctx, g.score.value, g.timer, g.player.hp, g.fm.hp, FM_HP);
-            if (g.phase === 'won' || g.phase === 'lost') drawEnd(ctx, g.phase === 'won', g.score.value, g.reason);
+            if (g.phase === 'won' || g.phase === 'lost') drawEnd(ctx, g.phase === 'won', g.score.value, g.reason, g.closeCountdown);
 
             ctx.textBaseline = 'top';
             ctx.font = "9px 'BonusStagePixel', monospace";
