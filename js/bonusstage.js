@@ -77,7 +77,7 @@ window.BonusStage = (function () {
         punch_lo: ['reiffer_punch_lo.webp', 6],
         kick_lo: ['reiffer_kick_lo.webp', 4],
         hurt: ['hit.webp', 1],
-        defeat: ['midevils_defeat.webp?v=2', 3],
+        defeat: ['midevils_defeat.webp?v=3', 3],
     };
     // Conmen holders get their own character - same animation states, own
     // art and frame counts (this set has fewer frames per animation, which
