@@ -31,21 +31,34 @@ function _bgMusicSrcForCurrentTheme() {
 
 function toggleBgMusic() {
     const src = _bgMusicSrcForCurrentTheme();
-    if (!src) return; // current theme (if any) has no music track, full stop
+    console.log('[audio] toggleBgMusic() called. current theme src:', src, '| body classes:', document.body.className);
+    if (!src) {
+        console.log('[audio] no theme detected on <body> - nothing to play, button does nothing by design in this case');
+        return;
+    }
     if (!bgMusicEl) bgMusicEl = document.getElementById('bgMusicEl');
-    if (bgMusicEl && !bgMusicEl.src.endsWith(src)) {
-        bgMusicEl.src = src; // switch track if the active theme changed since last play
+    if (!bgMusicEl) {
+        console.error('[audio] #bgMusicEl not found in the page - the <audio> tag is missing or was removed');
+        return;
+    }
+    if (!bgMusicEl.src.endsWith(src)) {
+        console.log('[audio] switching track from', bgMusicEl.src, 'to', src);
+        bgMusicEl.src = src;
     }
     bgMusicMuted = !bgMusicMuted;
+    console.log('[audio] bgMusicMuted is now', bgMusicMuted, '- will', bgMusicMuted ? 'pause' : 'attempt to play');
     const icon = document.getElementById('audioToggleIcon');
     if (icon) {
         icon.classList.toggle('fa-volume-high', !bgMusicMuted);
         icon.classList.toggle('fa-volume-xmark', bgMusicMuted);
     }
-    if (bgMusicEl) {
-        bgMusicEl.volume = 0.3;
-        if (bgMusicMuted) bgMusicEl.pause();
-        else bgMusicEl.play().catch(() => {});
+    bgMusicEl.volume = 0.3;
+    if (bgMusicMuted) {
+        bgMusicEl.pause();
+    } else {
+        bgMusicEl.play()
+            .then(() => console.log('[audio] play() succeeded, readyState:', bgMusicEl.readyState, 'paused:', bgMusicEl.paused))
+            .catch((err) => console.error('[audio] play() FAILED:', err.name, '-', err.message));
     }
 }
 
@@ -87,10 +100,9 @@ function getAudioCtx() {
     return audioCtx;
 }
 
-function playSound(type) {
+function _playSoundNow(type) {
     try {
         const ctx = getAudioCtx();
-        if (ctx.state === 'suspended') ctx.resume();
 
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
@@ -233,6 +245,23 @@ function playSound(type) {
             osc.start(now); osc.stop(now + 0.2);
         }
     } catch (e) {
-        console.warn('Audio blocked or unsupported:', e);
+        console.warn('[audio] playSound blocked or unsupported:', e);
+    }
+}
+
+// Public entry point. The Web Audio API starts every AudioContext in a
+// "suspended" state until a user gesture resumes it, and resume() is
+// async - calling it and immediately building/starting the oscillator
+// (the old code) is a race: the context can still be suspended the
+// instant .start() fires, which produces no audible sound at all with
+// no error anywhere. This waits for resume to actually finish first.
+function playSound(type) {
+    const ctx = getAudioCtx();
+    if (ctx.state === 'suspended') {
+        ctx.resume()
+            .then(() => _playSoundNow(type))
+            .catch((e) => console.warn('[audio] AudioContext.resume() failed:', e));
+    } else {
+        _playSoundNow(type);
     }
 }
