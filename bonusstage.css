@@ -109,7 +109,8 @@
     line-height: 0; /* kill the canvas's inline-element gap */
 }
 
-#bonusStageCanvas {
+#bonusStageCanvas,
+#fightGameCanvas {
     display: block;
     width: 100%;
     height: auto;
