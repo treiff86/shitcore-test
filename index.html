@@ -13,7 +13,7 @@
     <!-- FontAwesome icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Local styles (FIXED PATH) -->
-    <link rel="stylesheet" href="style.css?v=40">
+    <link rel="stylesheet" href="style.css?v=42">
     <link rel="stylesheet" href="bonusstage.css?v=6">
 </head>
 <body class="overflow-x-hidden min-h-screen flex flex-col justify-between">
@@ -812,6 +812,17 @@
         </div>
     </div>
 
+    <!-- McDonald's mini-game promo popup - random interval, only when the Bonus
+         Stage is actually available (see js/mcdonalds-egg.js). Clicking the
+         bubble opens the mini-game. -->
+    <div id="mcdEggPopup" class="fixed bottom-0 left-6 z-50 hidden flex items-end gap-2 max-w-md">
+        <img src="assets/mcdonalds-pfp.png" alt="" class="w-40 h-auto flex-shrink-0 drop-shadow-2xl">
+        <div id="mcdEggBubble" onclick="openBonusStage()" class="bg-white text-black px-4 py-3 rounded-2xl shadow-2xl text-sm font-semibold mb-6 relative border-[3px] border-black cursor-pointer">
+            Would you like <span class="mcd-fries-link">fries</span> with that?
+            <div class="absolute -bottom-[9px] left-6 w-4 h-4 bg-white border-l-[3px] border-b-[3px] border-black" style="transform: rotate(45deg);"></div>
+        </div>
+    </div>
+
 
     <!-- Generic alert modal -->
     <div id="customAlertModal" class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 hidden p-4">
@@ -992,6 +1003,7 @@
 <script src="js/perks.js" defer></script>
 <script src="js/bonusstage.js?v=8" defer></script>
 <script src="js/conmen-egg.js?v=4" defer></script>
+<script src="js/mcdonalds-egg.js?v=2" defer></script>
 <script src="js/web3.js?v=16" defer></script>
 <script type="module" src="js/sns.js?v=5"></script>
 <script type="module" src="js/nftgate.js?v=2"></script>
