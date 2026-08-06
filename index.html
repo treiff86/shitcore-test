@@ -39,7 +39,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Local styles (FIXED PATH) -->
     <link rel="stylesheet" href="style.css?v=42">
-    <link rel="stylesheet" href="bonusstage.css?v=6">
+    <link rel="stylesheet" href="bonusstage.css?v=7">
 </head>
 <body class="overflow-x-hidden min-h-screen flex flex-col justify-between">
     <!-- Hand-drawn wobble filter for the chart canvas in Mid Evils mode -
@@ -84,9 +84,14 @@
                         <span class="text-white font-extrabold text-base md:text-lg uppercase flex items-center gap-1.5">
                             <span class="mc-title-accent">USDSHT</span> <span class="text-[10px] bg-[#1B2130] text-amber-500 px-1.5 py-0.5 rounded font-bold normal-case">Layer 1 Shitcoin Tycoon</span>
                         </span>
-                        <button id="bonusStageBtn" onclick="openBonusStage()" title="Mid Evils holders: play the Bonus Stage mini-game" class="hidden items-center gap-1 text-[10px] bg-gradient-to-b from-amber-500 to-amber-700 hover:from-amber-400 hover:to-amber-600 text-black px-2 py-0.5 rounded font-bold normal-case shadow">
-                            <i class="fa-solid fa-gamepad"></i> Play mini game
-                        </button>
+                        <div class="flex flex-col gap-0.5">
+                            <button id="bonusStageBtn" onclick="openBonusStage()" title="Mid Evils holders: play the Bonus Stage mini-game" class="hidden items-center gap-1 text-[10px] bg-gradient-to-b from-amber-500 to-amber-700 hover:from-amber-400 hover:to-amber-600 text-black px-2 py-0.5 rounded font-bold normal-case shadow">
+                                <i class="fa-solid fa-gamepad"></i> Play mini game
+                            </button>
+                            <button id="fightGameBtn" onclick="openFightGame()" title="TEST PLAY only: 1v1 fight game, Conmen vs Mid Evils" class="hidden items-center gap-1 text-[10px] bg-gradient-to-b from-rose-500 to-rose-700 hover:from-rose-400 hover:to-rose-600 text-black px-2 py-0.5 rounded font-bold normal-case shadow">
+                                <i class="fa-solid fa-hand-fist"></i> Play fight game
+                            </button>
+                        </div>
                         <button id="conmenEggTestBtn" onclick="testConmenEgg()" title="Master wallet only: force-trigger the Conmen easter egg popup for testing" class="hidden items-center gap-1 text-[10px] bg-gradient-to-b from-gray-400 to-gray-600 hover:from-gray-300 hover:to-gray-500 text-black px-2 py-0.5 rounded font-bold normal-case shadow">
                             <i class="fa-solid fa-egg"></i> Easter Egg
                         </button>
@@ -1019,6 +1024,31 @@
         </div>
     </div>
 
+    <!-- Fight Game - TEST PLAY only for now. Conmen vs Mid Evils, CPU
+         opponent. Same window chrome as the Bonus Stage on purpose. -->
+    <div id="fightGameOverlay" class="fixed inset-0 bg-black/70 hidden items-center justify-center z-[100] p-4">
+        <div class="win95-window">
+            <div class="win95-titlebar">
+                <span class="win95-title"><i class="fa-solid fa-hand-fist"></i> FIGHT_CLUB.EXE</span>
+                <div class="win95-controls">
+                    <button class="win95-btn" disabled title="Minimize (not implemented)">_</button>
+                    <button class="win95-btn" disabled title="Maximize (not implemented)">&#9633;</button>
+                    <button class="win95-btn win95-close" onclick="closeFightGame()" title="Close">&times;</button>
+                </div>
+            </div>
+            <div class="win95-menubar">
+                <span>File</span><span>Edit</span><span>View</span><span>Help</span>
+            </div>
+            <div class="win95-content">
+                <canvas id="fightGameCanvas" width="960" height="540"></canvas>
+            </div>
+            <div class="win95-statusbar">
+                <span class="win95-statusfield">Ready</span>
+                <span class="win95-statusfield">TEST PLAY Only</span>
+            </div>
+        </div>
+    </div>
+
     <!-- Conmen easter egg: roaming clickable popup (Conmen-mode only, see js/conmen-egg.js) -->
     <div id="conmenEggPopup" onclick="openConmenLauncher()">
         <span class="conmen-egg-tag">psst...</span>
@@ -1101,9 +1131,10 @@
 <script src="js/staking.js" defer></script>
 <script src="js/perks.js" defer></script>
 <script src="js/bonusstage.js?v=14" defer></script>
+<script src="js/fightgame.js?v=1" defer></script>
 <script src="js/conmen-egg.js?v=4" defer></script>
 <script src="js/mcdonalds-egg.js?v=3" defer></script>
-<script src="js/web3.js?v=21" defer></script>
+<script src="js/web3.js?v=22" defer></script>
 <script type="module" src="js/sns.js?v=5"></script>
 <script type="module" src="js/nftgate.js?v=2"></script>
 <script src="js/gate.js?v=2" defer></script>
