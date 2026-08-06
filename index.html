@@ -92,6 +92,9 @@
                 <button id="themePreviewBtn" onclick="openThemePreview()" title="Preview cosmetic themes (master wallet only)" class="hidden text-gray-500 hover:text-purple-400 transition text-xs border border-[#1A2232] rounded px-2 py-1.5">
                     <i class="fa-solid fa-palette"></i>
                 </button>
+                <button id="themeSwitchBtn" onclick="openThemeChoice()" title="Switch cosmetic theme (this wallet holds more than one)" class="hidden text-gray-500 hover:text-emerald-400 transition text-xs border border-[#1A2232] rounded px-2 py-1.5">
+                    <i class="fa-solid fa-shuffle"></i>
+                </button>
                 <button id="walletConnectBtn" title="Connect a wallet to save your progress and appear on the leaderboard - read-only, never asks you to sign a transaction" class="text-gray-400 hover:text-emerald-400 transition text-[10px] font-bold border border-[#1A2232] rounded px-2 py-1.5 whitespace-nowrap">
                     Connect Wallet
                 </button>
@@ -876,6 +879,20 @@
         </div>
     </div>
 
+    <!-- Theme choice - shown when a wallet holds NFTs from more than one
+         cosmetic-theme collection (e.g. both Mid Evils and Conmen). The
+         "switch theme" button in the header re-opens this any time. -->
+    <div id="themeChoiceModal" class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 hidden p-4">
+        <div class="bg-[#0C0F16] border border-emerald-500/40 max-w-sm w-full p-6 rounded-xl shadow-2xl space-y-3">
+            <div class="flex items-center justify-between">
+                <h3 class="text-emerald-400 font-black text-lg tracking-tight"><i class="fa-solid fa-shuffle mr-1.5"></i>Choose Your Theme</h3>
+                <button onclick="closeThemeChoice()" class="text-gray-500 hover:text-white text-xl leading-none">&times;</button>
+            </div>
+            <p class="text-[10px] text-gray-500">This wallet holds NFTs from more than one collection - pick which look you want.</p>
+            <div id="themeChoiceButtons" class="space-y-2"></div>
+        </div>
+    </div>
+
     <!-- Deposit to Rugged Savings -->
     <div id="depositModal" class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 hidden p-4">
         <div class="bg-[#0C0F16] border border-amber-500/40 max-w-sm w-full p-6 rounded-xl shadow-2xl space-y-3">
@@ -992,7 +1009,7 @@
     <!-- SCRIPTS (ALL FIXED FOR ROOT DEPLOYMENT IN SHITCORE-TEST)     -->
     <!-- ============================================================ -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>
-<script src="js/audio.js?v=6" defer></script>
+<script src="js/audio.js?v=7" defer></script>
 <script src="js/state.js?v=6" defer></script>
 <script src="js/ui.js?v=3" defer></script>
 <script src="js/markets.js?v=17" defer></script>
@@ -1001,10 +1018,10 @@
 <script src="js/volatility.js" defer></script>
 <script src="js/staking.js" defer></script>
 <script src="js/perks.js" defer></script>
-<script src="js/bonusstage.js?v=11" defer></script>
+<script src="js/bonusstage.js?v=12" defer></script>
 <script src="js/conmen-egg.js?v=4" defer></script>
 <script src="js/mcdonalds-egg.js?v=2" defer></script>
-<script src="js/web3.js?v=17" defer></script>
+<script src="js/web3.js?v=18" defer></script>
 <script type="module" src="js/sns.js?v=5"></script>
 <script type="module" src="js/nftgate.js?v=2"></script>
 <script src="js/gate.js?v=2" defer></script>
