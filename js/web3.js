@@ -198,6 +198,7 @@ function choosePlayMode(mode) {
         document.getElementById("audioToggleBtn")?.classList.remove("hidden");
         document.getElementById("conmenEggTestBtn")?.classList.remove("hidden");
         document.getElementById("debugMenuBtn")?.classList.remove("hidden");
+        document.getElementById("fightGameBtn")?.classList.remove("hidden");
         openThemePreview();
         showToast("🧪 TEST PLAY active - all testing tools unlocked.", "info");
     } else {
@@ -485,6 +486,7 @@ function disconnectWallet() {
     document.getElementById("bonusStageBtn")?.classList.add("hidden");
     document.getElementById("conmenEggTestBtn")?.classList.add("hidden");
     document.getElementById("debugMenuBtn")?.classList.add("hidden");
+    document.getElementById("fightGameBtn")?.classList.add("hidden");
     updateWalletUI();
     showToast("Wallet disconnected. Still playing locally.", "info");
 }
@@ -684,6 +686,34 @@ function closeBonusStage() {
     }
     document.removeEventListener("keydown", _bonusStageEscHandler);
     if (typeof window.BonusStage !== "undefined") window.BonusStage.stop();
+    if (typeof resumeMainThemeAfterBonusStage === "function") resumeMainThemeAfterBonusStage();
+}
+
+// TEST PLAY only - see choosePlayMode(). Escape-to-quit is handled inside
+// fightgame.js itself (its own keydown listener, torn down in stop()), so
+// unlike Bonus Stage there's no separate handler to wire up here.
+function openFightGame() {
+    const overlay = document.getElementById("fightGameOverlay");
+    const canvas = document.getElementById("fightGameCanvas");
+    if (!overlay || !canvas) return;
+    if (typeof window.FightGame === "undefined") {
+        console.error("[fightgame] js/fightgame.js didn't load - check the <script> tag in index.html");
+        showToast("Fight game failed to load. Try refreshing the page.", "error");
+        return;
+    }
+    if (typeof pauseMainThemeForBonusStage === "function") pauseMainThemeForBonusStage();
+    overlay.classList.remove("hidden");
+    overlay.classList.add("flex");
+    window.FightGame.start(canvas);
+}
+
+function closeFightGame() {
+    const overlay = document.getElementById("fightGameOverlay");
+    if (overlay) {
+        overlay.classList.add("hidden");
+        overlay.classList.remove("flex");
+    }
+    if (typeof window.FightGame !== "undefined") window.FightGame.stop();
     if (typeof resumeMainThemeAfterBonusStage === "function") resumeMainThemeAfterBonusStage();
 }
 
