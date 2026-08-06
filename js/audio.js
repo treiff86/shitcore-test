@@ -31,22 +31,13 @@ function _bgMusicSrcForCurrentTheme() {
 
 function toggleBgMusic() {
     const src = _bgMusicSrcForCurrentTheme();
-    console.log('[audio] toggleBgMusic() called. current theme src:', src, '| body classes:', document.body.className);
-    if (!src) {
-        console.log('[audio] no theme detected on <body> - nothing to play, button does nothing by design in this case');
-        return;
-    }
+    if (!src) return; // current theme (if any) has no music track, full stop
     if (!bgMusicEl) bgMusicEl = document.getElementById('bgMusicEl');
-    if (!bgMusicEl) {
-        console.error('[audio] #bgMusicEl not found in the page - the <audio> tag is missing or was removed');
-        return;
-    }
+    if (!bgMusicEl) return;
     if (!bgMusicEl.src.endsWith(src)) {
-        console.log('[audio] switching track from', bgMusicEl.src, 'to', src);
-        bgMusicEl.src = src;
+        bgMusicEl.src = src; // switch track if the active theme changed since last play
     }
     bgMusicMuted = !bgMusicMuted;
-    console.log('[audio] bgMusicMuted is now', bgMusicMuted, '- will', bgMusicMuted ? 'pause' : 'attempt to play');
     const icon = document.getElementById('audioToggleIcon');
     if (icon) {
         icon.classList.toggle('fa-volume-high', !bgMusicMuted);
@@ -56,9 +47,7 @@ function toggleBgMusic() {
     if (bgMusicMuted) {
         bgMusicEl.pause();
     } else {
-        bgMusicEl.play()
-            .then(() => console.log('[audio] play() succeeded, readyState:', bgMusicEl.readyState, 'paused:', bgMusicEl.paused))
-            .catch((err) => console.error('[audio] play() FAILED:', err.name, '-', err.message));
+        bgMusicEl.play().catch((err) => console.warn('[audio] background music blocked:', err.name));
     }
 }
 
