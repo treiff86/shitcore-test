@@ -50,6 +50,7 @@ window.BonusStage = (function () {
     // in-game SCORE now mirrors live progress toward that same $2500 -
     // no more open-ended point piling, it's capped here to match
     const VICTORY_FPS = 8;
+    const DEFEAT_FPS = 7;
 
     const PLAYER_MAX_HP = 100;
     const SELF_DMG = [0, 1];
@@ -85,6 +86,7 @@ window.BonusStage = (function () {
         punch_lo: ['conmen_punch_lo.webp', 3],
         kick_lo: ['conmen_kick_lo.webp', 3],
         hurt: ['conmen_hit.webp', 1],
+        defeat: ['conmen_defeat.webp', 4],
     };
     const FRYER_FILES = ['tier_01.webp','tier_02.webp','tier_03.webp','tier_04.webp','tier_05.webp','tier_06.webp'];
     const DEBRIS_FILES = ['debris_1.webp','debris_2.webp','debris_3.webp','debris_4.webp','debris_5.webp','debris_6.webp','debris_7.webp','debris_8.webp','debris_9.webp','debris_10.webp','debris_11.webp','debris_12.webp'];
@@ -697,14 +699,31 @@ window.BonusStage = (function () {
                     }
                 } else if (g.player.hp <= 0) {
                     g.phase = 'lost'; g.reason = 'ko';
-                    g.player.state = 'idle'; g.player.fr = 0; g.player.frT = 0.0;
+                    g.player.state = 'defeat'; g.player.fr = 0; g.player.frT = 0.0;
+                    g.player.hurtT = 0.0;  // don't let a lingering hurt-flash mask the defeat pose
                     g.fm.flash = 0.0; g.fm.shkT = 0.0; g.fm.shkX = 0;
                 } else if (g.timer <= 0) {
                     g.timer = 0.0; g.phase = 'lost'; g.reason = 'time';
+                    g.player.state = 'defeat'; g.player.fr = 0; g.player.frT = 0.0;
+                    g.player.hurtT = 0.0;
                     g.fm.flash = 0.0; g.fm.shkT = 0.0; g.fm.shkX = 0;
                 }
             } else if (g.phase === 'won') {
                 g.player._adv(dt, VICTORY_FPS);
+            } else if (g.phase === 'lost') {
+                // Play through once and freeze on the last (down-for-the-count)
+                // frame, rather than looping like victory does - a defeat
+                // animation that repeats forever looks like he keeps getting
+                // back up and falling again. Mid Evils has no 'defeat' set,
+                // so this just no-ops safely (idle's single frame stays put).
+                const defeatN = (g.player.anims.defeat && g.player.anims.defeat.length) || 1;
+                if (g.player.fr < defeatN - 1) {
+                    g.player.frT += dt;
+                    if (g.player.frT >= 1 / DEFEAT_FPS) {
+                        g.player.frT = 0.0;
+                        g.player.fr = Math.min(defeatN - 1, g.player.fr + 1);
+                    }
+                }
             }
 
             if (bg) ctx.drawImage(bg, Math.round(so[0]), Math.round(so[1]));
@@ -754,7 +773,7 @@ window.BonusStage = (function () {
                 SW, SH, GROUND, P_H, FM_CX, FM_DW, FM_DH, FM_Y_PUSH, FM_HP, FM_FINAL_TIER_HP, ROUND_T,
                 P_SPD, P_Y, LEFT_WALL_X, RIGHT_WALL_X, WALL_COLLIDE_W,
                 DMG, ATK_DUR, HEAVY, HS_LT, HS_HV, HITSTUN, CANCEL_W, BUF_WIN,
-                VICTORY_FPS, PLAYER_MAX_HP, SELF_DMG, DEBRIS_HIT_CHANCE, WIN_CASH_REWARD,
+                VICTORY_FPS, DEFEAT_FPS, PLAYER_MAX_HP, SELF_DMG, DEBRIS_HIT_CHANCE, WIN_CASH_REWARD,
                 DEBRIS_DMG_LIGHT, DEBRIS_DMG_HEAVY, HEAVY_BASE, HEAVY_PER_STREAK,
                 HEAVY_CAP, STREAK_RESET_T, HURT_FLASH_T,
             },
