@@ -13,7 +13,7 @@
    availability) can happen well after this script first runs.
    ============================================================ */
 
-const MCD_EGG_VISIBLE_MS = 3500;
+const MCD_EGG_VISIBLE_MS = 5000;
 const MCD_EGG_MIN_GAP_MS = 3 * 60 * 1000;   // 3 min
 const MCD_EGG_MAX_GAP_MS = 7 * 60 * 1000;   // 7 min
 
