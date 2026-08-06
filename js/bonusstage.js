@@ -452,7 +452,7 @@ window.BonusStage = (function () {
                         fm.stun = this.stop / 60;
                         shake.hit(heavy ? 8.0 : 3.8);
                         spawnHitFx(fx, cx, cy, heavy, debrisImgs || [], sparkImgs || []);
-                        if (typeof window.playSound === 'function') window.playSound('fryer_hit');
+                        if (typeof window.playSound === 'function') { window.playSound('fryer_hit'); } else { console.warn('[bonusstage] window.playSound not found - SFX will not play'); }
                         this.hp = Math.max(0, this.hp - randInt(SELF_DMG[0], SELF_DMG[1]));
                         this.streak += 1; this.streakT = STREAK_RESET_T;
                         if (Math.random() < DEBRIS_HIT_CHANCE) {
@@ -462,7 +462,7 @@ window.BonusStage = (function () {
                             else dmg = randInt(DEBRIS_DMG_LIGHT[0], DEBRIS_DMG_LIGHT[1]);
                             this.hp = Math.max(0, this.hp - dmg);
                             this.hurtT = HURT_FLASH_T;
-                            if (typeof window.playSound === 'function') window.playSound('player_hurt');
+                            if (typeof window.playSound === 'function') { window.playSound('player_hurt'); } else { console.warn('[bonusstage] window.playSound not found - SFX will not play'); }
                             shake.hit(5.0);
                         }
                     }
@@ -717,12 +717,14 @@ window.BonusStage = (function () {
                     g.player.hurtT = 0.0;  // don't let a lingering hurt-flash mask the defeat pose
                     g.fm.flash = 0.0; g.fm.shkT = 0.0; g.fm.shkX = 0;
                     g.closeCountdown = AUTO_CLOSE_SECONDS;
+                    console.log('[bonusstage] KO -> defeat state set. anims.defeat:', g.player.anims.defeat ? `${g.player.anims.defeat.length} frames loaded` : 'MISSING/undefined');
                 } else if (g.timer <= 0) {
                     g.timer = 0.0; g.phase = 'lost'; g.reason = 'time';
                     g.player.state = 'defeat'; g.player.fr = 0; g.player.frT = 0.0;
                     g.player.hurtT = 0.0;
                     g.closeCountdown = AUTO_CLOSE_SECONDS;
                     g.fm.flash = 0.0; g.fm.shkT = 0.0; g.fm.shkX = 0;
+                    console.log('[bonusstage] time out -> defeat state set. anims.defeat:', g.player.anims.defeat ? `${g.player.anims.defeat.length} frames loaded` : 'MISSING/undefined');
                 }
             } else if (g.phase === 'won') {
                 g.player._adv(dt, VICTORY_FPS);
