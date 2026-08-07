@@ -939,3 +939,157 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .conmen-mode #tradingCanvas {
     filter: url(#mc-hand-drawn);
 }
+
+/* ============================================================
+   $MIM / BITCOIN WIZARD THEME — WINDOWS 95 DESKTOP
+   ============================================================
+   Unlike the other themes, this one doesn't reskin elements in
+   place - js/win95desktop.js physically moves the marked panels
+   into a full-screen desktop overlay and turns each into a
+   draggable "window". This stylesheet only handles the visual
+   look of that overlay and the windows themselves; the reflow/
+   drag mechanics live in the JS file.
+   ============================================================ */
+
+body.win95-mode {
+    background: #008080 !important; /* classic teal desktop */
+}
+
+#win95Desktop {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    background: #008080;
+    background-image:
+        linear-gradient(45deg, rgba(255,255,255,0.02) 25%, transparent 25%),
+        linear-gradient(-45deg, rgba(255,255,255,0.02) 25%, transparent 25%);
+    background-size: 4px 4px;
+    overflow: hidden;
+    font-family: "Tahoma", "Segoe UI", "MS Sans Serif", Geneva, sans-serif;
+}
+
+.win95-window {
+    position: absolute;
+    background: #c0c0c0;
+    border: 2px solid #dfdfdf;
+    box-shadow:
+        inset -1px -1px 0 #0a0a0a,
+        inset 1px 1px 0 #ffffff,
+        inset -2px -2px 0 #808080,
+        inset 2px 2px 0 #dfdfdf,
+        3px 3px 6px rgba(0,0,0,0.4);
+    min-width: 260px;
+    max-width: min(92vw, 640px);
+    display: flex;
+    flex-direction: column;
+    color: #000;
+}
+
+.win95-window * {
+    font-family: "Tahoma", "Segoe UI", "MS Sans Serif", Geneva, sans-serif !important;
+}
+
+.win95-titlebar {
+    background: linear-gradient(90deg, #000080, #1084d0);
+    color: #fff;
+    font-weight: bold;
+    font-size: 12px;
+    padding: 3px 3px 3px 6px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: move;
+    user-select: none;
+    flex-shrink: 0;
+}
+
+.win95-titlebar-buttons {
+    display: flex;
+    gap: 2px;
+}
+
+.win95-titlebar-btn {
+    width: 16px;
+    height: 14px;
+    background: #c0c0c0;
+    border: 1px solid #dfdfdf;
+    box-shadow: inset -1px -1px 0 #0a0a0a, inset 1px 1px 0 #ffffff;
+    color: #000;
+    font-size: 10px;
+    font-weight: bold;
+    line-height: 12px;
+    text-align: center;
+    cursor: pointer;
+}
+.win95-titlebar-btn:active {
+    box-shadow: inset 1px 1px 0 #0a0a0a, inset -1px -1px 0 #ffffff;
+}
+
+.win95-window-body {
+    padding: 10px;
+    overflow: auto;
+    background: #c0c0c0;
+    flex: 1;
+}
+
+/* The moved panels keep their own dark card styling inside the window
+   body - looks like a "web browser embedded in a Win95 window" rather
+   than a full native reskin, which reads fine and keeps this achievable
+   without re-doing every panel's internal styling per theme. */
+.win95-window-body > * {
+    background: #10141d !important;
+    border-radius: 4px;
+}
+
+#win95Taskbar {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    z-index: 41;
+    height: 32px;
+    background: #c0c0c0;
+    border-top: 2px solid #dfdfdf;
+    box-shadow: inset 0 1px 0 #ffffff;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 4px;
+    font-family: "Tahoma", "Segoe UI", "MS Sans Serif", Geneva, sans-serif;
+}
+
+.win95-start-btn {
+    background: #c0c0c0;
+    border: 1px solid #dfdfdf;
+    box-shadow: inset -1px -1px 0 #0a0a0a, inset 1px 1px 0 #ffffff;
+    font-weight: bold;
+    font-size: 12px;
+    padding: 3px 10px;
+    cursor: default;
+    color: #000;
+}
+
+.win95-taskbar-item {
+    background: #c0c0c0;
+    border: 1px solid #dfdfdf;
+    box-shadow: inset -1px -1px 0 #0a0a0a, inset 1px 1px 0 #ffffff;
+    font-size: 11px;
+    padding: 3px 10px;
+    cursor: pointer;
+    color: #000;
+    white-space: nowrap;
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.win95-taskbar-item.active {
+    box-shadow: inset 1px 1px 0 #0a0a0a, inset -1px -1px 0 #ffffff;
+}
+
+#win95Clock {
+    margin-left: auto;
+    background: #c0c0c0;
+    border: 1px solid #808080;
+    box-shadow: inset 1px 1px 0 #0a0a0a, inset -1px -1px 0 #ffffff;
+    font-size: 11px;
+    padding: 3px 8px;
+    color: #000;
+}
