@@ -149,7 +149,10 @@ function applyTheme(theme) {
     document.body.classList.add(theme.cssClass);
     showToast(theme.toastMsg, "success");
     if (theme.id === "midevils" || theme.id === "conmen") {
-        document.getElementById("bonusStageBtn")?.classList.remove("hidden");
+        // Deliberately NOT unlocking bonusStageBtn here - the persistent
+        // "Play mini game" header button is TEST Play only now. Every real
+        // player (and LIVE Play) only reaches the mini-game through the
+        // McDonald's popup easter egg (see js/mcdonalds-egg.js).
         document.getElementById("audioToggleBtn")?.classList.remove("hidden");
     }
 }
