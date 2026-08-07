@@ -24,8 +24,10 @@ function _mcdEggRandomGap() {
 }
 
 function _mcdEggBonusStageAvailable() {
-    const btn = document.getElementById('bonusStageBtn');
-    return !!btn && !btn.classList.contains('hidden');
+    // Checks the active theme directly rather than bonusStageBtn's
+    // visibility - that button is TEST Play only now, so it no longer
+    // reflects whether a real player actually has mini-game access.
+    return document.body.classList.contains('medieval-mode') || document.body.classList.contains('conmen-mode');
 }
 
 function _mcdEggAnotherToastVisible() {
