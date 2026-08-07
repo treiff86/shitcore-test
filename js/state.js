@@ -86,10 +86,16 @@ function addTestCash() {
     if (typeof showToast === "function") showToast("🧪 Test: +$4,200 added.", "success");
 }
 
-function resetGame() {
+async function resetGame() {
     state = JSON.parse(JSON.stringify(defaultState));
     localStorage.removeItem('shitcore_tycoon_save'); // harmless cleanup of any pre-existing save from before this change
     playSound('click');
+    // Push the fresh state to the cloud save too, or reconnecting the same
+    // wallet after the reload below would just pull the old progress right
+    // back down and silently undo the reset.
+    if (typeof saveToCloud === 'function') {
+        try { await saveToCloud(); } catch (e) { console.warn('[state] resetGame cloud sync failed:', e); }
+    }
     window.location.reload();
 }
 
