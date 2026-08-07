@@ -126,9 +126,13 @@ function getPlayerLevel() {
     return state.degenLevel || 1;
 }
 
-/** Offshore Cayman Layering Loop perk: heat-generating events produce ~50% less Heat. */
+/** Reduces heat-generating events: the Offshore Cayman Layering Loop perk
+ *  (~50% less) stacks with genuinely holding a Conmen NFT (~40% less) - a
+ *  real conman doesn't leave much of a paper trail. */
 function applyCaymanDiscount(heatGain) {
-    return state.ownedPerks.includes('cayman_vault') ? heatGain * 0.5 : heatGain;
+    let g = state.ownedPerks.includes('cayman_vault') ? heatGain * 0.5 : heatGain;
+    if (typeof isConmenHolder !== 'undefined' && isConmenHolder) g *= 0.6;
+    return g;
 }
 
 /** Shared seizure handling for both the normal Audit Threat climb and Quantum Audit. */
