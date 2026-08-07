@@ -28,6 +28,8 @@ const MASTER_WALLET = "AUrTSsPC2hqZB71QDPn1iHCtTpdFqk4uzk1eRmJDnmGs";
 // wallet holds one. Only the first match applies - these are full-page
 // reskins, not meant to stack. Add new ones here as new collections come
 // in; nothing else needs to change to support another.
+const MIM_SOL_MINT = "M1M6sdffCs3ozzhpRveweRCWdZhxth4mvVujPtYEC3h"; // $MIM SPL token on Solana
+
 const COSMETIC_THEMES = [
     {
         id: "midevils",
@@ -42,6 +44,37 @@ const COSMETIC_THEMES = [
         collectionAddress: "9DqJWp9jF2M7F5Be8Sxs1GSJz7HZYVcyFgyMU9CBLmUQ", // verified via Solscan
         cssClass: "conmen-mode",
         toastMsg: "🔒 Conman detected! Welcome to the cell block.",
+    },
+    {
+        id: "skullx",
+        label: "Skull X",
+        cssClass: "", // no dedicated visual theme yet - detection/unlock only, standard look
+        toastMsg: "💀 Skull X detected!",
+        // Bitcoin-based, not Solana - checked against whatever Bitcoin
+        // wallet is connected via js/btcwallet.js, not the Solana wallet.
+        checkFn: async () => {
+            if (typeof btcWalletAddress === 'undefined' || !btcWalletAddress) return false;
+            if (typeof window.checkSkullXOrigins !== 'function') return false;
+            return await window.checkSkullXOrigins();
+        },
+    },
+    {
+        id: "mimwizard",
+        label: "$MIM / Bitcoin Wizard",
+        cssClass: "", // no dedicated visual theme yet - detection/unlock only, standard look
+        toastMsg: "🧙 MIM / Bitcoin Wizard detected!",
+        // Shared across both chains on purpose - holding $MIM on Solana OR
+        // a Bitcoin Wizard both qualify for the same theme slot.
+        checkFn: async () => {
+            let holds = false;
+            if (typeof walletAddress !== 'undefined' && walletAddress && typeof window.checkTokenHolding === 'function') {
+                holds = await window.checkTokenHolding(walletAddress, MIM_SOL_MINT);
+            }
+            if (!holds && typeof btcWalletAddress !== 'undefined' && btcWalletAddress && typeof window.checkBitcoinWizardsOwnership === 'function') {
+                holds = await window.checkBitcoinWizardsOwnership();
+            }
+            return holds;
+        },
     },
 ];
 
@@ -90,7 +123,7 @@ function initSupabase() {
 /* ---------------- Cosmetic theme detection ---------------- */
 
 function clearCosmeticThemes() {
-    COSMETIC_THEMES.forEach((t) => document.body.classList.remove(t.cssClass));
+    COSMETIC_THEMES.forEach((t) => { if (t.cssClass) document.body.classList.remove(t.cssClass); });
     document.getElementById("audioToggleBtn")?.classList.add("hidden");
     if (typeof stopMainThemeIfPlaying === "function") stopMainThemeIfPlaying();
 }
@@ -108,12 +141,18 @@ let isConmenHolder = false; // real Conmen NFT ownership - separate from cosmeti
 // including LIVE Play, which is deliberately meant to be indistinguishable
 // from a real connection - leaves it true.
 async function applyCosmeticThemes(addr, showChoiceIfMultiple = true) {
-    if (typeof window.checkCollectionOwnership !== "function") return;
-
     const owned = [];
     for (const theme of COSMETIC_THEMES) {
-        if (!theme.collectionAddress) continue;
-        const owns = await window.checkCollectionOwnership(addr, theme.collectionAddress);
+        let owns = false;
+        try {
+            if (theme.checkFn) {
+                owns = await theme.checkFn();
+            } else if (theme.collectionAddress && typeof window.checkCollectionOwnership === 'function') {
+                owns = await window.checkCollectionOwnership(addr, theme.collectionAddress);
+            }
+        } catch (e) {
+            console.warn(`[web3] ownership check failed for theme "${theme.id}":`, e);
+        }
         if (owns) owned.push(theme);
     }
     ownedThemesList = owned;
@@ -155,11 +194,20 @@ function updateOnlineLobbyAccess() {
     const unlocked = isTestPlayMode || ownedThemesList.length > 0;
     document.getElementById("onlineLobbySoonOverlay")?.classList.toggle("hidden", unlocked);
     document.getElementById("onlineLobbySoonBadge")?.classList.toggle("hidden", unlocked);
+
+    // Test-cash button (click the wallet balance for +$4,200) is TEST Play
+    // only - addTestCash() itself refuses outside TEST Play too (see
+    // state.js), this just stops it from looking clickable for real players.
+    const cashWrapper = document.getElementById("cashDisplayWrapper");
+    if (cashWrapper) {
+        cashWrapper.classList.toggle("cursor-pointer", isTestPlayMode);
+        cashWrapper.title = isTestPlayMode ? "Testing only: click to add $4,200" : "";
+    }
 }
 
 function applyTheme(theme) {
     clearCosmeticThemes();
-    document.body.classList.add(theme.cssClass);
+    if (theme.cssClass) document.body.classList.add(theme.cssClass);
     showToast(theme.toastMsg, "success");
     if (theme.id === "midevils" || theme.id === "conmen") {
         // Deliberately NOT unlocking bonusStageBtn here - the persistent
@@ -562,6 +610,24 @@ async function applyTraitRewards(addr, isNewSave) {
     }
 }
 
+// One-time $4,200 bonus for genuinely holding a Conmen NFT. Independent
+// ownership check rather than reusing isConmenHolder - applyCosmeticThemes
+// runs concurrently with this (not awaited before it), so that flag isn't
+// guaranteed to have resolved yet by the time this runs.
+async function grantConmenHolderBonus(addr) {
+    if (typeof window.checkCollectionOwnership !== "function") return;
+    const conmenTheme = COSMETIC_THEMES.find((t) => t.id === "conmen");
+    if (!conmenTheme) return;
+    const owns = await window.checkCollectionOwnership(addr, conmenTheme.collectionAddress);
+    if (!owns) return;
+    if ((state.claimedTraitRewards || []).includes("conmen_holder_bonus")) return;
+
+    state.claimedTraitRewards = [...(state.claimedTraitRewards || []), "conmen_holder_bonus"];
+    state.cash = (state.cash || 0) + 4200;
+    showToast("🔒 Conman detected - $4,200 welcome bonus added.", "success");
+    updateUI();
+}
+
 /* ---------------- Cloud save / load ---------------- */
 
 async function offerCloudLoadIfExists() {
@@ -575,6 +641,7 @@ async function offerCloudLoadIfExists() {
     if (error) { console.error("[web3] load check failed:", error); return; }
     if (!data) {
         await applyTraitRewards(walletAddress, true); // brand-new wallet - eligible for one-time starting bonuses too
+        await grantConmenHolderBonus(walletAddress);
         await saveToCloud();
         return;
     }
@@ -586,6 +653,7 @@ async function offerCloudLoadIfExists() {
     updateUI();
     showToast("☁️ Welcome back - resumed where you left off.", "success");
     await applyTraitRewards(walletAddress, false); // existing save - can still earn permanent perks (e.g. luck), no cash bonus though
+    await grantConmenHolderBonus(walletAddress);
 }
 
 async function saveToCloud() {
