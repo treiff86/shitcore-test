@@ -419,6 +419,10 @@ let activeProvider = null; // whichever wallet's provider/wallet object we actua
 let activeProviderKind = null; // "legacy" or "standard" - connect/disconnect differ slightly
 
 async function connectWallet() {
+    if (typeof btcWalletAddress !== 'undefined' && btcWalletAddress) {
+        showToast("Only one wallet at a time - disconnect the Bitcoin wallet first.", "error");
+        return;
+    }
     const wallets = getInstalledWallets();
     if (wallets.length === 0) {
         showToast("No Solana wallet found - install Phantom, Solflare, Backpack, or similar to connect.", "error");
