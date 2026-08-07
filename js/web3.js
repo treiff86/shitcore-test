@@ -487,6 +487,7 @@ function disconnectWallet() {
     document.getElementById("conmenEggTestBtn")?.classList.add("hidden");
     document.getElementById("debugMenuBtn")?.classList.add("hidden");
     document.getElementById("fightGameBtn")?.classList.add("hidden");
+    if (typeof resetGameStateInMemory === "function") resetGameStateInMemory();
     updateWalletUI();
     showToast("Wallet disconnected. Still playing locally.", "info");
 }
