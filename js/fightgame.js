@@ -1,17 +1,30 @@
 /* ============================================================
    FIGHT GAME (TEST PLAY ONLY, FOR NOW)
    ============================================================
-   1v1: whichever character matches your active theme vs the other,
-   CPU-controlled. Reuses the exact same walk/punch/kick/hurt/victory/
-   defeat art already built for the Bonus Stage - only the block pose
-   and the two arena backgrounds are new to this file.
+   Local 2-player: Conmen vs Mid Evils, both human-controlled.
+
+   Player 1 - WASD
+     A/D move, W jump, S crouch, Z punch, X kick, Space block
+   Player 2 - Arrow keys
+     Left/Right move, Up jump, Down crouch, Enter punch, / kick, Shift block
 
    Block: hold the block key. While blocking:
      - you cannot attack (inputs are ignored, same as a real fighting
        game - blocking is purely defensive)
      - incoming hits are reduced by a random 60-90%, never fully
        negated and never full damage either
-     - you can still be chip-damaged, just heavily reduced
+
+   Attacks require an actual key PRESS per hit - holding the key down
+   does not auto-repeat the attack. You have to mash it.
+
+   Jump/crouch/jump-attacks/crouch-attacks: Conmen has real art for jump,
+   crouch, jump_punch, jump_kick, and crouch_kick now - only crouch_punch
+   is still a placeholder for him. Mid Evils/Reiffer has none of these
+   yet and uses placeholders for all six. Swap the relevant entry in
+   FIGHTER_ANIM_FILES for a real loadStrip() source the moment new art
+   exists; loadFighterAnims() only fills in a placeholder for whatever's
+   still missing, so adding real art for one character/state at a time
+   just works without touching anything else.
 
    Usage: FightGame.start(canvasEl) to begin, FightGame.stop() to
    fully tear down. Mirrors BonusStage's API on purpose.
@@ -30,11 +43,28 @@ window.FightGame = (function () {
     const ROUND_T = 60.0;
     const STAGE_MARGIN = 40;
 
+    const JUMP_VELOCITY = -560; // px/s
+    const GRAVITY = 1400;       // px/s^2
+
+    // Shared per-attack-type numbers - jump/crouch variants borrow their
+    // grounded counterpart's values until they get their own tuning.
+    const ATTACK_BASE = { punch: 'punch_lo', kick: 'kick_lo' };
     const DMG = { punch_lo: 14, kick_lo: 22 };
     const ATK_DUR = { punch_lo: 0.26, kick_lo: 0.34 };
     const HEAVY = new Set(['kick_lo']);
     const HS_LT = 5, HS_HV = 9;
     const CANCEL_W = 0.18;
+
+    function baseAttackKind(state) {
+        // 'jump_punch' / 'crouch_punch' -> 'punch_lo', etc. - so damage/
+        // duration/hitbox lookups work the same regardless of variant.
+        if (state.endsWith('_punch') || state === 'punch_lo') return 'punch_lo';
+        if (state.endsWith('_kick') || state === 'kick_lo') return 'kick_lo';
+        return null;
+    }
+    function isAttackState(state) {
+        return state === 'punch_lo' || state === 'kick_lo' || state === 'jump_punch' || state === 'jump_kick' || state === 'crouch_punch' || state === 'crouch_kick';
+    }
 
     const BLOCK_REDUCTION_MIN = 0.60;
     const BLOCK_REDUCTION_MAX = 0.90;
@@ -50,9 +80,9 @@ window.FightGame = (function () {
         GN: '#1ec846', GY: '#787878', DK: '#323232', LG: '#c8c8c8', BL: '#3b82f6',
     };
 
-    // Full move sets - walk/punch/kick/hurt/victory/defeat all reuse the
-    // exact files already built for the Bonus Stage; only "block" is new
-    // and lives in assets/fight_game/ instead.
+    // Full move sets - walk/punch/kick/hurt/victory/defeat/block are real
+    // art. jump/crouch/jump_punch/jump_kick/crouch_punch/crouch_kick are
+    // placeholders (see loadFighterAnims) until dedicated sprites exist.
     const FIGHTER_ANIM_FILES = {
         reiffer: {
             walk:     ['assets/bonus_stage/reiffer_walk.webp', 6],
@@ -71,6 +101,12 @@ window.FightGame = (function () {
             hurt:     ['assets/bonus_stage/conmen_hit.webp', 1],
             defeat:   ['assets/bonus_stage/conmen_defeat.webp?v=2', 4],
             block:    ['assets/fight_game/conmen_block.webp', 1],
+            jump:        ['assets/fight_game/conmen_jump.webp', 1],
+            crouch:      ['assets/fight_game/conmen_crouch.webp', 1],
+            jump_punch:  ['assets/fight_game/conmen_jump_punch.webp', 1],
+            jump_kick:   ['assets/fight_game/conmen_jump_kick.webp', 1],
+            crouch_kick: ['assets/fight_game/conmen_crouch_kick.webp', 1],
+            // crouch_punch: still a placeholder (reuses punch_lo) - no art yet
         },
     };
 
@@ -117,6 +153,15 @@ window.FightGame = (function () {
             anims[state] = await loadStrip(path, count, P_H);
         }
         anims.idle = anims.walk.length ? [anims.walk[0]] : [];
+        // PLACEHOLDERS for anything not defined above in FIGHTER_ANIM_FILES -
+        // replace the corresponding FIGHTER_ANIM_FILES entry with a real
+        // loadStrip() source once that art exists, and these no-ops itself.
+        if (!anims.jump || !anims.jump.length) anims.jump = anims.idle;
+        if (!anims.crouch || !anims.crouch.length) anims.crouch = anims.idle;
+        if (!anims.jump_punch || !anims.jump_punch.length) anims.jump_punch = anims.punch_lo;
+        if (!anims.jump_kick || !anims.jump_kick.length) anims.jump_kick = anims.kick_lo;
+        if (!anims.crouch_punch || !anims.crouch_punch.length) anims.crouch_punch = anims.punch_lo;
+        if (!anims.crouch_kick || !anims.crouch_kick.length) anims.crouch_kick = anims.kick_lo;
         return anims;
     }
 
@@ -137,11 +182,12 @@ window.FightGame = (function () {
     // FIGHTER
     // ---------------------------------------------------------------
     class Fighter {
-        constructor(anims, x, facing, isCPU) {
+        constructor(anims, x, facing) {
             this.anims = anims;
             this.x = x; this.y = GROUND - P_H;
-            this.vx = 0; this.facing = facing;
-            this.isCPU = isCPU;
+            this.vx = 0; this.vy = 0; this.facing = facing;
+            this.grounded = true;
+            this.crouching = false;
             this.hp = MAX_HP;
             this.state = 'idle'; this.fr = 0; this.frT = 0;
             this._fw = 90;
@@ -150,31 +196,40 @@ window.FightGame = (function () {
             this.blocking = false;
             this.hurtT = 0;
             this.ko = false;
-            // CPU brain
-            this.cpuTimer = 0;
-            this.cpuAction = 'idle';
         }
 
         rect() {
-            return { x: this.x, y: this.y, w: this._fw, h: P_H };
+            // Crouching halves the hurtbox height, feet-anchored - low
+            // attacks would matter more here once crouch has real art.
+            const h = this.crouching ? P_H * 0.6 : P_H;
+            return { x: this.x, y: this.y + (P_H - h), w: this._fw, h };
         }
 
         hitbox() {
-            if (this.state === 'punch_lo' && !this.hitReg) {
+            if (!isAttackState(this.state) || this.hitReg) return null;
+            const base = baseAttackKind(this.state);
+            if (base === 'punch_lo') {
                 const ex = this.facing === 1 ? this.x + this._fw - 6 : this.x - 40;
                 return { x: ex, y: this.y + P_H * 0.30, w: 46, h: 30 };
             }
-            if (this.state === 'kick_lo' && !this.hitReg) {
+            if (base === 'kick_lo') {
                 const ex = this.facing === 1 ? this.x + this._fw - 4 : this.x - 46;
                 return { x: ex, y: this.y + P_H * 0.55, w: 54, h: 28 };
             }
             return null;
         }
 
-        beginAttack(kind) {
+        // baseKind: 'punch' or 'kick' - resolves to the grounded/airborne/
+        // crouching variant automatically.
+        beginAttack(baseKind) {
             if (this.blocking) return; // can't attack while blocking, no exceptions
+            let kind;
+            if (!this.grounded) kind = baseKind === 'punch' ? 'jump_punch' : 'jump_kick';
+            else if (this.crouching) kind = baseKind === 'punch' ? 'crouch_punch' : 'crouch_kick';
+            else kind = ATTACK_BASE[baseKind];
             this.state = kind; this.atkT = 0; this.hitReg = false; this.canW = false; this.canT = 0;
-            this.fr = 0; this.frT = 0; this.atkDur = ATK_DUR[kind];
+            this.fr = 0; this.frT = 0;
+            this.atkDur = ATK_DUR[baseAttackKind(kind)];
         }
 
         takeDamage(rawDmg, heavy) {
@@ -237,99 +292,33 @@ window.FightGame = (function () {
     let assetsPromise = null;
     let rafId = null;
     let keys = {};
+    let justPressed = {}; // set true on a genuine new keydown, cleared every frame - forces mashing instead of holding
     let onKeyDown, onKeyUp;
 
-    function newGame(anims, bg, playerKey) {
-        const cpuKey = playerKey === 'conmen' ? 'reiffer' : 'conmen';
-        const player = new Fighter(anims[playerKey], 180, 1, false);
-        const cpu = new Fighter(anims[cpuKey], SW - 180 - 90, -1, true);
+    const HANDLED_KEYS = new Set([
+        'a', 'd', 'w', 's', 'z', 'x', ' ',
+        'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Enter', '/',
+        'Shift', 'Escape',
+    ]);
+
+    function normKey(k) {
+        if (k.length === 1 && /[a-zA-Z]/.test(k)) return k.toLowerCase();
+        return k;
+    }
+
+    function newGame(anims, bg) {
+        const p1 = new Fighter(anims.reiffer, 180, 1);
+        const p2 = new Fighter(anims.conmen, SW - 180 - 90, -1);
         return {
-            player, cpu, bg,
+            p1, p2, bg,
             timer: ROUND_T,
-            phase: 'playing', // playing | won | lost | draw
+            phase: 'playing', // playing | p1win | p2win | draw
             closeCountdown: null,
         };
     }
 
     function aabbOverlap(a, b) {
         return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
-    }
-
-    function updateCPU(dt, cpu, player) {
-        cpu.cpuTimer -= dt;
-        const gap = player.x - cpu.x;
-        const absGap = Math.abs(gap);
-        cpu.facing = gap >= 0 ? 1 : -1;
-
-        const busy = cpu.state === 'punch_lo' || cpu.state === 'kick_lo';
-        if (cpu.stop > 0) { cpu.stop--; return; }
-
-        // React to the player actively attacking at close range - decent
-        // chance to throw up a block instead of eating it clean.
-        const playerAttacking = (player.state === 'punch_lo' || player.state === 'kick_lo') && !player.hitReg;
-        if (playerAttacking && absGap < 90 && Math.random() < 0.55 && !busy) {
-            cpu.blocking = true;
-            cpu.state = 'block'; cpu.fr = 0;
-            return;
-        }
-
-        if (cpu.cpuTimer <= 0) {
-            cpu.cpuTimer = 0.35 + Math.random() * 0.5;
-            if (absGap > 140) {
-                cpu.cpuAction = 'approach';
-            } else if (absGap < 60) {
-                cpu.cpuAction = Math.random() < 0.6 ? 'attack' : (Math.random() < 0.3 ? 'block' : 'idle');
-            } else {
-                cpu.cpuAction = Math.random() < 0.5 ? 'approach' : 'attack';
-            }
-        }
-
-        cpu.blocking = false;
-        if (busy) { /* let current swing finish */ }
-        else if (cpu.cpuAction === 'block') {
-            cpu.blocking = true;
-            cpu.state = 'block'; cpu.fr = 0;
-        } else if (cpu.cpuAction === 'approach') {
-            cpu.vx = cpu.facing * P_SPD * 0.85;
-            cpu.x = Math.max(STAGE_MARGIN, Math.min(SW - STAGE_MARGIN - cpu._fw, cpu.x + cpu.vx));
-            cpu.state = 'walk';
-        } else if (cpu.cpuAction === 'attack' && absGap < 100) {
-            cpu.beginAttack(Math.random() < 0.5 ? 'punch_lo' : 'kick_lo');
-        } else {
-            cpu.state = 'idle';
-        }
-    }
-
-    function updateFighterCommon(dt, f) {
-        const atk = f.state === 'punch_lo' || f.state === 'kick_lo';
-        if (atk) {
-            f.atkT += dt;
-            if (f.canT > 0) f.canT -= dt;
-            if (!f.canW && f.atkT >= f.atkDur * 0.4) { f.canW = true; f.canT = CANCEL_W; }
-            if (f.atkT >= f.atkDur) {
-                f.state = 'idle'; f.atkT = 0; f.canW = false; f.fr = 0;
-            }
-        }
-        if (f.hurtT > 0) f.hurtT = Math.max(0, f.hurtT - dt);
-        const fpsMap = { idle: 5, walk: 10, punch_lo: 16, kick_lo: 14, block: 1 };
-        f._adv(dt, fpsMap[f.state] || 8);
-    }
-
-    function resolveHit(attacker, defender, shake, fx) {
-        const hb = attacker.hitbox();
-        if (!hb || attacker.hitReg) return;
-        if (aabbOverlap(hb, defender.rect())) {
-            attacker.hitReg = true;
-            const heavy = HEAVY.has(attacker.state);
-            const dealt = defender.takeDamage(DMG[attacker.state] || 10, heavy);
-            attacker.stop = heavy ? HS_HV : HS_LT;
-            shake.hit(heavy ? 7.0 : 3.2);
-            fx.push({ x: hb.x + hb.w / 2, y: hb.y + hb.h / 2, l: heavy ? 9 : 6, ml: heavy ? 9 : 6, heavy });
-            if (typeof window.playSound === 'function') {
-                window.playSound(defender.blocking ? 'fryer_hit' : 'player_hurt');
-            }
-            void dealt;
-        }
     }
 
     class Shake {
@@ -339,11 +328,93 @@ window.FightGame = (function () {
         off() { if (this.v < 0.4) return [0, 0]; return [(Math.random() - 0.5) * 2 * this.v, (Math.random() - 0.5) * this.v]; }
     }
 
+    // Handles movement, jump physics, crouch, and attack input for one
+    // fighter given its own key bindings. Shared by both players so P1
+    // and P2 behave identically, just reading different keys.
+    function updateHumanFighter(dt, f, bind) {
+        const blockHeld = !!(keys[bind.block]);
+        const attacking = isAttackState(f.state);
+
+        f.blocking = blockHeld && !attacking && f.grounded;
+        if (f.blocking) {
+            f.state = 'block'; f.fr = 0;
+            return;
+        }
+
+        if (f.stop > 0) { f.stop--; return; }
+
+        // --- jump physics (runs regardless of attack state, so you can
+        // still fall/land mid-attack) ---
+        if (!f.grounded) {
+            f.vy += GRAVITY * dt;
+            f.y += f.vy * dt;
+            if (f.y >= GROUND - P_H) {
+                f.y = GROUND - P_H; f.vy = 0; f.grounded = true;
+            }
+        } else if (justPressed[bind.jump]) {
+            f.vy = JUMP_VELOCITY; f.grounded = false;
+        }
+
+        if (!attacking) {
+            // --- crouch (grounded only, cancels moving) ---
+            f.crouching = f.grounded && !!keys[bind.crouch];
+
+            f.vx = 0;
+            if (!f.crouching) {
+                if (keys[bind.left]) { f.vx = -P_SPD; f.facing = -1; }
+                else if (keys[bind.right]) { f.vx = P_SPD; f.facing = 1; }
+            }
+            f.x = Math.max(STAGE_MARGIN, Math.min(SW - STAGE_MARGIN - f._fw, f.x + f.vx));
+
+            if (f.grounded) {
+                f.state = f.crouching ? 'crouch' : (f.vx !== 0 ? 'walk' : 'idle');
+            } else {
+                f.state = 'jump';
+            }
+        }
+
+        // --- attacks: only fire on a genuine key PRESS, mashing required ---
+        const canStart = !attacking || (f.canW && f.canT > 0);
+        if (canStart) {
+            if (justPressed[bind.punch]) f.beginAttack('punch');
+            else if (justPressed[bind.kick]) f.beginAttack('kick');
+        }
+    }
+
+    function updateFighterCommon(dt, f) {
+        if (isAttackState(f.state)) {
+            f.atkT += dt;
+            if (f.canT > 0) f.canT -= dt;
+            if (!f.canW && f.atkT >= f.atkDur * 0.4) { f.canW = true; f.canT = CANCEL_W; }
+            if (f.atkT >= f.atkDur) {
+                f.state = f.grounded ? 'idle' : 'jump'; f.atkT = 0; f.canW = false; f.fr = 0;
+            }
+        }
+        if (f.hurtT > 0) f.hurtT = Math.max(0, f.hurtT - dt);
+        const fpsMap = { idle: 5, walk: 10, punch_lo: 16, kick_lo: 14, block: 1, jump: 1, crouch: 1, jump_punch: 16, jump_kick: 14, crouch_punch: 16, crouch_kick: 14 };
+        f._adv(dt, fpsMap[f.state] || 8);
+    }
+
+    function resolveHit(attacker, defender, shake, fx) {
+        const hb = attacker.hitbox();
+        if (!hb || attacker.hitReg) return;
+        if (aabbOverlap(hb, defender.rect())) {
+            attacker.hitReg = true;
+            const heavy = HEAVY.has(baseAttackKind(attacker.state));
+            defender.takeDamage(DMG[baseAttackKind(attacker.state)] || 10, heavy);
+            attacker.stop = heavy ? HS_HV : HS_LT;
+            shake.hit(heavy ? 7.0 : 3.2);
+            fx.push({ x: hb.x + hb.w / 2, y: hb.y + hb.h / 2, l: heavy ? 9 : 6, ml: heavy ? 9 : 6, heavy });
+            if (typeof window.playSound === 'function') {
+                window.playSound(defender.blocking ? 'fryer_hit' : 'player_hurt');
+            }
+        }
+    }
+
     function drawHUD(ctx, g) {
-        // Player bar (left)
         const barW = 300, barH = 18;
-        drawBar(ctx, 24, 20, barW, barH, g.player.hp / MAX_HP, COL.GN, 'YOU');
-        drawBar(ctx, SW - 24 - barW, 20, barW, barH, g.cpu.hp / MAX_HP, COL.RD, 'RIVAL', true);
+        drawBar(ctx, 24, 20, barW, barH, g.p1.hp / MAX_HP, COL.GN, 'P1', false);
+        drawBar(ctx, SW - 24 - barW, 20, barW, barH, g.p2.hp / MAX_HP, COL.BL, 'P2', true);
 
         ctx.textBaseline = 'top';
         ctx.font = "20px 'BonusStagePixel', monospace";
@@ -377,8 +448,8 @@ window.FightGame = (function () {
 
     function drawEnd(ctx, g) {
         let title, col;
-        if (g.phase === 'won') { title = 'YOU WIN'; col = COL.YL; }
-        else if (g.phase === 'lost') { title = 'YOU LOSE'; col = COL.RD; }
+        if (g.phase === 'p1win') { title = 'PLAYER 1 WINS'; col = COL.GN; }
+        else if (g.phase === 'p2win') { title = 'PLAYER 2 WINS'; col = COL.BL; }
         else { title = 'DRAW'; col = COL.GY; }
 
         ctx.textBaseline = 'top';
@@ -420,20 +491,26 @@ window.FightGame = (function () {
         const [reifferAnims, conmenAnims, bg] = await assetsPromise;
         const anims = { reiffer: reifferAnims, conmen: conmenAnims };
 
-        const playerKey = document.body.classList.contains('conmen-mode') ? 'conmen' : 'reiffer';
-        let g = newGame(anims, bg, playerKey);
+        let g = newGame(anims, bg);
         const shake = new Shake();
         const fx = [];
 
-        keys = {};
+        const P1_BIND = { left: 'a', right: 'd', jump: 'w', crouch: 's', punch: 'z', kick: 'x', block: ' ' };
+        const P2_BIND = { left: 'ArrowLeft', right: 'ArrowRight', jump: 'ArrowUp', crouch: 'ArrowDown', punch: 'Enter', kick: '/', block: 'Shift' };
+
+        keys = {}; justPressed = {};
         onKeyDown = (ev) => {
-            keys[ev.key] = true;
+            const k = normKey(ev.key);
+            if (HANDLED_KEYS.has(ev.key) || HANDLED_KEYS.has(k)) ev.preventDefault();
+            if (!keys[k]) justPressed[k] = true; // only a fresh press counts, not OS key-repeat while held
+            keys[k] = true;
+
             if (ev.key === 'Escape') { if (typeof window.closeFightGame === 'function') window.closeFightGame(); return; }
             if (g.phase !== 'playing' && ev.key === 'Enter') {
-                g = newGame(anims, bg, playerKey);
+                g = newGame(anims, bg);
             }
         };
-        onKeyUp = (ev) => { keys[ev.key] = false; };
+        onKeyUp = (ev) => { keys[normKey(ev.key)] = false; };
         window.addEventListener('keydown', onKeyDown);
         window.addEventListener('keyup', onKeyUp);
 
@@ -445,60 +522,38 @@ window.FightGame = (function () {
 
             if (g.phase === 'playing') {
                 g.timer -= dt;
-                const p = g.player, c = g.cpu;
+                const p1 = g.p1, p2 = g.p2;
 
-                // --- player input ---
-                const blockHeld = !!(keys['c'] || keys['C'] || keys['l'] || keys['L']);
-                p.blocking = blockHeld && p.state !== 'punch_lo' && p.state !== 'kick_lo';
-                if (p.blocking) {
-                    p.state = 'block'; p.fr = 0;
-                } else if (p.stop <= 0) {
-                    const atk = p.state === 'punch_lo' || p.state === 'kick_lo';
-                    if (!atk) {
-                        p.vx = 0;
-                        if (keys['ArrowLeft'] || keys['a'] || keys['A']) { p.vx = -P_SPD; p.facing = -1; p.state = 'walk'; }
-                        else if (keys['ArrowRight'] || keys['d'] || keys['D']) { p.vx = P_SPD; p.facing = 1; p.state = 'walk'; }
-                        else { p.state = 'idle'; }
-                        p.x = Math.max(STAGE_MARGIN, Math.min(SW - STAGE_MARGIN - p._fw, p.x + p.vx));
-                    }
-                    const canStart = !atk || (p.canW && p.canT > 0);
-                    if (canStart) {
-                        if (keys['z'] || keys['Z'] || keys['j'] || keys['J']) p.beginAttack('punch_lo');
-                        else if (keys['x'] || keys['X'] || keys['k'] || keys['K']) p.beginAttack('kick_lo');
-                    }
-                } else { p.stop--; }
+                updateHumanFighter(dt, p1, P1_BIND);
+                updateHumanFighter(dt, p2, P2_BIND);
+                updateFighterCommon(dt, p1);
+                updateFighterCommon(dt, p2);
 
-                if (c.stop > 0) c.stop--; else updateCPU(dt, c, p);
+                resolveHit(p1, p2, shake, fx);
+                resolveHit(p2, p1, shake, fx);
 
-                updateFighterCommon(dt, p);
-                updateFighterCommon(dt, c);
-
-                resolveHit(p, c, shake, fx);
-                resolveHit(c, p, shake, fx);
-
-                if (c.ko || p.ko) {
+                if (p1.ko || p2.ko) {
                     g.closeCountdown = AUTO_CLOSE_SECONDS;
-                    if (c.ko && !p.ko) {
-                        g.phase = 'won'; p.state = 'victory'; p.fr = 0; p.hurtT = 0;
-                        c.state = 'defeat'; c.fr = 0; c.hurtT = 0;
-                    } else if (p.ko && !c.ko) {
-                        g.phase = 'lost'; c.state = 'victory'; c.fr = 0; c.hurtT = 0;
-                        p.state = 'defeat'; p.fr = 0; p.hurtT = 0;
+                    if (p2.ko && !p1.ko) {
+                        g.phase = 'p1win'; p1.state = 'victory'; p1.fr = 0; p1.hurtT = 0;
+                        p2.state = 'defeat'; p2.fr = 0; p2.hurtT = 0;
+                    } else if (p1.ko && !p2.ko) {
+                        g.phase = 'p2win'; p2.state = 'victory'; p2.fr = 0; p2.hurtT = 0;
+                        p1.state = 'defeat'; p1.fr = 0; p1.hurtT = 0;
                     } else {
                         g.phase = 'draw';
                     }
                 } else if (g.timer <= 0) {
                     g.timer = 0;
                     g.closeCountdown = AUTO_CLOSE_SECONDS;
-                    if (p.hp > c.hp) { g.phase = 'won'; p.state = 'victory'; c.state = 'defeat'; }
-                    else if (c.hp > p.hp) { g.phase = 'lost'; c.state = 'victory'; p.state = 'defeat'; }
+                    if (p1.hp > p2.hp) { g.phase = 'p1win'; p1.state = 'victory'; p2.state = 'defeat'; }
+                    else if (p2.hp > p1.hp) { g.phase = 'p2win'; p2.state = 'victory'; p1.state = 'defeat'; }
                     else { g.phase = 'draw'; }
-                    p.fr = 0; c.fr = 0; p.hurtT = 0; c.hurtT = 0;
+                    p1.fr = 0; p2.fr = 0; p1.hurtT = 0; p2.hurtT = 0;
                 }
             } else {
-                // Play victory/defeat once then freeze, same approach as the Bonus Stage
-                const winner = g.phase === 'won' ? g.player : (g.phase === 'lost' ? g.cpu : null);
-                const loser = g.phase === 'won' ? g.cpu : (g.phase === 'lost' ? g.player : null);
+                const winner = g.phase === 'p1win' ? g.p1 : (g.phase === 'p2win' ? g.p2 : null);
+                const loser = g.phase === 'p1win' ? g.p2 : (g.phase === 'p2win' ? g.p1 : null);
                 if (winner) {
                     winner.frT += dt;
                     if (winner.frT >= 1 / VICTORY_FPS) { winner.frT = 0; const n = (winner.anims.victory || [null]).length; winner.fr = (winner.fr + 1) % Math.max(1, n); }
@@ -535,17 +590,23 @@ window.FightGame = (function () {
                 ctx.globalAlpha = 1;
             }
 
-            g.player.draw(ctx, so);
-            g.cpu.draw(ctx, so);
+            g.p1.draw(ctx, so);
+            g.p2.draw(ctx, so);
             drawHUD(ctx, g);
             if (g.phase !== 'playing') drawEnd(ctx, g);
 
-            const leg = '←→/AD Move   Z/J Punch   X/K Kick   Hold C/L Block   ESC Quit';
-            ctx.font = "10px 'BonusStagePixel', monospace";
+            const leg = 'P1: AD Move  W Jump  S Crouch  Z Punch  X Kick  Space Block   |   P2: \u2190\u2192 Move  \u2191 Jump  \u2193 Crouch  Enter Punch  / Kick  Shift Block';
+            ctx.font = "9px 'BonusStagePixel', monospace";
             ctx.fillStyle = '#aaaaaa';
             ctx.textAlign = 'center';
-            ctx.fillText(leg, SW / 2, SH - 16);
+            ctx.fillText(leg, SW / 2, SH - 14);
             ctx.textAlign = 'left';
+
+            // Clear "just pressed" pulses at the very end of the frame -
+            // each physical press only gets this one frame to register,
+            // which combined with the OS-repeat guard above is what
+            // forces mashing instead of holding.
+            justPressed = {};
 
             rafId = requestAnimationFrame(frame);
         }
@@ -557,6 +618,7 @@ window.FightGame = (function () {
         if (onKeyDown) window.removeEventListener('keydown', onKeyDown);
         if (onKeyUp) window.removeEventListener('keyup', onKeyUp);
         onKeyDown = onKeyUp = null;
+        keys = {}; justPressed = {};
     }
 
     return { start, stop };
