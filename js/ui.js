@@ -24,6 +24,7 @@ function switchTab(tabId) {
     }
 
     if (tabId === 'onlinelobby' && typeof openOnlineLobby === 'function') openOnlineLobby();
+    if (typeof rebuildWin95WindowsForActiveTab === 'function') rebuildWin95WindowsForActiveTab();
 }
 
 function updateUI() {
