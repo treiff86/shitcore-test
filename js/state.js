@@ -112,11 +112,18 @@ function resetGameStateInMemory() {
 // Resets spendable cash back to the $1,000 starting amount only - Degen
 // Level, Rugged Savings, perks, and everything else stay exactly as they
 // are. No page reload.
-function refreshFundsToStart() {
+async function refreshFundsToStart() {
     state.cash = 1000;
+    state.ruggedSavings = 0;
     playSound('click');
     if (typeof updateUI === "function") updateUI();
-    if (typeof showToast === "function") showToast("💸 Funds refreshed to $1,000.", "info");
+    if (typeof showToast === "function") showToast("💸 Funds refreshed to $1,000. Rugged Savings reset to $0.", "info");
+    // Push immediately rather than waiting on the periodic autosave - same
+    // reasoning as resetGame(): otherwise reconnecting before that next
+    // tick would just pull the old numbers back down.
+    if (typeof saveToCloud === 'function') {
+        try { await saveToCloud(); } catch (e) { console.warn('[state] refreshFundsToStart cloud sync failed:', e); }
+    }
 }
 
 /* ---------------- Zero-balance choice ---------------- */
