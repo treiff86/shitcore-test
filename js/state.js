@@ -93,6 +93,16 @@ function resetGame() {
     window.location.reload();
 }
 
+// Used on wallet disconnect - progress without a connected wallet is meant
+// to be ephemeral, so disconnecting should show a clean slate immediately,
+// same as a fresh page load would. Unlike resetGame() this doesn't reload
+// the page (that would be a jarring/unnecessary disruption just for
+// disconnecting) or touch localStorage (already unused, see loadGame()).
+function resetGameStateInMemory() {
+    state = JSON.parse(JSON.stringify(defaultState));
+    if (typeof updateUI === "function") updateUI();
+}
+
 // Resets spendable cash back to the $1,000 starting amount only - Degen
 // Level, Rugged Savings, perks, and everything else stay exactly as they
 // are. No page reload.
