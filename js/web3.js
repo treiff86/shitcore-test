@@ -100,6 +100,7 @@ function clearCosmeticThemes() {
 // "switch theme" button so a dual (or more) holder can change their mind
 // later without having to reconnect.
 let ownedThemesList = [];
+let isConmenHolder = false; // real Conmen NFT ownership - separate from cosmetic theme choice, used to gate the Online Fight Club tab and the Conmen heat perks below
 
 // showChoiceIfMultiple=false is used specifically for the master wallet's
 // TEST Play path, where Theme Preview is about to open right after and
@@ -116,6 +117,8 @@ async function applyCosmeticThemes(addr, showChoiceIfMultiple = true) {
         if (owns) owned.push(theme);
     }
     ownedThemesList = owned;
+    isConmenHolder = owned.some((t) => t.id === "conmen");
+    updateOnlineLobbyAccess();
 
     const switchBtn = document.getElementById("themeSwitchBtn");
     if (owned.length > 1) {
@@ -144,6 +147,16 @@ async function applyCosmeticThemes(addr, showChoiceIfMultiple = true) {
 // Actually applies a theme's visuals/features - shared by the single-owner
 // auto-apply path above and the manual picker below, so they can never
 // drift out of sync with each other.
+// Online Fight Club: locked to "Soon"/"Holders Only" for everyone except
+// TEST Play (for testing) or a wallet that genuinely holds a Conmen or Mid
+// Evils NFT (checked above via COSMETIC_THEMES, same real ownership check
+// cosmetic theming uses - nothing separate to maintain).
+function updateOnlineLobbyAccess() {
+    const unlocked = isTestPlayMode || ownedThemesList.length > 0;
+    document.getElementById("onlineLobbySoonOverlay")?.classList.toggle("hidden", unlocked);
+    document.getElementById("onlineLobbySoonBadge")?.classList.toggle("hidden", unlocked);
+}
+
 function applyTheme(theme) {
     clearCosmeticThemes();
     document.body.classList.add(theme.cssClass);
@@ -213,8 +226,6 @@ function choosePlayMode(mode) {
         // holds more than one gated collection. Nothing about this call
         // is different for the master wallet.
         applyCosmeticThemes(walletAddress, true);
-        document.getElementById("onlineLobbySoonOverlay")?.classList.remove("hidden");
-        document.getElementById("onlineLobbySoonBadge")?.classList.remove("hidden");
         showToast("▶️ LIVE PLAY active - this is exactly what a real player sees.", "info");
     }
     if (typeof updateUI === "function") updateUI(); // re-checks things like the zero-balance modal now that the picker is out of the way
@@ -488,7 +499,9 @@ function disconnectWallet() {
     walletSolDomain = null;
     clearCosmeticThemes();
     ownedThemesList = [];
+    isConmenHolder = false;
     isTestPlayMode = false;
+    updateOnlineLobbyAccess();
     document.getElementById("themePreviewBtn")?.classList.add("hidden");
     document.getElementById("themeSwitchBtn")?.classList.add("hidden");
     document.getElementById("bonusStageBtn")?.classList.add("hidden");
