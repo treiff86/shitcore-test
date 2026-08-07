@@ -16,11 +16,40 @@
 let lobbyChannel = null;
 const ROOM_LIST_WINDOW_MINUTES = 10; // only show recently-created rooms; older ones are considered stale
 
+// Identifies THIS BROWSER TAB, not the wallet - two tabs on the same
+// wallet (like when testing solo with the master wallet) would otherwise
+// look identical by wallet address alone, and neither would ever see a
+// Join button for the other's room. Fresh every tab/reload on purpose.
+const mySessionId = (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
+let myRoomId = null; // the room THIS tab created, if any - used to clean it up on the way out
+
 function lobbyDisplayName() {
     if (typeof walletSolDomain !== 'undefined' && walletSolDomain) return walletSolDomain;
     if (typeof shortAddr === 'function' && typeof walletAddress !== 'undefined' && walletAddress) return shortAddr(walletAddress);
     return 'Anonymous Degen';
 }
+
+// Best-effort delete of the room this tab created, fired when the tab is
+// closed, refreshed, or navigated away from. fetch's keepalive flag is the
+// modern equivalent of sendBeacon but (unlike sendBeacon) lets us send the
+// apikey header Supabase requires, so it can actually survive the page
+// unloading rather than being silently dropped.
+function cleanupMyRoom() {
+    if (!myRoomId || typeof SUPABASE_URL === 'undefined' || typeof SUPABASE_ANON_KEY === 'undefined') return;
+    try {
+        fetch(`${SUPABASE_URL}/rest/v1/fight_rooms?id=eq.${myRoomId}`, {
+            method: 'DELETE',
+            headers: {
+                'apikey': SUPABASE_ANON_KEY,
+                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+            },
+            keepalive: true,
+        });
+    } catch (e) { /* best effort - nothing more we can do on the way out */ }
+    myRoomId = null;
+}
+window.addEventListener('pagehide', cleanupMyRoom);
+window.addEventListener('beforeunload', cleanupMyRoom);
 
 async function renderLobbyRooms() {
     const box = document.getElementById('lobbyRoomList');
@@ -30,7 +59,7 @@ async function renderLobbyRooms() {
     const cutoff = new Date(Date.now() - ROOM_LIST_WINDOW_MINUTES * 60 * 1000).toISOString();
     const { data, error } = await sb
         .from('fight_rooms')
-        .select('id, host_wallet, host_name, guest_wallet, status, created_at')
+        .select('id, host_wallet, host_name, host_session, guest_wallet, status, created_at')
         .eq('status', 'waiting')
         .gte('created_at', cutoff)
         .order('created_at', { ascending: false })
@@ -49,7 +78,7 @@ async function renderLobbyRooms() {
     box.innerHTML = data.map(room => `
         <div class="flex justify-between items-center text-xs border-b border-[#1A2232] py-2">
             <span>${room.host_name || shortAddr(room.host_wallet)}'s room</span>
-            ${room.host_wallet === walletAddress
+            ${room.host_session === mySessionId
                 ? `<span class="text-gray-500 italic">Waiting for an opponent…</span>`
                 : `<button onclick="joinLobbyRoom('${room.id}')" class="bg-emerald-600/20 hover:bg-emerald-600/40 border border-emerald-500/30 text-emerald-300 rounded px-3 py-1 font-bold transition">Join</button>`}
         </div>
@@ -58,17 +87,19 @@ async function renderLobbyRooms() {
 
 async function createLobbyRoom() {
     if (!sb || !walletAddress) { if (typeof showToast === 'function') showToast('Connect a wallet first.', 'error'); return; }
-    const { error } = await sb.from('fight_rooms').insert({
+    const { data, error } = await sb.from('fight_rooms').insert({
         host_wallet: walletAddress,
         host_name: lobbyDisplayName(),
+        host_session: mySessionId,
         status: 'waiting',
-    });
+    }).select().single();
 
     if (error) {
         if (typeof showToast === 'function') showToast("Couldn't create a room - try again.", 'error');
         console.error('[onlinelobby] create failed:', error);
         return;
     }
+    myRoomId = data.id;
     if (typeof showToast === 'function') showToast('🥊 Room created - waiting for an opponent…', 'info');
     renderLobbyRooms();
 }
