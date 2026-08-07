@@ -28,6 +28,16 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('heatBarFill').style.width = `${Math.floor(state.globalHeat)}%`;
         }
 
+        // Conmen NFT holders: rare (0.01% per second - roughly once every
+        // few hours of active play) chance to wipe Regulatory Heat entirely.
+        if (typeof isConmenHolder !== 'undefined' && isConmenHolder && Math.random() < 0.0001) {
+            state.globalHeat = 0;
+            document.getElementById('heatPct').innerText = `0%`;
+            document.getElementById('heatBarFill').style.width = `0%`;
+            showToast("🃏 You conned The Conmen! Regulatory heat to 0.", "success");
+            playSound('buy');
+        }
+
         // Cloud autosave every 30s, only while a wallet is connected - avoids
         // hammering Supabase on every single tick the way localStorage can.
         if (typeof walletAddress !== 'undefined' && walletAddress) {
