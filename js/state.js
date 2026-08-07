@@ -111,12 +111,14 @@ function resetGameStateInMemory() {
     if (typeof updateUI === "function") updateUI();
 }
 
-// Resets spendable cash back to the $1,000 starting amount only - Degen
-// Level, Rugged Savings, perks, and everything else stay exactly as they
-// are. No page reload.
+// Resets spendable cash back to the $1,000 starting amount. Rugged
+// Savings resets to $0 too, and Degen Level follows it right back down
+// since it's a live reflection of Rugged Savings, not a separate stored
+// achievement. Perks stay exactly as they are. No page reload.
 async function refreshFundsToStart() {
     state.cash = 1000;
     state.ruggedSavings = 0;
+    checkProgressions(); // recalculates Degen Level to match the reset Rugged Savings
     playSound('click');
     if (typeof updateUI === "function") updateUI();
     if (typeof showToast === "function") showToast("💸 Funds refreshed to $1,000. Rugged Savings reset to $0.", "info");
@@ -185,16 +187,24 @@ function depositToSavings(amount) {
     return true;
 }
 
+// Degen Level is a LIVE reflection of current Rugged Savings, not a
+// permanent achievement - if Rugged Savings goes down (Refresh Funds,
+// Game Over), the level drops right along with it. Pure function: same
+// savings amount always gives the same level, no hidden state.
+function computeDegenLevel(savings) {
+    let level = 1;
+    while (DEGEN_LEVELS[level + 1] && savings >= DEGEN_LEVELS[level].target) level++;
+    return level;
+}
+
 function checkProgressions() {
-    // Level Up Check - now driven by Rugged Savings (money actually
-    // deposited/saved), not total lifetime earnings. Earning cash alone
-    // no longer levels you up; you have to bank it.
-    let currentTier = DEGEN_LEVELS[state.degenLevel];
-    while (currentTier && state.ruggedSavings >= currentTier.target && state.degenLevel < 4) {
-        state.degenLevel++;
-        currentTier = DEGEN_LEVELS[state.degenLevel];
-        showToast(`🎉 LEVELED UP! You are now: ${currentTier.name}`, "success");
+    const newLevel = computeDegenLevel(state.ruggedSavings);
+    if (newLevel > state.degenLevel) {
+        state.degenLevel = newLevel;
+        showToast(`🎉 LEVELED UP! You are now: ${DEGEN_LEVELS[newLevel].name}`, "success");
         playSound('buy');
+    } else if (newLevel !== state.degenLevel) {
+        state.degenLevel = newLevel; // dropped - no toast/sound, just reflect it
     }
     
     // Win Condition Check - matches Level 4's target and the Lambo
