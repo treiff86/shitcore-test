@@ -202,6 +202,8 @@ function choosePlayMode(mode) {
         document.getElementById("conmenEggTestBtn")?.classList.remove("hidden");
         document.getElementById("debugMenuBtn")?.classList.remove("hidden");
         document.getElementById("fightGameBtn")?.classList.remove("hidden");
+        document.getElementById("onlineLobbySoonOverlay")?.classList.add("hidden");
+        document.getElementById("onlineLobbySoonBadge")?.classList.add("hidden");
         openThemePreview();
         showToast("🧪 TEST PLAY active - all testing tools unlocked.", "info");
     } else {
@@ -211,6 +213,8 @@ function choosePlayMode(mode) {
         // holds more than one gated collection. Nothing about this call
         // is different for the master wallet.
         applyCosmeticThemes(walletAddress, true);
+        document.getElementById("onlineLobbySoonOverlay")?.classList.remove("hidden");
+        document.getElementById("onlineLobbySoonBadge")?.classList.remove("hidden");
         showToast("▶️ LIVE PLAY active - this is exactly what a real player sees.", "info");
     }
 }
