@@ -160,6 +160,10 @@
                 Mempool Roulette <i class="fa-solid fa-dice text-xs text-cyan-400 animate-pulse"></i>
                 <span class="bg-rose-500/20 text-rose-400 text-[8px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wide">Soon</span>
             </button>
+            <button onclick="switchTab('onlinelobby')" id="tab-onlinelobby" class="py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-white whitespace-nowrap flex items-center gap-1.5 transition-all">
+                Online Fight Club <i class="fa-solid fa-globe text-xs text-purple-400 animate-pulse"></i>
+                <span id="onlineLobbySoonBadge" class="bg-rose-500/20 text-rose-400 text-[8px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wide">Soon</span>
+            </button>
             <button onclick="switchTab('info')" id="tab-info" class="py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-white whitespace-nowrap transition-all">
                 How to Play 📖
             </button>
@@ -770,6 +774,29 @@
             </div>
         </section>
 
+        <!-- ================= ONLINE FIGHT CLUB TAB (Stage 1: lobby only, no live match sync yet) ================= -->
+        <section id="content-onlinelobby" class="hidden space-y-6">
+            <div class="relative">
+                <div id="onlineLobbySoonOverlay" class="absolute inset-0 z-20 bg-black/70 backdrop-blur-sm rounded-xl flex items-center justify-center pointer-events-auto">
+                    <span class="text-3xl md:text-5xl font-black uppercase text-rose-500 border-4 border-rose-500 px-6 py-3 rounded-lg -rotate-6 shadow-2xl tracking-widest" style="text-shadow: 0 0 20px rgba(244,63,94,0.6);">
+                        Coming Soon
+                    </span>
+                </div>
+                <div class="space-y-6">
+                    <div class="bg-[#0C0F16] rounded-xl p-6 border border-[#1A2232] shadow-2xl">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-lg font-black text-white flex items-center gap-2"><i class="fa-solid fa-globe text-purple-400"></i>Online Fight Club</h3>
+                            <button onclick="createLobbyRoom()" class="bg-purple-600/20 hover:bg-purple-600/40 border border-purple-500/30 text-purple-300 rounded px-4 py-2 text-xs font-bold transition">
+                                <i class="fa-solid fa-plus mr-1"></i>Create Room
+                            </button>
+                        </div>
+                        <div class="text-[11px] text-gray-500 mb-4">Stage 1: matchmaking only, relayed through the same Supabase setup as your leaderboard - not a direct connection between players. Live synced matches aren't wired up yet; joining a room here confirms the connection pipeline actually works.</div>
+                        <div id="lobbyRoomList" class="space-y-1"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
     </main>
 
     <!-- ============================================================ -->
@@ -969,6 +996,13 @@
                 <div class="text-[10px] uppercase tracking-wide text-gray-500 mb-1">Caught Errors (this page load)</div>
                 <div id="debugErrorsBox" class="bg-black/40 border border-[#1A2232] rounded p-3 text-[11px] font-mono text-rose-300 space-y-1 max-h-40 overflow-y-auto"></div>
             </div>
+            <div>
+                <div class="flex items-center justify-between mb-1">
+                    <div class="text-[10px] uppercase tracking-wide text-gray-500">Connectivity</div>
+                    <button onclick="checkConnectivity()" class="text-[10px] text-amber-400 hover:text-amber-300 transition"><i class="fa-solid fa-wifi mr-1"></i>Check</button>
+                </div>
+                <div id="connectivityCheckResult" class="bg-black/40 border border-[#1A2232] rounded p-3 text-[11px] font-mono text-gray-300">Not checked yet.</div>
+            </div>
             <div class="flex gap-2">
                 <button onclick="refreshDebugInfo()" class="flex-1 py-2 border border-[#1A2232] hover:border-gray-500 text-gray-400 hover:text-white rounded text-xs transition">
                     <i class="fa-solid fa-rotate mr-1"></i>Refresh
@@ -1106,6 +1140,26 @@
         </div>
     </div>
 
+    <!-- Zero-balance choice - shown when cash hits $0. No close/backdrop-dismiss
+         on purpose, this blocks until a choice is made. -->
+    <div id="zeroBalanceModal" class="fixed inset-0 bg-black/85 flex items-center justify-center z-[110] hidden p-4">
+        <div class="bg-[#0C0F16] border-2 border-rose-500/60 max-w-md w-full p-7 rounded-xl shadow-2xl text-center space-y-4">
+            <div class="w-20 h-20 bg-rose-500/10 text-rose-500 rounded-full flex items-center justify-center mx-auto text-4xl">💀</div>
+            <h3 class="text-rose-500 font-black text-2xl tracking-tight">YOU'RE REKT</h3>
+            <p class="text-gray-300 text-sm leading-relaxed font-light">Your wallet's at $0. Grind out some quick cash, or wipe the slate and start over.</p>
+            <div class="space-y-2 pt-1">
+                <button onclick="closeZeroBalanceModalForBonusStage()" class="w-full py-3 bg-amber-600/20 hover:bg-amber-600/40 border border-amber-500/30 text-amber-300 rounded-lg font-bold transition">
+                    🍟 Play Bonus Stage for Cash
+                    <div class="text-[10px] font-normal text-gray-500 mt-0.5 normal-case">Rugged Savings stays exactly where it is</div>
+                </button>
+                <button onclick="confirmZeroBalanceGameOver()" class="w-full py-3 bg-rose-600/20 hover:bg-rose-600/40 border border-rose-500/30 text-rose-300 rounded-lg font-bold transition">
+                    💀 GAME OVER — Start Fresh
+                    <div class="text-[10px] font-normal text-gray-500 mt-0.5 normal-case">Resets everything, including Rugged Savings, back to $1,000</div>
+                </button>
+            </div>
+        </div>
+    </div>
+
     <footer class="bg-[#090C12] border-t border-[#1A2232] py-3 px-4 text-center text-[10px] text-gray-500 font-mono flex flex-col md:flex-row justify-between items-center max-w-7xl mx-auto w-full gap-2">
         <div class="flex items-center space-x-3">
             <span>NETWORK: <span class="text-green-400 font-bold">SHITCORE_MAINNET-3.0 (FAKE)</span></span>
@@ -1122,8 +1176,8 @@
     <!-- ============================================================ -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>
 <script src="js/audio.js?v=7" defer></script>
-<script src="js/state.js?v=7" defer></script>
-<script src="js/ui.js?v=3" defer></script>
+<script src="js/state.js?v=8" defer></script>
+<script src="js/ui.js?v=4" defer></script>
 <script src="js/markets.js?v=17" defer></script>
 <script src="js/auditor.js" defer></script>
 <script src="js/deployer.js" defer></script>
@@ -1134,7 +1188,8 @@
 <script src="js/fightgame.js?v=6" defer></script>
 <script src="js/conmen-egg.js?v=4" defer></script>
 <script src="js/mcdonalds-egg.js?v=4" defer></script>
-<script src="js/web3.js?v=24" defer></script>
+<script src="js/web3.js?v=25" defer></script>
+<script src="js/onlinelobby.js?v=1" defer></script>
 <script type="module" src="js/sns.js?v=5"></script>
 <script type="module" src="js/nftgate.js?v=2"></script>
 <script src="js/gate.js?v=2" defer></script>
