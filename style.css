@@ -964,15 +964,63 @@ body.win95-mode {
 
 #win95Desktop {
     position: fixed;
-    inset: 0;
-    z-index: 40;
+    left: 0; right: 0; bottom: 0;
+    top: 118px; /* JS overrides this with the real measured header+nav height */
+    z-index: 30; /* below header/nav so they stay clickable, above normal page content */
     background: #008080;
     background-image:
         linear-gradient(45deg, rgba(255,255,255,0.02) 25%, transparent 25%),
         linear-gradient(-45deg, rgba(255,255,255,0.02) 25%, transparent 25%);
     background-size: 4px 4px;
-    overflow: hidden;
+    overflow: auto; /* was "hidden" - anything dragged or laid out below the fold was completely unreachable */
     font-family: 'BonusStagePixel', monospace;
+}
+
+/* Chunky, blocky scrollbar to match the theme - the desktop can genuinely
+   be scrolled to reach anything off-screen, not just dragged into view. */
+#win95Desktop::-webkit-scrollbar { width: 18px; }
+#win95Desktop::-webkit-scrollbar-track { background: #808080; border-left: 2px solid #dfdfdf; }
+#win95Desktop::-webkit-scrollbar-thumb {
+    background: #c0c0c0;
+    border: 2px solid #dfdfdf;
+    box-shadow: inset -1px -1px 0 #0a0a0a, inset 1px 1px 0 #ffffff;
+}
+
+/* A generous minimum canvas so there's real room to drag windows around
+   and something to actually scroll to. */
+#win95Desktop::after {
+    content: '';
+    display: block;
+    height: 1600px;
+    width: 1px;
+}
+
+/* Header and nav stay exactly where they are and stay fully usable
+   (switching tabs, connecting wallets, etc.) - just restyled to match,
+   rather than being swallowed into the desktop overlay like everything
+   else. Keeping them outside the overlay is what keeps tab-switching and
+   wallet buttons working while this theme is on. */
+body.win95-mode header,
+body.win95-mode nav {
+    background: #c0c0c0 !important;
+    border-color: #808080 !important;
+    font-family: 'BonusStagePixel', monospace !important;
+}
+body.win95-mode header *,
+body.win95-mode nav * {
+    font-family: 'BonusStagePixel', monospace !important;
+    color: #000 !important;
+    text-shadow: none !important;
+}
+body.win95-mode header button,
+body.win95-mode nav button {
+    background: #c0c0c0 !important;
+    border: 2px solid #dfdfdf !important;
+    box-shadow: inset -1px -1px 0 #0a0a0a, inset 1px 1px 0 #ffffff !important;
+    border-radius: 0 !important;
+}
+body.win95-mode nav button[class*="border-blue-500"] {
+    box-shadow: inset 1px 1px 0 #0a0a0a, inset -1px -1px 0 #ffffff !important; /* pressed-in look for the active tab */
 }
 
 .win95-window {
