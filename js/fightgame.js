@@ -46,6 +46,14 @@ window.FightGame = (function () {
     const JUMP_VELOCITY = -560; // px/s
     const GRAVITY = 1400;       // px/s^2
 
+    // Helicopter kick (Reiffer-specific, needs a 2+ frame jump_kick strip):
+    // mashing kick again while already jump-kicking extends a reduced-
+    // gravity spin instead of starting a new attack.
+    const HELI_MAX_T = 2.2;          // hard cap on total float time, seconds
+    const HELI_ADD_PER_MASH = 0.45;  // each mash press adds this much float time
+    const HELI_GRAVITY_MULT = 0.18;  // fraction of normal gravity while active
+    const HELI_FRAME_FPS = 10;       // spin frame-cycle rate
+
     // Shared per-attack-type numbers - jump/crouch variants borrow their
     // grounded counterpart's values until they get their own tuning.
     const ATTACK_BASE = { punch: 'punch_lo', kick: 'kick_lo' };
@@ -92,6 +100,12 @@ window.FightGame = (function () {
             hurt:     ['assets/bonus_stage/hit.webp', 1],
             defeat:   ['assets/bonus_stage/midevils_defeat.webp?v=3', 3],
             block:    ['assets/fight_game/reiffer_block.webp', 1],
+            jump:         ['assets/fight_game/reiffer_jump.webp', 1],
+            crouch:       ['assets/fight_game/reiffer_crouch.webp', 1],
+            jump_punch:   ['assets/fight_game/reiffer_jump_punch.webp', 1],
+            jump_kick:    ['assets/fight_game/reiffer_jump_kick.webp', 2], // also doubles as the helicopter-kick loop, see updateHumanFighter
+            crouch_kick:  ['assets/fight_game/reiffer_crouch_kick.webp', 1],
+            crouch_punch: ['assets/fight_game/reiffer_crouch_punch.webp', 1],
         },
         conmen: {
             walk:     ['assets/bonus_stage/conmen_walk.webp', 4],
@@ -101,12 +115,12 @@ window.FightGame = (function () {
             hurt:     ['assets/bonus_stage/conmen_hit.webp', 1],
             defeat:   ['assets/bonus_stage/conmen_defeat.webp?v=2', 4],
             block:    ['assets/fight_game/conmen_block.webp', 1],
-            jump:        ['assets/fight_game/conmen_jump.webp', 1],
-            crouch:      ['assets/fight_game/conmen_crouch.webp', 1],
-            jump_punch:  ['assets/fight_game/conmen_jump_punch.webp', 1],
-            jump_kick:   ['assets/fight_game/conmen_jump_kick.webp', 1],
-            crouch_kick: ['assets/fight_game/conmen_crouch_kick.webp', 1],
-            // crouch_punch: still a placeholder (reuses punch_lo) - no art yet
+            jump:         ['assets/fight_game/conmen_jump.webp', 1],
+            crouch:       ['assets/fight_game/conmen_crouch.webp', 1],
+            jump_punch:   ['assets/fight_game/conmen_jump_punch.webp', 1],
+            jump_kick:    ['assets/fight_game/conmen_jump_kick.webp', 1],
+            crouch_kick:  ['assets/fight_game/conmen_crouch_kick.webp', 1],
+            crouch_punch: ['assets/fight_game/conmen_crouch_punch.webp', 1],
         },
     };
 
@@ -145,12 +159,21 @@ window.FightGame = (function () {
         return frames;
     }
 
+    // Reiffer's original sprite set (walk/punch/kick/victory - not built by
+    // me, pre-existing) has a lot more empty padding baked into each frame
+    // than Conmen's tightly-cropped ones, so at the same P_H he renders
+    // visibly smaller standing side-by-side. This boosts his whole set
+    // uniformly to compensate - measured from content-fill ratio (his walk
+    // sprite is ~77% character vs Conmen's ~97%).
+    const CHAR_SIZE_CORRECTION = { reiffer: 1.255, conmen: 1.0 };
+
     async function loadFighterAnims(key) {
         const files = FIGHTER_ANIM_FILES[key];
+        const outH = P_H * (CHAR_SIZE_CORRECTION[key] || 1.0);
         const anims = {};
         for (const state in files) {
             const [path, count] = files[state];
-            anims[state] = await loadStrip(path, count, P_H);
+            anims[state] = await loadStrip(path, count, outH);
         }
         anims.idle = anims.walk.length ? [anims.walk[0]] : [];
         // PLACEHOLDERS for anything not defined above in FIGHTER_ANIM_FILES -
@@ -166,7 +189,14 @@ window.FightGame = (function () {
     }
 
     async function loadArenaBackground() {
-        const src = BACKGROUNDS[Math.floor(Math.random() * BACKGROUNDS.length)];
+        // Matches whichever theme is actually active - Mid Evils gets the
+        // market, Conmen gets the prison yard. Falls back to random only if
+        // somehow neither theme class is present (shouldn't normally happen,
+        // this game is gated to TEST Play).
+        let src;
+        if (document.body.classList.contains('medieval-mode')) src = 'assets/fight_game/bg_market.webp';
+        else if (document.body.classList.contains('conmen-mode')) src = 'assets/fight_game/bg_prison.webp';
+        else src = BACKGROUNDS[Math.floor(Math.random() * BACKGROUNDS.length)];
         try {
             const img = await loadImage(src);
             const c = document.createElement('canvas');
@@ -195,6 +225,7 @@ window.FightGame = (function () {
             this.stop = 0;
             this.blocking = false;
             this.hurtT = 0;
+            this.heliT = 0;
             this.ko = false;
         }
 
@@ -271,9 +302,14 @@ window.FightGame = (function () {
 
         draw(ctx, so) {
             const img = this._surf();
-            const sx = Math.round(this.x + so[0]);
-            const sy = Math.round(this.y + so[1]);
             if (!img) return;
+            const sx = Math.round(this.x + so[0]);
+            // Bottom-anchored: most sprites are exactly P_H tall (this is a
+            // no-op for those), but some dynamic poses (e.g. a full diagonal
+            // jump-punch) need a taller canvas to avoid cropping the head or
+            // limbs. Anchoring by the bottom keeps feet/ground-contact in the
+            // same place regardless of a given frame's actual height.
+            const sy = Math.round(this.y + P_H - img.height + so[1]);
             if (this.facing === -1) {
                 ctx.save();
                 ctx.translate(sx + this._fw, sy);
@@ -344,12 +380,20 @@ window.FightGame = (function () {
         if (f.stop > 0) { f.stop--; return; }
 
         // --- jump physics (runs regardless of attack state, so you can
-        // still fall/land mid-attack) ---
+        // still fall/land mid-attack). Helicopter kick drastically slows
+        // the fall while it's active, then hands back to normal gravity. ---
         if (!f.grounded) {
-            f.vy += GRAVITY * dt;
+            const heliActive = f.heliT > 0 && f.state === 'jump_kick';
+            const g = heliActive ? GRAVITY * HELI_GRAVITY_MULT : GRAVITY;
+            f.vy += g * dt;
             f.y += f.vy * dt;
+            if (heliActive) {
+                f.heliT = Math.max(0, f.heliT - dt);
+                if (f.heliT <= 0) { f.state = 'jump'; f.fr = 0; f.atkT = 0; f.canW = false; }
+            }
             if (f.y >= GROUND - P_H) {
-                f.y = GROUND - P_H; f.vy = 0; f.grounded = true;
+                f.y = GROUND - P_H; f.vy = 0; f.grounded = true; f.heliT = 0;
+                if (f.state === 'jump_kick') { f.state = 'idle'; f.fr = 0; }
             }
         } else if (justPressed[bind.jump]) {
             f.vy = JUMP_VELOCITY; f.grounded = false;
@@ -375,14 +419,28 @@ window.FightGame = (function () {
 
         // --- attacks: only fire on a genuine key PRESS, mashing required ---
         const canStart = !attacking || (f.canW && f.canT > 0);
-        if (canStart) {
-            if (justPressed[bind.punch]) f.beginAttack('punch');
-            else if (justPressed[bind.kick]) f.beginAttack('kick');
+        if (justPressed[bind.punch] && canStart) {
+            f.beginAttack('punch');
+        } else if (justPressed[bind.kick]) {
+            // Helicopter kick: mashing kick WHILE ALREADY mid-air-kicking (not
+            // the first press - that's a normal jump kick) extends the spin
+            // instead of starting a new attack. Only characters with a 2+
+            // frame jump_kick strip (currently just Reiffer) can do this -
+            // Conmen's single-frame jump kick just behaves like a normal kick.
+            const jkFrames = f.anims.jump_kick;
+            const helicopterCapable = !f.grounded && f.state === 'jump_kick' && jkFrames && jkFrames.length >= 2;
+            if (helicopterCapable) {
+                f.heliT = Math.min(HELI_MAX_T, f.heliT + HELI_ADD_PER_MASH);
+                f.hitReg = false; // fresh hit chance for this mash
+            } else if (canStart) {
+                f.beginAttack('kick');
+            }
         }
     }
 
     function updateFighterCommon(dt, f) {
-        if (isAttackState(f.state)) {
+        const heliActive = f.heliT > 0 && f.state === 'jump_kick';
+        if (isAttackState(f.state) && !heliActive) {
             f.atkT += dt;
             if (f.canT > 0) f.canT -= dt;
             if (!f.canW && f.atkT >= f.atkDur * 0.4) { f.canW = true; f.canT = CANCEL_W; }
@@ -391,8 +449,21 @@ window.FightGame = (function () {
             }
         }
         if (f.hurtT > 0) f.hurtT = Math.max(0, f.hurtT - dt);
-        const fpsMap = { idle: 5, walk: 10, punch_lo: 16, kick_lo: 14, block: 1, jump: 1, crouch: 1, jump_punch: 16, jump_kick: 14, crouch_punch: 16, crouch_kick: 14 };
-        f._adv(dt, fpsMap[f.state] || 8);
+
+        if (heliActive) {
+            // Spin through both jump_kick frames fast, resetting hitReg each
+            // cycle so the move can actually land more than one hit.
+            f.frT += dt;
+            if (f.frT >= 1 / HELI_FRAME_FPS) {
+                f.frT = 0;
+                const n = f.anims.jump_kick.length;
+                f.fr = (f.fr + 1) % Math.max(1, n);
+                f.hitReg = false;
+            }
+        } else {
+            const fpsMap = { idle: 5, walk: 10, punch_lo: 16, kick_lo: 14, block: 1, jump: 1, crouch: 1, jump_punch: 16, jump_kick: 14, crouch_punch: 16, crouch_kick: 14 };
+            f._adv(dt, fpsMap[f.state] || 8);
+        }
     }
 
     function resolveHit(attacker, defender, shake, fx) {
@@ -485,10 +556,10 @@ window.FightGame = (function () {
             assetsPromise = Promise.all([
                 loadFighterAnims('reiffer'),
                 loadFighterAnims('conmen'),
-                loadArenaBackground(),
             ]);
         }
-        const [reifferAnims, conmenAnims, bg] = await assetsPromise;
+        const [reifferAnims, conmenAnims] = await assetsPromise;
+        const bg = await loadArenaBackground(); // always fresh - depends on whichever theme is active right now, not cached
         const anims = { reiffer: reifferAnims, conmen: conmenAnims };
 
         let g = newGame(anims, bg);
