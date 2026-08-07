@@ -70,8 +70,9 @@ const COSMETIC_THEMES = [
             if (typeof walletAddress !== 'undefined' && walletAddress && typeof window.checkTokenHolding === 'function') {
                 holds = await window.checkTokenHolding(walletAddress, MIM_SOL_MINT);
             }
-            if (!holds && typeof btcWalletAddress !== 'undefined' && btcWalletAddress && typeof window.checkBitcoinWizardsOwnership === 'function') {
-                holds = await window.checkBitcoinWizardsOwnership();
+            if (!holds && typeof btcWalletAddress !== 'undefined' && btcWalletAddress) {
+                if (typeof window.checkMimRuneHolding === 'function') holds = await window.checkMimRuneHolding();
+                if (!holds && typeof window.checkBitcoinWizardsOwnership === 'function') holds = await window.checkBitcoinWizardsOwnership();
             }
             return holds;
         },
@@ -126,6 +127,7 @@ function clearCosmeticThemes() {
     COSMETIC_THEMES.forEach((t) => { if (t.cssClass) document.body.classList.remove(t.cssClass); });
     document.getElementById("audioToggleBtn")?.classList.add("hidden");
     if (typeof stopMainThemeIfPlaying === "function") stopMainThemeIfPlaying();
+    if (typeof exitWin95Desktop === "function") exitWin95Desktop();
 }
 
 // Themes the currently-connected wallet actually owns (real ownership,
@@ -206,9 +208,12 @@ function updateOnlineLobbyAccess() {
 }
 
 function applyTheme(theme) {
-    clearCosmeticThemes();
+    clearCosmeticThemes(); // also exits Win95 desktop if it was active, so switching straight between themes doesn't stack states
     if (theme.cssClass) document.body.classList.add(theme.cssClass);
     showToast(theme.toastMsg, "success");
+    if (theme.id === "mimwizard" && typeof enterWin95Desktop === "function") {
+        enterWin95Desktop();
+    }
     if (theme.id === "midevils" || theme.id === "conmen") {
         // Deliberately NOT unlocking bonusStageBtn here - the persistent
         // "Play mini game" header button is TEST Play only now. Every real
@@ -727,15 +732,18 @@ function renderThemePreviewButtons() {
 }
 
 function previewTheme(themeId) {
-    clearCosmeticThemes();
+    clearCosmeticThemes(); // also exits Win95 desktop if it was active
     if (!themeId) {
         showToast("Preview reset to normal.", "info");
         return;
     }
     const theme = COSMETIC_THEMES.find((t) => t.id === themeId);
     if (!theme) return;
-    document.body.classList.add(theme.cssClass);
+    if (theme.cssClass) document.body.classList.add(theme.cssClass);
     showToast(`Previewing: ${theme.label} (not a real ownership check)`, "info");
+    if (theme.id === "mimwizard" && typeof enterWin95Desktop === "function") {
+        enterWin95Desktop();
+    }
 }
 
 function openThemePreview() {
