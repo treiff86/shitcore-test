@@ -583,6 +583,20 @@ function shortAddr(addr) {
     return addr ? `${addr.slice(0, 4)}...${addr.slice(-4)}` : "";
 }
 
+// .sol domain names are registered by whoever owns them - nothing stops a
+// malicious one containing HTML. Anywhere a resolved domain name (or any
+// other externally-sourced string) gets inserted via innerHTML instead of
+// innerText, it needs to go through this first.
+function escapeHtml(str) {
+    if (str == null) return "";
+    return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+
 function displayName() {
     return walletSolDomain || shortAddr(walletAddress);
 }
@@ -708,7 +722,7 @@ async function renderLeaderboard() {
 
     box.innerHTML = data.map((row, i) => `
         <div class="flex justify-between items-center text-[11px] border-b border-[#1A2232] py-1.5 ${row.wallet_address === walletAddress ? "text-amber-400" : "text-gray-300"}">
-            <span>#${i + 1} <strong>${row.display_name || shortAddr(row.wallet_address)}</strong> ${row.wallet_address === walletAddress ? "(you)" : ""}</span>
+            <span>#${i + 1} <strong>${row.display_name ? escapeHtml(row.display_name) : shortAddr(row.wallet_address)}</strong> ${row.wallet_address === walletAddress ? "(you)" : ""}</span>
             <span class="font-mono">$${Math.round(row.lifetime_earned).toLocaleString()}</span>
         </div>
     `).join("");
