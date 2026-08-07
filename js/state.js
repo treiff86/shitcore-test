@@ -113,6 +113,33 @@ function refreshFundsToStart() {
     if (typeof showToast === "function") showToast("💸 Funds refreshed to $1,000.", "info");
 }
 
+/* ---------------- Zero-balance choice ---------------- */
+// Triggered from updateUI() whenever cash is at/under $0. Guarded so it
+// only pops once per "run" of being broke - if they play Bonus Stage and
+// end up back at $0 later, it's allowed to show again.
+let zeroBalanceModalShown = false;
+
+function maybeShowZeroBalanceModal() {
+    if (zeroBalanceModalShown || state.cash > 0) return;
+    zeroBalanceModalShown = true;
+    document.getElementById('zeroBalanceModal')?.classList.remove('hidden');
+    if (typeof playSound === 'function') playSound('alarm');
+}
+
+function closeZeroBalanceModalForBonusStage() {
+    zeroBalanceModalShown = false; // could hit $0 again after playing - let it show again if so
+    document.getElementById('zeroBalanceModal')?.classList.add('hidden');
+    if (typeof openBonusStage === 'function') openBonusStage();
+}
+
+// Deliberately the same full reset as the existing Reset Game flow
+// (resetGame(), via restartGame()) - NOT refreshFundsToStart(), which
+// keeps Rugged Savings on purpose. "Start from the beginning" means
+// Rugged Savings goes back to 0 too, along with everything else.
+function confirmZeroBalanceGameOver() {
+    if (typeof restartGame === 'function') restartGame();
+}
+
 function addCash(amount) {
     if (isNaN(amount) || amount <= 0) return;
     state.cash += amount;
