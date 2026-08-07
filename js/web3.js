@@ -270,6 +270,7 @@ function choosePlayMode(mode) {
         document.getElementById("fightGameBtn")?.classList.remove("hidden");
         document.getElementById("onlineLobbySoonOverlay")?.classList.add("hidden");
         document.getElementById("onlineLobbySoonBadge")?.classList.add("hidden");
+        document.getElementById("btcWalletConnectBtn")?.classList.remove("hidden");
         openThemePreview();
         showToast("🧪 TEST PLAY active - all testing tools unlocked.", "info");
     } else {
@@ -279,6 +280,10 @@ function choosePlayMode(mode) {
         // holds more than one gated collection. Nothing about this call
         // is different for the master wallet.
         applyCosmeticThemes(walletAddress, true);
+        document.getElementById("btcWalletConnectBtn")?.classList.add("hidden");
+        if (typeof disconnectBitcoinWallet === "function" && typeof btcWalletAddress !== "undefined" && btcWalletAddress) {
+            disconnectBitcoinWallet(); // BTC connectivity is TEST-only - don't let it carry over into a LIVE Play session
+        }
         showToast("▶️ LIVE PLAY active - this is exactly what a real player sees.", "info");
     }
     if (typeof updateUI === "function") updateUI(); // re-checks things like the zero-balance modal now that the picker is out of the way
@@ -565,6 +570,10 @@ function disconnectWallet() {
     document.getElementById("conmenEggTestBtn")?.classList.add("hidden");
     document.getElementById("debugMenuBtn")?.classList.add("hidden");
     document.getElementById("fightGameBtn")?.classList.add("hidden");
+    document.getElementById("btcWalletConnectBtn")?.classList.add("hidden");
+    if (typeof disconnectBitcoinWallet === "function" && typeof btcWalletAddress !== "undefined" && btcWalletAddress) {
+        disconnectBitcoinWallet();
+    }
     if (typeof resetGameStateInMemory === "function") resetGameStateInMemory();
     updateWalletUI();
     showToast("Wallet disconnected. Still playing locally.", "info");
