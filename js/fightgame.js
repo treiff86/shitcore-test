@@ -57,7 +57,7 @@ window.FightGame = (function () {
     // Shared per-attack-type numbers - jump/crouch variants borrow their
     // grounded counterpart's values until they get their own tuning.
     const ATTACK_BASE = { punch: 'punch_lo', kick: 'kick_lo' };
-    const DMG = { punch_lo: 14, kick_lo: 22 };
+    const DMG = { punch_lo: 5, kick_lo: 8 }; // tuned so continuous unblocked hitting takes ~20-30s to KO, not ~5 hits
     const ATK_DUR = { punch_lo: 0.26, kick_lo: 0.34 };
     const HEAVY = new Set(['kick_lo']);
     const HS_LT = 5, HS_HV = 9;
@@ -100,7 +100,6 @@ window.FightGame = (function () {
     const MAX_HP = 100;
     const VICTORY_FPS = 8;
     const DEFEAT_FPS = 7;
-    const AUTO_CLOSE_SECONDS = 3.0;
     const INTRO_DURATION = 1.0; // seconds the "FIGHT!" card holds before a round starts
     const HURT_FLASH_T = 0.22;
 
@@ -437,7 +436,6 @@ window.FightGame = (function () {
             timer: ROUND_T,
             phase: 'intro', // intro | playing | p1win | p2win | draw
             introT: 0,
-            closeCountdown: null,
         };
     }
 
@@ -705,17 +703,9 @@ window.FightGame = (function () {
         drawOutlinedText(ctx, title, SW / 2 - tw / 2, SH / 2 - 70, col);
 
         ctx.font = "13px 'BonusStagePixel', monospace";
-        const h = 'ENTER = Rematch    ESC = Quit';
+        const h = 'ESC = Quit';
         const hw = ctx.measureText(h).width;
         drawOutlinedText(ctx, h, SW / 2 - hw / 2, SH / 2 + 60, COL.W);
-
-        if (g.closeCountdown !== null) {
-            const secs = Math.max(0, Math.ceil(g.closeCountdown));
-            const c = `Closing in ${secs}...`;
-            ctx.font = "12px 'BonusStagePixel', monospace";
-            const cw = ctx.measureText(c).width;
-            drawOutlinedText(ctx, c, SW / 2 - cw / 2, SH / 2 + 84, COL.W);
-        }
     }
 
     // Pre-round "FIGHT!" card: punches in big, holds, fades out. Fighters
@@ -793,9 +783,6 @@ window.FightGame = (function () {
             keys[k] = true;
 
             if (ev.key === 'Escape') { if (typeof window.closeFightGame === 'function') window.closeFightGame(); return; }
-            if ((g.phase === 'p1win' || g.phase === 'p2win' || g.phase === 'draw') && ev.key === 'Enter') {
-                g = newGame(anims, bg);
-            }
         };
         onKeyUp = (ev) => { keys[normKey(ev.key)] = false; };
         window.addEventListener('keydown', onKeyDown);
@@ -823,7 +810,6 @@ window.FightGame = (function () {
                 resolveHit(p2, p1, shake, fx);
 
                 if (p1.ko || p2.ko) {
-                    g.closeCountdown = AUTO_CLOSE_SECONDS;
                     if (p2.ko && !p1.ko) {
                         g.phase = 'p1win'; p1.state = 'victory'; p1.fr = 0; p1.hurtT = 0;
                         p2.state = 'defeat'; p2.fr = 0; p2.hurtT = 0;
@@ -835,7 +821,6 @@ window.FightGame = (function () {
                     }
                 } else if (g.timer <= 0) {
                     g.timer = 0;
-                    g.closeCountdown = AUTO_CLOSE_SECONDS;
                     if (p1.hp > p2.hp) { g.phase = 'p1win'; p1.state = 'victory'; p2.state = 'defeat'; }
                     else if (p2.hp > p1.hp) { g.phase = 'p2win'; p2.state = 'victory'; p1.state = 'defeat'; }
                     else { g.phase = 'draw'; }
@@ -853,13 +838,6 @@ window.FightGame = (function () {
                     if (loser.fr < n - 1) {
                         loser.frT += dt;
                         if (loser.frT >= 1 / DEFEAT_FPS) { loser.frT = 0; loser.fr = Math.min(n - 1, loser.fr + 1); }
-                    }
-                }
-                if (g.closeCountdown !== null) {
-                    g.closeCountdown -= dt;
-                    if (g.closeCountdown <= 0) {
-                        if (typeof window.closeFightGame === 'function') window.closeFightGame();
-                        return;
                     }
                 }
             }
