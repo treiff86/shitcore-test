@@ -79,7 +79,7 @@ async function renderLobbyRooms() {
 
     box.innerHTML = data.map(room => `
         <div class="flex justify-between items-center text-xs border-b border-[#1A2232] py-2">
-            <span>${room.host_name || shortAddr(room.host_wallet)}'s room</span>
+            <span>${room.host_name ? escapeHtml(room.host_name) : shortAddr(room.host_wallet)}'s room</span>
             ${room.host_session === mySessionId
                 ? `<span class="text-gray-500 italic">Waiting for an opponent…</span>`
                 : `<button onclick="joinLobbyRoom('${room.id}')" class="bg-emerald-600/20 hover:bg-emerald-600/40 border border-emerald-500/30 text-emerald-300 rounded px-3 py-1 font-bold transition">Join</button>`}
