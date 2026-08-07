@@ -38,7 +38,7 @@
     <!-- FontAwesome icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Local styles (FIXED PATH) -->
-    <link rel="stylesheet" href="style.css?v=42">
+    <link rel="stylesheet" href="style.css?v=43">
     <link rel="stylesheet" href="bonusstage.css?v=7">
 </head>
 <body class="overflow-x-hidden min-h-screen flex flex-col justify-between">
@@ -336,7 +336,7 @@
         <!-- ================= MARKETS TAB ================= -->
         <section id="content-markets" class="space-y-6">
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div class="lg:col-span-2 bg-[#0C0F16] border border-[#1A2232] rounded-xl p-5 flex flex-col justify-between shadow-lg">
+                <div data-win95-window="SHITCORE_Chart.exe" class="lg:col-span-2 bg-[#0C0F16] border border-[#1A2232] rounded-xl p-5 flex flex-col justify-between shadow-lg">
                     <div>
                         <div class="flex items-center justify-between mb-4 gap-2">
                             <div class="flex items-center space-x-3">
@@ -368,7 +368,7 @@
                     </div>
                 </div>
 
-                <div class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-5 flex flex-col justify-between shadow-lg space-y-4">
+                <div data-win95-window="Orderbook.exe" class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-5 flex flex-col justify-between shadow-lg space-y-4">
                     <div>
                         <div class="border-b border-[#1A2232] pb-3 mb-3 flex items-center justify-between">
                             <h3 class="font-bold text-sm text-gray-200 mc-title-accent">Live Orderbook</h3>
@@ -399,7 +399,7 @@
                 </div>
             </div>
 
-            <div class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-4 shadow-lg">
+            <div data-win95-window="ChainFeed.exe" class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-4 shadow-lg">
                 <div class="flex items-center justify-between mb-3">
                     <h4 class="text-sm font-semibold flex items-center gap-2">
                         <span>Live Shitcore Chain Feed</span>
@@ -816,7 +816,7 @@
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
             <!-- Lambo + Level progress -->
-            <div class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-5 shadow-lg space-y-5">
+            <div data-win95-window="LamboTracker.exe" class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-5 shadow-lg space-y-5">
                 <div>
                     <h4 class="font-bold text-xs uppercase text-amber-500 tracking-widest mb-2"><i class="fa-solid fa-car"></i> Lambo Target Tracker</h4>
                     <div class="bg-[#10141D] p-4 rounded-lg border border-[#1A2232] space-y-3 mc-inset-panel">
@@ -845,14 +845,14 @@
             </div>
 
             <!-- Perk shop -->
-            <div class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-5 shadow-lg">
+            <div data-win95-window="PerkShop.exe" class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-5 shadow-lg">
                 <h4 class="font-bold text-xs uppercase text-emerald-400 tracking-widest mb-3"><i class="fa-solid fa-cart-shopping"></i> Perk Shop (Permanent Upgrades)</h4>
                 <div id="perkShopContainer" class="space-y-2.5"></div>
             </div>
         </div>
 
         <!-- Victim leaderboard -->
-        <div class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-5 shadow-lg mt-6">
+        <div data-win95-window="VictimHOF.exe" class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-5 shadow-lg mt-6">
             <h4 class="font-bold text-xs uppercase text-rose-500 tracking-widest mb-3"><i class="fa-solid fa-skull"></i> Live Degen Victim Hall of Fame</h4>
             <div id="victimLeaderboard" class="bg-[#10141D] p-4 rounded-lg border border-[#1A2232] space-y-2 max-h-[160px] overflow-y-auto text-xs mono mc-inset-panel">
                 <div class="text-gray-500 italic text-[11px]">No rugs pulled yet. Get to work.</div>
@@ -1213,8 +1213,9 @@
 <script src="js/fightgame.js?v=10" defer></script>
 <script src="js/conmen-egg.js?v=4" defer></script>
 <script src="js/mcdonalds-egg.js?v=4" defer></script>
-<script src="js/web3.js?v=29" defer></script>
-<script src="js/btcwallet.js?v=1" defer></script>
+<script src="js/web3.js?v=31" defer></script>
+<script src="js/win95desktop.js?v=1" defer></script>
+<script src="js/btcwallet.js?v=2" defer></script>
 <script src="js/onlinelobby.js?v=3" defer></script>
 <script type="module" src="js/sns.js?v=5"></script>
 <script type="module" src="js/nftgate.js?v=3"></script>
