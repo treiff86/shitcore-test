@@ -81,6 +81,7 @@ window.FightGame = (function () {
     const VICTORY_FPS = 8;
     const DEFEAT_FPS = 7;
     const AUTO_CLOSE_SECONDS = 3.0;
+    const INTRO_DURATION = 1.0; // seconds the "FIGHT!" card holds before a round starts
     const HURT_FLASH_T = 0.22;
 
     const COL = {
@@ -351,7 +352,8 @@ window.FightGame = (function () {
         return {
             p1, p2, bg,
             timer: ROUND_T,
-            phase: 'playing', // playing | p1win | p2win | draw
+            phase: 'intro', // intro | playing | p1win | p2win | draw
+            introT: 0,
             closeCountdown: null,
         };
     }
@@ -547,6 +549,48 @@ window.FightGame = (function () {
         }
     }
 
+    // Pre-round "FIGHT!" card: punches in big, holds, fades out. Fighters
+    // are drawn already-idle behind it (see frame()) since update() isn't
+    // called for either player during 'intro', so they just stand ready.
+    function drawIntro(ctx, g) {
+        const growEnd = 0.15;
+        const fadeStart = INTRO_DURATION - 0.2;
+        const t = g.introT;
+        let scale = 1, alpha = 1;
+        if (t < growEnd) {
+            const p = t / growEnd;
+            scale = 1.7 - 0.7 * p; // punches in from big to normal size
+            alpha = p;
+        } else if (t > fadeStart) {
+            const p = (t - fadeStart) / (INTRO_DURATION - fadeStart);
+            alpha = 1 - p;
+        }
+        alpha = Math.max(0, Math.min(1, alpha));
+
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = "62px 'BonusStagePixel', monospace";
+        ctx.translate(SW / 2, SH / 2 - 20);
+        ctx.scale(scale, scale);
+
+        const text = 'FIGHT!';
+        // Chunky outline: same pixel font used everywhere else in the game,
+        // just stamped 8x behind in dark before the bright fill on top -
+        // no separate outlined font/asset needed for the arcade look.
+        ctx.fillStyle = COL.DK;
+        for (const [ox, oy] of [[-4, -4], [4, -4], [-4, 4], [4, 4], [0, -4], [0, 4], [-4, 0], [4, 0]]) {
+            ctx.fillText(text, ox, oy);
+        }
+        ctx.fillStyle = COL.YL;
+        ctx.fillText(text, 0, 0);
+        ctx.restore();
+
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+    }
+
     // ---------------------------------------------------------------
     // MAIN LOOP
     // ---------------------------------------------------------------
@@ -580,7 +624,7 @@ window.FightGame = (function () {
             keys[k] = true;
 
             if (ev.key === 'Escape') { if (typeof window.closeFightGame === 'function') window.closeFightGame(); return; }
-            if (g.phase !== 'playing' && ev.key === 'Enter') {
+            if ((g.phase === 'p1win' || g.phase === 'p2win' || g.phase === 'draw') && ev.key === 'Enter') {
                 g = newGame(anims, bg);
             }
         };
@@ -594,7 +638,10 @@ window.FightGame = (function () {
             lastT = now;
             const so = shake.off(); shake.update();
 
-            if (g.phase === 'playing') {
+            if (g.phase === 'intro') {
+                g.introT += dt;
+                if (g.introT >= INTRO_DURATION) g.phase = 'playing';
+            } else if (g.phase === 'playing') {
                 g.timer -= dt;
                 const p1 = g.p1, p2 = g.p2;
 
@@ -667,7 +714,8 @@ window.FightGame = (function () {
             g.p1.draw(ctx, so);
             g.p2.draw(ctx, so);
             drawHUD(ctx, g);
-            if (g.phase !== 'playing') drawEnd(ctx, g);
+            if (g.phase === 'intro') drawIntro(ctx, g);
+            else if (g.phase !== 'playing') drawEnd(ctx, g);
 
             const leg = 'P1: AD Move  W Jump  S Crouch  Z Punch  X Kick  Space Block   |   P2: \u2190\u2192 Move  \u2191 Jump  \u2193 Crouch  Enter Punch  / Kick  Shift Block';
             ctx.font = "9px 'BonusStagePixel', monospace";
