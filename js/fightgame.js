@@ -159,20 +159,23 @@ window.FightGame = (function () {
         return frames;
     }
 
-    // Reiffer's original sprite set (walk/punch/kick/victory - not built by
-    // me, pre-existing) has a lot more empty padding baked into each frame
-    // than Conmen's tightly-cropped ones, so at the same P_H he renders
-    // visibly smaller standing side-by-side. This boosts his whole set
-    // uniformly to compensate - measured from content-fill ratio (his walk
-    // sprite is ~77% character vs Conmen's ~97%).
-    const CHAR_SIZE_CORRECTION = { reiffer: 1.255, conmen: 1.0 };
+    // Only Reiffer's ORIGINAL sprites (walk/victory/punch_lo/kick_lo/hurt -
+    // not built by me, pre-existing) have the extra padding problem and
+    // need the size boost. Everything I built this session for him
+    // (block, defeat, jump, crouch, jump_punch, jump_kick, crouch_kick,
+    // crouch_punch) was already scaled to his true reference size directly
+    // - applying the correction to those too was the bug that made his
+    // crouch (and other new poses) render oversized.
+    const REIFFER_LEGACY_PADDED_STATES = new Set(['walk', 'victory', 'punch_lo', 'kick_lo', 'hurt']);
+    const REIFFER_SIZE_CORRECTION = 1.255;
 
     async function loadFighterAnims(key) {
         const files = FIGHTER_ANIM_FILES[key];
-        const outH = P_H * (CHAR_SIZE_CORRECTION[key] || 1.0);
         const anims = {};
         for (const state in files) {
             const [path, count] = files[state];
+            const needsCorrection = key === 'reiffer' && REIFFER_LEGACY_PADDED_STATES.has(state);
+            const outH = needsCorrection ? P_H * REIFFER_SIZE_CORRECTION : P_H;
             anims[state] = await loadStrip(path, count, outH);
         }
         anims.idle = anims.walk.length ? [anims.walk[0]] : [];
