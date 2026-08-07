@@ -74,8 +74,28 @@ window.FightGame = (function () {
         return state === 'punch_lo' || state === 'kick_lo' || state === 'jump_punch' || state === 'jump_kick' || state === 'crouch_punch' || state === 'crouch_kick';
     }
 
-    const BLOCK_REDUCTION_MIN = 0.60;
-    const BLOCK_REDUCTION_MAX = 0.90;
+    // ---------------- Guard meter, chip damage, guard break ----------------
+    // Blocking is free (0 damage) while the guard meter has charge. Each
+    // blocked hit costs GUARD_COST_PER_BLOCK, so GUARD_METER_MAX / cost =
+    // how many hits you can block for free before it runs out (5 at these
+    // numbers). Once empty, further blocked hits deal chip damage that
+    // scales from 1% to 10% of max HP over CHIP_BLOCKS_TO_BREAK more hits,
+    // then Guard Break triggers.
+    const GUARD_METER_MAX = 100;
+    const GUARD_COST_PER_BLOCK = 20;
+    const CHIP_BLOCKS_TO_BREAK = 5;
+    const CHIP_DMG_MIN_PCT = 0.01;
+    const CHIP_DMG_MAX_PCT = 0.10;
+    const GUARD_BREAK_DURATION = 1.5;   // seconds fully vulnerable after a guard break
+    const GUARD_REGEN_DELAY = 2.0;      // seconds without blocking/taking a hit before the meter starts refilling
+    const GUARD_REGEN_RATE = 40;        // meter points per second once regen kicks in
+
+    // ---------------- Counter hits & combo scaling ----------------
+    const COUNTER_HIT_MULT = 1.25;      // bonus damage for interrupting an opponent's attack startup
+    const COUNTER_HIT_EXTRA_STOP = 4;   // extra hitstop frames on a counter hit, on top of the normal HS_LT/HS_HV
+    const COMBO_SCALE_STEP = 0.08;      // each hit after the first in a combo deals ~8% less
+    const COMBO_MIN_SCALE = 0.5;        // combo scaling never drops a hit below 50% of its base damage
+    const COMBO_WINDOW = 0.6;           // seconds after a hit lands where the next hit still counts as the same combo
 
     const MAX_HP = 100;
     const VICTORY_FPS = 8;
@@ -242,6 +262,17 @@ window.FightGame = (function () {
             this.hurtT = 0;
             this.heliT = 0;
             this.ko = false;
+
+            // Guard meter / chip damage / guard break
+            this.guardMeter = GUARD_METER_MAX;
+            this.chipBlockCount = 0;
+            this.guardBroken = false;
+            this.guardBreakT = 0;
+            this.timeSinceBlockOrHit = GUARD_REGEN_DELAY; // starts "already recovered"
+
+            // Combo scaling
+            this.comboCounter = 0;
+            this.comboWindowT = 0;
         }
 
         rect() {
@@ -278,20 +309,61 @@ window.FightGame = (function () {
             this.atkDur = ATK_DUR[baseAttackKind(kind)];
         }
 
-        takeDamage(rawDmg, heavy) {
-            let dmg = rawDmg;
-            if (this.blocking) {
-                const reduction = BLOCK_REDUCTION_MIN + Math.random() * (BLOCK_REDUCTION_MAX - BLOCK_REDUCTION_MIN);
-                dmg = rawDmg * (1 - reduction);
-            }
-            dmg = Math.round(dmg);
-            this.hp = Math.max(0, this.hp - dmg);
-            if (!this.blocking) {
+        // rawDmg has already had counter-hit and combo scaling applied by
+        // resolveHit() by the time it gets here - this method's only job is
+        // deciding how blocking/guard state affects it.
+        takeDamage(rawDmg, heavy, isCounterHit) {
+            let dmg;
+            if (this.guardBroken) {
+                // Fully vulnerable - blocking isn't possible during a guard
+                // break, so this always behaves like an unblocked hit.
+                dmg = Math.round(rawDmg);
                 this.hurtT = HURT_FLASH_T;
-                this.stop = heavy ? HS_HV : HS_LT;
+                this.stop = (heavy ? HS_HV : HS_LT) + (isCounterHit ? COUNTER_HIT_EXTRA_STOP : 0);
+                this.timeSinceBlockOrHit = 0;
+            } else if (this.blocking) {
+                this.timeSinceBlockOrHit = 0;
+                if (this.guardMeter > 0) {
+                    // Free block - guard meter absorbs it instead of health.
+                    this.guardMeter = Math.max(0, this.guardMeter - GUARD_COST_PER_BLOCK);
+                    dmg = 0;
+                } else {
+                    // Guard's empty - chip damage scales up the longer they
+                    // keep leaning on block instead of recovering it.
+                    this.chipBlockCount++;
+                    const t = Math.min(1, this.chipBlockCount / CHIP_BLOCKS_TO_BREAK);
+                    const chipPct = CHIP_DMG_MIN_PCT + t * (CHIP_DMG_MAX_PCT - CHIP_DMG_MIN_PCT);
+                    dmg = Math.round(MAX_HP * chipPct);
+                    if (this.chipBlockCount >= CHIP_BLOCKS_TO_BREAK) this.triggerGuardBreak();
+                }
+            } else {
+                dmg = Math.round(rawDmg);
+                this.hurtT = HURT_FLASH_T;
+                this.stop = (heavy ? HS_HV : HS_LT) + (isCounterHit ? COUNTER_HIT_EXTRA_STOP : 0);
+                this.timeSinceBlockOrHit = 0;
+                // A clean non-blocked hit also resets guard - no reason to
+                // stay "worn down" from blocking once they've eaten a real hit.
+                this.chipBlockCount = 0;
             }
+
+            this.hp = Math.max(0, this.hp - dmg);
             if (this.hp <= 0) this.ko = true;
             return dmg;
+        }
+
+        // Dizzy/stagger state: fully vulnerable, can't block or attack, for
+        // GUARD_BREAK_DURATION seconds. Reuses the 'hurt' pose since there's
+        // no dedicated dizzy sprite - the "GUARD BREAK!" callout in drawHUD
+        // and the stars effect are what actually sell the moment.
+        triggerGuardBreak() {
+            this.guardBroken = true;
+            this.guardBreakT = GUARD_BREAK_DURATION;
+            this.blocking = false;
+            this.guardMeter = 0;
+            this.chipBlockCount = 0;
+            this.state = 'hurt';
+            this.fr = 0;
+            if (typeof showToast === 'function') showToast('💥 Guard Break!', 'error');
         }
 
         _adv(dt, fps) {
@@ -384,12 +456,15 @@ window.FightGame = (function () {
     // fighter given its own key bindings. Shared by both players so P1
     // and P2 behave identically, just reading different keys.
     function updateHumanFighter(dt, f, bind) {
+        if (f.guardBroken) return; // fully vulnerable, no input accepted - see updateFighterCommon for the countdown
+
         const blockHeld = !!(keys[bind.block]);
         const attacking = isAttackState(f.state);
 
         f.blocking = blockHeld && !attacking && f.grounded;
         if (f.blocking) {
             f.state = 'block'; f.fr = 0;
+            f.timeSinceBlockOrHit = 0; // holding block also resets the recovery clock, not just getting hit while blocking
             return;
         }
 
@@ -455,6 +530,37 @@ window.FightGame = (function () {
     }
 
     function updateFighterCommon(dt, f) {
+        // Guard break countdown - once it expires they're back to normal,
+        // guard meter already reset to 0 by triggerGuardBreak() so they have
+        // to earn it back like anyone else who got chipped down.
+        if (f.guardBroken) {
+            f.guardBreakT -= dt;
+            if (f.hurtT > 0) f.hurtT = Math.max(0, f.hurtT - dt);
+            if (f.guardBreakT <= 0) {
+                f.guardBroken = false;
+                f.state = f.grounded ? 'idle' : 'jump';
+                f.fr = 0;
+            }
+            return; // no attack/animation timers to advance while dizzy
+        }
+
+        // Guard meter regen - only once GUARD_REGEN_DELAY has passed since
+        // they last blocked or got hit, and only while they're not
+        // currently holding block (matches "not blocking or taking damage").
+        f.timeSinceBlockOrHit += dt;
+        if (!f.blocking && f.timeSinceBlockOrHit >= GUARD_REGEN_DELAY && f.guardMeter < GUARD_METER_MAX) {
+            f.guardMeter = Math.min(GUARD_METER_MAX, f.guardMeter + GUARD_REGEN_RATE * dt);
+            if (f.guardMeter >= GUARD_METER_MAX) f.chipBlockCount = 0; // fully recovered - clean slate
+        }
+
+        // Combo window - if nothing else lands within COMBO_WINDOW seconds
+        // of the last hit, the next hit starts a fresh combo instead of
+        // extending this one.
+        if (f.comboWindowT > 0) {
+            f.comboWindowT = Math.max(0, f.comboWindowT - dt);
+            if (f.comboWindowT === 0) f.comboCounter = 0;
+        }
+
         const heliActive = f.heliT > 0 && f.state === 'jump_kick';
         if (isAttackState(f.state) && !heliActive) {
             f.atkT += dt;
@@ -488,12 +594,32 @@ window.FightGame = (function () {
         if (aabbOverlap(hb, defender.rect())) {
             attacker.hitReg = true;
             const heavy = HEAVY.has(baseAttackKind(attacker.state));
-            defender.takeDamage(DMG[baseAttackKind(attacker.state)] || 10, heavy);
+            const baseDmg = DMG[baseAttackKind(attacker.state)] || 10;
+
+            // Counter hit: defender was already mid-attack (committed,
+            // hasn't landed their own hit yet) when this connected -
+            // interrupting a startup earns bonus damage and extra hitstun.
+            const isCounterHit = isAttackState(defender.state) && !defender.hitReg && !defender.guardBroken;
+            let dmg = isCounterHit ? baseDmg * COUNTER_HIT_MULT : baseDmg;
+
+            // Combo scaling only applies to genuinely unguarded hits -
+            // blocked hits (free or chip) are a guard mechanic, not a combo.
+            if (!defender.blocking) {
+                defender.comboCounter = defender.comboWindowT > 0 ? defender.comboCounter + 1 : 1;
+                defender.comboWindowT = COMBO_WINDOW;
+                const scale = Math.max(COMBO_MIN_SCALE, 1 - (defender.comboCounter - 1) * COMBO_SCALE_STEP);
+                dmg *= scale;
+            }
+
+            defender.takeDamage(dmg, heavy, isCounterHit);
             attacker.stop = heavy ? HS_HV : HS_LT;
             shake.hit(heavy ? 7.0 : 3.2);
             fx.push({ x: hb.x + hb.w / 2, y: hb.y + hb.h / 2, l: heavy ? 9 : 6, ml: heavy ? 9 : 6, heavy });
             if (typeof window.playSound === 'function') {
                 window.playSound(defender.blocking ? 'fryer_hit' : 'player_hurt');
+            }
+            if (isCounterHit && typeof showToast === 'function') {
+                showToast('⚡ Counter Hit!', 'success');
             }
         }
     }
@@ -503,12 +629,32 @@ window.FightGame = (function () {
         drawBar(ctx, 24, 20, barW, barH, g.p1.hp / MAX_HP, COL.GN, 'P1', false);
         drawBar(ctx, SW - 24 - barW, 20, barW, barH, g.p2.hp / MAX_HP, COL.BL, 'P2', true);
 
+        // Guard meter - thin bar under each health bar. Gold while it has
+        // charge (blocking's still free), red once empty (chip damage zone)
+        // or during an active Guard Break.
+        const guardBarH = 6, guardBarY = 20 + barH + 4;
+        drawGuardBar(ctx, 24, guardBarY, barW, guardBarH, g.p1, false);
+        drawGuardBar(ctx, SW - 24 - barW, guardBarY, barW, guardBarH, g.p2, true);
+
         ctx.textBaseline = 'top';
         ctx.font = "20px 'BonusStagePixel', monospace";
         ctx.fillStyle = COL.W;
         const t = Math.max(0, Math.ceil(g.timer));
         const tw = ctx.measureText(String(t)).width;
         ctx.fillText(String(t), SW / 2 - tw / 2, 18);
+    }
+
+    function drawGuardBar(ctx, x, y, w, h, fighter, rightAlign) {
+        const pct = fighter.guardBroken ? 0 : Math.max(0, Math.min(1, fighter.guardMeter / GUARD_METER_MAX));
+        const empty = fighter.guardBroken || fighter.guardMeter <= 0;
+        ctx.fillStyle = COL.DK;
+        ctx.fillRect(x, y, w, h);
+        const fillW = w * pct;
+        ctx.fillStyle = empty ? COL.RD : COL.YL;
+        ctx.fillRect(rightAlign ? x + w - fillW : x, y, fillW, h);
+        ctx.strokeStyle = COL.W;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x, y, w, h);
     }
 
     function drawBar(ctx, x, y, w, h, pct, color, label, rightAlign) {
