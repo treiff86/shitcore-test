@@ -121,6 +121,11 @@ let zeroBalanceModalShown = false;
 
 function maybeShowZeroBalanceModal() {
     if (zeroBalanceModalShown || state.cash > 0) return;
+    // Don't cover the LIVE/TEST picker while the master wallet still has an
+    // unresolved choice to make there - this fires again once that's picked
+    // and cash is still $0 by then (updateUI() runs again after).
+    const playModeModal = document.getElementById('playModeModal');
+    if (playModeModal && !playModeModal.classList.contains('hidden')) return;
     zeroBalanceModalShown = true;
     document.getElementById('zeroBalanceModal')?.classList.remove('hidden');
     if (typeof playSound === 'function') playSound('alarm');
