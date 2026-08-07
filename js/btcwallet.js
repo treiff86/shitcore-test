@@ -139,10 +139,66 @@ window.checkSkullXOrigins = async function () {
     });
 };
 
-// Bitcoin Wizards - STUB. Waiting on the collection's parent inscription
-// ID (or official inscription range, if it doesn't use parent-child)
-// before this can actually check anything. Always returns false until
-// filled in.
+/* ============================================================
+   ORDISCAN API — collections by slug + rune balances
+   ============================================================
+   Separate from the wallet-native checks above. Needed for two
+   things the wallet's own API can't do: (1) recognize "Gallery"
+   groupings like Bitcoin Wizards and most of Skull X, which
+   aren't true on-chain parent-child so ord_getInscriptions can't
+   see them, and (2) check Rune balances (a different asset type
+   than inscriptions entirely). Requires a free API key from
+   ordiscan.com.
+   ============================================================ */
+
+const ORDISCAN_API_KEY = "abe0d88c-74bd-4828-8f8b-ed7b66efafd7";
+const ORDISCAN_BASE = "https://api.ordiscan.com/v1";
+
+async function ordiscanFetch(path) {
+    try {
+        const res = await fetch(`${ORDISCAN_BASE}${path}`, {
+            headers: { Authorization: `Bearer ${ORDISCAN_API_KEY}` },
+        });
+        if (!res.ok) {
+            console.warn(`[btcwallet] Ordiscan returned HTTP ${res.status} for ${path}`);
+            return null;
+        }
+        return await res.json();
+    } catch (e) {
+        console.warn(`[btcwallet] Ordiscan request failed for ${path}:`, e);
+        return null;
+    }
+}
+
+// Checks the connected BTC wallet's own inscriptions (via Ordiscan, which
+// includes each one's collection_slug) for a match against the given
+// collection slug. Works for "Gallery"-style groupings that the wallet's
+// own API can't see, as long as Ordiscan has that collection indexed
+// under this exact slug.
+async function checkOrdiscanCollection(slug) {
+    if (!btcWalletAddress) return false;
+    const data = await ordiscanFetch(`/address/${btcWalletAddress}/inscriptions`);
+    if (!Array.isArray(data)) return false;
+    return data.some(i => i.collection_slug === slug);
+}
+
+// Checks the connected BTC wallet's Rune balance for a real amount > 0 of
+// the given rune (name WITHOUT the bullet spacers, e.g. "MAGICINTERNETMONEY").
+async function checkOrdiscanRune(runeName) {
+    if (!btcWalletAddress) return false;
+    const data = await ordiscanFetch(`/address/${btcWalletAddress}/runes`);
+    if (!Array.isArray(data)) return false;
+    return data.some(r => r.name === runeName && BigInt(r.balance || "0") > 0n);
+}
+
+// Bitcoin Wizards - confirmed real slug on Ordiscan (verified against
+// ordiscan.com/collection/bitcoin-wizards directly), so this replaces the
+// stub above for real.
 window.checkBitcoinWizardsOwnership = async function () {
-    return false;
+    return await checkOrdiscanCollection("bitcoin-wizards");
+};
+
+// $MIM rune on Bitcoin (Rune #17, MAGIC•INTERNET•MONEY, id 840000:45).
+window.checkMimRuneHolding = async function () {
+    return await checkOrdiscanRune("MAGICINTERNETMONEY");
 };
