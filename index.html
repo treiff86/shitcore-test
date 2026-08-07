@@ -131,6 +131,12 @@
                 <button id="walletConnectBtn" title="Connect a wallet to save your progress and appear on the leaderboard - read-only, never asks you to sign a transaction" class="text-gray-400 hover:text-emerald-400 transition text-[10px] font-bold border border-[#1A2232] rounded px-2 py-1.5 whitespace-nowrap">
                     Connect Wallet
                 </button>
+                <button id="btcWalletConnectBtn" onclick="document.getElementById('btcWalletChoiceModal')?.classList.remove('hidden')" title="Connect a Bitcoin wallet (Xverse or UniSat) to unlock Ordinals-gated content" class="text-gray-400 hover:text-orange-400 transition text-[10px] font-bold border border-[#1A2232] rounded px-2 py-1.5 whitespace-nowrap">
+                    🟠 BTC
+                </button>
+                <button id="btcWalletDisplay" onclick="disconnectBitcoinWallet()" title="Click to disconnect" class="hidden text-orange-400 hover:text-rose-400 transition text-[10px] font-bold border border-[#1A2232] rounded px-2 py-1.5 whitespace-nowrap">
+                    🟠 <span id="btcWalletAddressText"></span>
+                </button>
                 <button id="resetGameBtn" title="Refresh your funds to $1,000" class="text-gray-500 hover:text-rose-400 transition text-xs border border-[#1A2232] rounded px-2 py-1.5">
                     <i class="fa-solid fa-arrows-rotate"></i>
                 </button>
@@ -957,6 +963,21 @@
         </div>
     </div>
 
+    <!-- Bitcoin wallet provider choice - separate from the Solana connect
+         flow entirely. Ordinals-gated content (Skull X, Bitcoin Wizards)
+         checks whichever Bitcoin wallet gets connected here. -->
+    <div id="btcWalletChoiceModal" class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 hidden p-4">
+        <div class="bg-[#0C0F16] border border-orange-500/40 max-w-sm w-full p-6 rounded-xl shadow-2xl space-y-3">
+            <div class="flex items-center justify-between">
+                <h3 class="text-orange-400 font-black text-lg tracking-tight">🟠 Connect Bitcoin Wallet</h3>
+                <button onclick="document.getElementById('btcWalletChoiceModal')?.classList.add('hidden')" class="text-gray-500 hover:text-white text-xl leading-none">&times;</button>
+            </div>
+            <p class="text-[10px] text-gray-500">Unlocks Ordinals-gated content (Skull X, Bitcoin Wizards). Read-only, never asks you to sign a transaction.</p>
+            <button onclick="document.getElementById('btcWalletChoiceModal')?.classList.add('hidden'); connectXverse();" class="w-full py-2.5 bg-orange-600/20 hover:bg-orange-600/40 border border-orange-500/30 text-orange-300 rounded font-bold text-sm transition">Xverse</button>
+            <button onclick="document.getElementById('btcWalletChoiceModal')?.classList.add('hidden'); connectUnisat();" class="w-full py-2.5 bg-orange-600/20 hover:bg-orange-600/40 border border-orange-500/30 text-orange-300 rounded font-bold text-sm transition">UniSat</button>
+        </div>
+    </div>
+
     <!-- Play Mode choice - master wallet only, shown every time it connects.
          LIVE PLAY = exactly what any real player experiences, no bypasses.
          TEST PLAY = every testing tool unlocked, plus the debug menu. -->
@@ -1192,7 +1213,8 @@
 <script src="js/fightgame.js?v=10" defer></script>
 <script src="js/conmen-egg.js?v=4" defer></script>
 <script src="js/mcdonalds-egg.js?v=4" defer></script>
-<script src="js/web3.js?v=28" defer></script>
+<script src="js/web3.js?v=29" defer></script>
+<script src="js/btcwallet.js?v=1" defer></script>
 <script src="js/onlinelobby.js?v=3" defer></script>
 <script type="module" src="js/sns.js?v=5"></script>
 <script type="module" src="js/nftgate.js?v=3"></script>
