@@ -533,30 +533,42 @@ window.FightGame = (function () {
         ctx.textBaseline = 'top';
     }
 
+    // Draws pixel-font text with a black outline + drop shadow so it stays
+    // readable over busy arena backgrounds no matter what's behind it.
+    // ctx.font/textAlign/textBaseline must already be set by the caller.
+    function drawOutlinedText(ctx, text, x, y, fillColor) {
+        ctx.fillStyle = 'rgba(0,0,0,0.55)';
+        ctx.fillText(text, x + 3, y + 3); // drop shadow
+        ctx.fillStyle = '#000000';
+        for (const [ox, oy] of [[-2, -2], [2, -2], [-2, 2], [2, 2], [0, -2], [0, 2], [-2, 0], [2, 0]]) {
+            ctx.fillText(text, x + ox, y + oy); // outline
+        }
+        ctx.fillStyle = fillColor;
+        ctx.fillText(text, x, y); // fill on top
+    }
+
     function drawEnd(ctx, g) {
         let title, col;
         if (g.phase === 'p1win') { title = 'PLAYER 1 WINS'; col = COL.GN; }
         else if (g.phase === 'p2win') { title = 'PLAYER 2 WINS'; col = COL.BL; }
-        else { title = 'DRAW'; col = COL.GY; }
+        else { title = 'DRAW'; col = COL.W; }
 
         ctx.textBaseline = 'top';
         ctx.font = "26px 'BonusStagePixel', monospace";
-        ctx.fillStyle = col;
         const tw = ctx.measureText(title).width;
-        ctx.fillText(title, SW / 2 - tw / 2, SH / 2 - 70);
+        drawOutlinedText(ctx, title, SW / 2 - tw / 2, SH / 2 - 70, col);
 
         ctx.font = "13px 'BonusStagePixel', monospace";
-        ctx.fillStyle = COL.GY;
         const h = 'ENTER = Rematch    ESC = Quit';
         const hw = ctx.measureText(h).width;
-        ctx.fillText(h, SW / 2 - hw / 2, SH / 2 + 60);
+        drawOutlinedText(ctx, h, SW / 2 - hw / 2, SH / 2 + 60, COL.W);
 
         if (g.closeCountdown !== null) {
             const secs = Math.max(0, Math.ceil(g.closeCountdown));
             const c = `Closing in ${secs}...`;
             ctx.font = "12px 'BonusStagePixel', monospace";
             const cw = ctx.measureText(c).width;
-            ctx.fillText(c, SW / 2 - cw / 2, SH / 2 + 84);
+            drawOutlinedText(ctx, c, SW / 2 - cw / 2, SH / 2 + 84, COL.W);
         }
     }
 
