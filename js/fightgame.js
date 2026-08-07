@@ -170,13 +170,24 @@ window.FightGame = (function () {
     const REIFFER_LEGACY_PADDED_STATES = new Set(['walk', 'victory', 'punch_lo', 'kick_lo', 'hurt']);
     const REIFFER_SIZE_CORRECTION = 1.255;
 
+    // Conmen's cloak flows almost to the ground even while he's crouching,
+    // so the crouch/crouch_punch source frames measure nearly as tall as
+    // his standing frames (the cloak fabric fills the frame regardless of
+    // pose) - without this he barely looks any shorter than standing.
+    // crouch_kick isn't listed here because it already measures noticeably
+    // shorter on its own. First-pass estimate - nudge the number if it
+    // still doesn't read as a crouch once you see it live.
+    const CONMEN_CROUCH_STATES = new Set(['crouch', 'crouch_punch']);
+    const CONMEN_CROUCH_CORRECTION = 0.87;
+
     async function loadFighterAnims(key) {
         const files = FIGHTER_ANIM_FILES[key];
         const anims = {};
         for (const state in files) {
             const [path, count] = files[state];
-            const needsCorrection = key === 'reiffer' && REIFFER_LEGACY_PADDED_STATES.has(state);
-            const outH = needsCorrection ? P_H * REIFFER_SIZE_CORRECTION : P_H;
+            let outH = P_H;
+            if (key === 'reiffer' && REIFFER_LEGACY_PADDED_STATES.has(state)) outH = P_H * REIFFER_SIZE_CORRECTION;
+            else if (key === 'conmen' && CONMEN_CROUCH_STATES.has(state)) outH = P_H * CONMEN_CROUCH_CORRECTION;
             anims[state] = await loadStrip(path, count, outH);
         }
         anims.idle = anims.walk.length ? [anims.walk[0]] : [];
