@@ -27,6 +27,10 @@ function getXverseProvider() {
 }
 
 async function connectXverse() {
+    if (typeof walletAddress !== 'undefined' && walletAddress) {
+        if (typeof showToast === 'function') showToast("Only one wallet at a time - disconnect your Solana wallet first.", "error");
+        return;
+    }
     const provider = getXverseProvider();
     if (!provider) {
         if (typeof showToast === 'function') showToast('Xverse not detected - install the extension first.', 'error');
@@ -48,6 +52,10 @@ async function connectXverse() {
 }
 
 async function connectUnisat() {
+    if (typeof walletAddress !== 'undefined' && walletAddress) {
+        if (typeof showToast === 'function') showToast("Only one wallet at a time - disconnect your Solana wallet first.", "error");
+        return;
+    }
     if (typeof window.unisat === 'undefined') {
         if (typeof showToast === 'function') showToast('UniSat not detected - install the extension first.', 'error');
         window.open('https://unisat.io/', '_blank');
