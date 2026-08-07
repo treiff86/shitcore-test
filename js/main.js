@@ -43,7 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const resetBtn = document.getElementById('resetGameBtn');
     if(resetBtn) {
         resetBtn.addEventListener('click', () => {
-            if(confirm("Refresh your funds back to $1,000? Your Degen Level, Rugged Savings, and perks stay as they are.")) {
+            if(confirm("Refresh your funds back to $1,000? Rugged Savings resets to $0 too. Your Degen Level and perks stay as they are.")) {
                 refreshFundsToStart();
             }
         });
