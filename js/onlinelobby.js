@@ -4,13 +4,15 @@
    This is just the "find and connect to an opponent" layer,
    relayed through Supabase Realtime (the same system already
    running the leaderboard) rather than a direct connection
-   between the two players. Actual live match input-syncing
-   (Stage 2) isn't built yet - joining a room right now proves
-   the connection pipeline genuinely works end to end, it doesn't
-   start a synced match.
+   between the two players. Once matched, both sides open the
+   local Fight Game as a "you're in, go fight" moment - but each
+   side is still its own independent local game instance. Real
+   input syncing between the two actual devices (Stage 2) isn't
+   built yet.
 
    Depends on sb / walletAddress / walletSolDomain / shortAddr /
-   showToast from web3.js, so this file must load AFTER web3.js.
+   showToast / openFightGame from web3.js, so this file must load
+   AFTER web3.js.
    ============================================================ */
 
 let lobbyChannel = null;
@@ -126,8 +128,9 @@ async function joinLobbyRoom(roomId) {
     }
 
     if (typeof showToast === 'function') {
-        showToast(`🔗 Connected to ${data.host_name || shortAddr(data.host_wallet)}! Live synced matches aren't wired up yet - this just confirms the connection works.`, 'success');
+        showToast(`🔗 Connected to ${data.host_name || shortAddr(data.host_wallet)}! Starting your local Fight Game - real cross-device syncing isn't wired up yet.`, 'success');
     }
+    if (typeof openFightGame === 'function') openFightGame();
     renderLobbyRooms();
 }
 
@@ -135,7 +138,21 @@ function subscribeLobbyRealtime() {
     if (!sb || lobbyChannel) return;
     lobbyChannel = sb
         .channel('fight-rooms-lobby')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'fight_rooms' }, renderLobbyRooms)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'fight_rooms' }, (payload) => {
+            renderLobbyRooms();
+            // My own room just got matched by someone else - jump into the
+            // Fight Game on this side too. myRoomId gets cleared right after
+            // so a stray duplicate event can't open it twice, and so leaving
+            // the page later doesn't try to delete an already-matched room.
+            if (payload.eventType === 'UPDATE' && payload.new?.status === 'matched'
+                && myRoomId && payload.new?.id === myRoomId) {
+                if (typeof showToast === 'function') {
+                    showToast(`🔗 ${payload.new.guest_name || 'An opponent'} joined your room! Starting your local Fight Game.`, 'success');
+                }
+                if (typeof openFightGame === 'function') openFightGame();
+                myRoomId = null;
+            }
+        })
         .subscribe();
 }
 
