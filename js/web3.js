@@ -217,6 +217,7 @@ function choosePlayMode(mode) {
         document.getElementById("onlineLobbySoonBadge")?.classList.remove("hidden");
         showToast("▶️ LIVE PLAY active - this is exactly what a real player sees.", "info");
     }
+    if (typeof updateUI === "function") updateUI(); // re-checks things like the zero-balance modal now that the picker is out of the way
 }
 
 /* ---------------- Debug menu (TEST Play only) ---------------- */
