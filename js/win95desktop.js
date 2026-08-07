@@ -25,6 +25,16 @@ function isWin95Supported() {
 function enterWin95Desktop() {
     if (win95Active) return;
     win95Active = true;
+
+    // Measure every panel's REAL on-screen position/size first, while
+    // they're still in normal page flow - moving them into the desktop
+    // overlay changes their layout, so this has to happen before any DOM
+    // manipulation, not after. Viewport-relative coordinates line up
+    // directly with the desktop overlay's own coordinates since it's
+    // position:fixed covering the full viewport.
+    const panels = [...document.querySelectorAll('[data-win95-window]')];
+    const startRects = panels.map(p => p.getBoundingClientRect());
+
     document.body.classList.add('win95-mode');
 
     const desktop = document.createElement('div');
@@ -34,7 +44,7 @@ function enterWin95Desktop() {
     const taskbar = document.createElement('div');
     taskbar.id = 'win95Taskbar';
     taskbar.innerHTML = `
-        <div class="win95-start-btn">🪟 Start</div>
+        <div class="win95-start-btn">Start</div>
         <div id="win95TaskbarItems" style="display:flex;gap:4px;"></div>
         <div id="win95Clock"></div>
     `;
@@ -42,21 +52,20 @@ function enterWin95Desktop() {
     updateWin95Clock();
     window._win95ClockInterval = setInterval(updateWin95Clock, 30000);
 
-    const panels = [...document.querySelectorAll('[data-win95-window]')];
-    const cols = Math.ceil(Math.sqrt(panels.length));
     panels.forEach((panel, i) => {
         win95OriginalSlots.push({ el: panel, parent: panel.parentElement, nextSibling: panel.nextSibling });
+        const rect = startRects[i];
 
         const win = document.createElement('div');
         win.className = 'win95-window';
-        win.style.left = `${24 + (i % cols) * 40}px`;
-        win.style.top = `${24 + Math.floor(i / cols) * 40}px`;
-        win.style.width = `${panel.getBoundingClientRect().width || 380}px`;
+        win.style.left = `${Math.round(rect.left)}px`;
+        win.style.top = `${Math.round(rect.top)}px`;
+        win.style.width = `${Math.round(rect.width) || 380}px`;
 
         const title = panel.getAttribute('data-win95-window') || 'Window.exe';
         const titlebar = document.createElement('div');
         titlebar.className = 'win95-titlebar';
-        titlebar.innerHTML = `<span>🪟 ${title}</span><div class="win95-titlebar-buttons"><div class="win95-titlebar-btn">_</div><div class="win95-titlebar-btn">□</div><div class="win95-titlebar-btn">×</div></div>`;
+        titlebar.innerHTML = `<span>${title}</span><div class="win95-titlebar-buttons"><div class="win95-titlebar-btn">_</div><div class="win95-titlebar-btn">&#9633;</div><div class="win95-titlebar-btn">X</div></div>`;
 
         const body = document.createElement('div');
         body.className = 'win95-window-body';
@@ -69,23 +78,28 @@ function enterWin95Desktop() {
         makeWin95Draggable(win, titlebar);
         win.addEventListener('mousedown', () => bringWin95ToFront(win));
 
-        // Taskbar entry
+        // Taskbar entry - clicking it brings the window to front AND
+        // restores it if it was minimized/closed.
         const taskItem = document.createElement('div');
         taskItem.className = 'win95-taskbar-item active';
         taskItem.textContent = title;
-        taskItem.onclick = () => bringWin95ToFront(win);
+        taskItem.onclick = () => {
+            win.style.display = 'flex';
+            bringWin95ToFront(win);
+        };
         document.getElementById('win95TaskbarItems').appendChild(taskItem);
 
-        // Close button just minimizes to taskbar (nothing is ever really
-        // "closed" here - the underlying panel still needs to exist and
-        // keep updating for the rest of the game to work).
-        titlebar.querySelector('.win95-titlebar-btn:last-child').onclick = (e) => {
-            e.stopPropagation();
-            win.style.display = win.style.display === 'none' ? 'flex' : 'none';
-        };
+        // Neither button destroys anything - the underlying panel still
+        // needs to exist and keep updating for the rest of the game to
+        // work, so both minimize and close just hide the window; the
+        // taskbar entry is what brings it back.
         titlebar.querySelector('.win95-titlebar-btn:first-child').onclick = (e) => {
             e.stopPropagation();
-            win.style.display = 'none';
+            win.style.display = 'none'; // minimize
+        };
+        titlebar.querySelector('.win95-titlebar-btn:last-child').onclick = (e) => {
+            e.stopPropagation();
+            win.style.display = 'none'; // close
         };
     });
 }
