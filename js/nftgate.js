@@ -81,6 +81,62 @@ window.checkCollectionOwnership = async function (walletAddressStr, collectionAd
    window.checkTraitOwnership(walletAddress, collectionAddress, traitType, traitValue)
    -> true/false, never throws.
    ============================================================ */
+/* ============================================================
+   SPL TOKEN HOLDER CHECK (Solana fungible tokens, e.g. $MIM)
+   ============================================================
+   Different from NFT collection ownership above - this checks a
+   regular Solana RPC method (getTokenAccountsByOwner) for ANY
+   balance > 0 of a given SPL token mint, rather than Helius's
+   NFT-specific DAS API. Same Helius endpoint works for both since
+   it's a full Solana RPC proxy, not just a DAS-only API.
+
+   window.checkTokenHolding(walletAddress, mintAddress) -> true/false,
+   never throws. Fails CLOSED on any error, same reasoning as the
+   NFT checks above.
+   ============================================================ */
+window.checkTokenHolding = async function (walletAddressStr, mintAddress) {
+    if (!walletAddressStr || !mintAddress) return false;
+
+    try {
+        const res = await fetch(HELIUS_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                jsonrpc: "2.0",
+                id: "token-gate-check",
+                method: "getTokenAccountsByOwner",
+                params: [
+                    walletAddressStr,
+                    { mint: mintAddress },
+                    { encoding: "jsonParsed" },
+                ],
+            }),
+        });
+
+        if (!res.ok) {
+            console.warn(`[nftgate] Helius returned HTTP ${res.status} checking token ${mintAddress}`);
+            return false;
+        }
+
+        const data = await res.json();
+        if (data.error) {
+            console.warn("[nftgate] Helius API error:", data.error);
+            return false;
+        }
+
+        const accounts = data?.result?.value || [];
+        const holds = accounts.some(acc => {
+            const amt = acc?.account?.data?.parsed?.info?.tokenAmount?.uiAmount;
+            return amt && amt > 0;
+        });
+        console.log(`[nftgate] ${walletAddressStr.slice(0,4)}...${walletAddressStr.slice(-4)} holds token ${mintAddress.slice(0,4)}...${mintAddress.slice(-4)} -> ${holds}`);
+        return holds;
+    } catch (e) {
+        console.warn("[nftgate] token holding check failed:", e);
+        return false;
+    }
+};
+
 window.checkTraitOwnership = async function (walletAddressStr, collectionAddress, traitType, traitValue) {
     if (!walletAddressStr || !collectionAddress || !traitType || !traitValue) return false;
 
