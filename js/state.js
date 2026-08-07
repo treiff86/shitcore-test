@@ -78,8 +78,10 @@ function saveGame() {
 
 // TESTING ONLY - click the wallet balance in the header to add $4,200.
 // Wired up for verifying the Caravaggio trait's starting-cash amount
-// without needing a real qualifying wallet every time.
+// without needing a real qualifying wallet every time. Hard-gated to TEST
+// Play - this must never work for a real LIVE player, full stop.
 function addTestCash() {
+    if (typeof isTestPlayMode === 'undefined' || !isTestPlayMode) return;
     state.cash = (state.cash || 0) + 4200;
     saveGame();
     if (typeof updateUI === "function") updateUI();
