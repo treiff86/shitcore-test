@@ -96,8 +96,8 @@ window.FightGame = (function () {
         reiffer: {
             walk:     ['assets/bonus_stage/reiffer_walk.webp', 6],
             victory:  ['assets/bonus_stage/reiffer_victory.webp', 6],
-            punch_lo: ['assets/bonus_stage/reiffer_punch_lo.webp', 6],
-            kick_lo:  ['assets/bonus_stage/reiffer_kick_lo.webp', 4],
+            punch_lo: ['assets/bonus_stage/reiffer_punch_lo.webp?v=2', 3],
+            kick_lo:  ['assets/bonus_stage/reiffer_kick_lo.webp?v=2', 3],
             hurt:     ['assets/bonus_stage/hit.webp', 1],
             defeat:   ['assets/bonus_stage/midevils_defeat.webp?v=3', 3],
             block:    ['assets/fight_game/reiffer_block.webp', 1],
