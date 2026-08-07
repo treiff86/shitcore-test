@@ -142,9 +142,24 @@ window.FightGame = (function () {
             crouch_kick:  ['assets/fight_game/conmen_crouch_kick.webp', 1],
             crouch_punch: ['assets/fight_game/conmen_crouch_punch.webp', 1],
         },
+        wizard: {
+            walk:     ['assets/fight_game/wizard_walk.webp', 1],
+            victory:  ['assets/fight_game/wizard_victory.webp', 3],
+            punch_lo: ['assets/fight_game/wizard_punch_lo.webp', 1],
+            kick_lo:  ['assets/fight_game/wizard_kick_lo.webp', 1],
+            hurt:     ['assets/fight_game/wizard_hurt.webp', 1],
+            defeat:   ['assets/fight_game/wizard_defeat.webp', 3],
+            block:    ['assets/fight_game/wizard_block.webp', 1],
+            jump:         ['assets/fight_game/wizard_jump.webp', 1],
+            crouch:       ['assets/fight_game/wizard_crouch.webp', 1],
+            jump_punch:   ['assets/fight_game/wizard_jump_punch.webp', 1],
+            jump_kick:    ['assets/fight_game/wizard_jump_kick.webp', 1],
+            crouch_kick:  ['assets/fight_game/wizard_crouch_kick.webp', 1],
+            crouch_punch: ['assets/fight_game/wizard_crouch_punch.webp', 1],
+        },
     };
 
-    const BACKGROUNDS = ['assets/fight_game/bg_prison.webp', 'assets/fight_game/bg_market.webp'];
+    const BACKGROUNDS = ['assets/fight_game/bg_prison.webp', 'assets/fight_game/bg_market.webp', 'assets/fight_game/bg_wizard.webp'];
 
     // ---------------------------------------------------------------
     // ASSET LOADING
@@ -199,6 +214,21 @@ window.FightGame = (function () {
     const CONMEN_CROUCH_STATES = new Set(['crouch', 'crouch_punch']);
     const CONMEN_CROUCH_CORRECTION = 0.87;
 
+    // Same issue, same fix, different character: the Wizard's robe also
+    // flows to the ground regardless of pose, so all three of his crouch
+    // states measure just as tall as standing. Caught this one proactively
+    // by measuring fill ratios before shipping, rather than waiting for a
+    // bug report - same correction value as Conmen's fix since the
+    // underlying cause and target look are identical.
+    const WIZARD_CROUCH_STATES = new Set(['crouch', 'crouch_kick', 'crouch_punch']);
+    const WIZARD_CROUCH_CORRECTION = 0.61; // 0.87 * 0.7 - shrunk another 30% on top of the first pass per feedback
+
+    // The new dedicated hurt sprite fills its own canvas noticeably less
+    // than his reference walk pose (~83% vs ~98%), so without this he'd
+    // render smaller than every other state during a hit reaction.
+    const WIZARD_BOOST_STATES = new Set(['hurt']);
+    const WIZARD_BOOST_CORRECTION = 1.18;
+
     async function loadFighterAnims(key) {
         const files = FIGHTER_ANIM_FILES[key];
         const anims = {};
@@ -207,6 +237,8 @@ window.FightGame = (function () {
             let outH = P_H;
             if (key === 'reiffer' && REIFFER_LEGACY_PADDED_STATES.has(state)) outH = P_H * REIFFER_SIZE_CORRECTION;
             else if (key === 'conmen' && CONMEN_CROUCH_STATES.has(state)) outH = P_H * CONMEN_CROUCH_CORRECTION;
+            else if (key === 'wizard' && WIZARD_CROUCH_STATES.has(state)) outH = P_H * WIZARD_CROUCH_CORRECTION;
+            else if (key === 'wizard' && WIZARD_BOOST_STATES.has(state)) outH = P_H * WIZARD_BOOST_CORRECTION;
             anims[state] = await loadStrip(path, count, outH);
         }
         anims.idle = anims.walk.length ? [anims.walk[0]] : [];
@@ -224,12 +256,14 @@ window.FightGame = (function () {
 
     async function loadArenaBackground() {
         // Matches whichever theme is actually active - Mid Evils gets the
-        // market, Conmen gets the prison yard. Falls back to random only if
-        // somehow neither theme class is present (shouldn't normally happen,
-        // this game is gated to TEST Play).
+        // market, Conmen gets the prison yard, $MIM/Bitcoin Wizard gets the
+        // wizard's study. Falls back to random only if somehow none of
+        // those theme classes are present (shouldn't normally happen, this
+        // game is gated to TEST Play).
         let src;
         if (document.body.classList.contains('medieval-mode')) src = 'assets/fight_game/bg_market.webp';
         else if (document.body.classList.contains('conmen-mode')) src = 'assets/fight_game/bg_prison.webp';
+        else if (document.body.classList.contains('win95-mode')) src = 'assets/fight_game/bg_wizard.webp';
         else src = BACKGROUNDS[Math.floor(Math.random() * BACKGROUNDS.length)];
         try {
             const img = await loadImage(src);
@@ -429,7 +463,12 @@ window.FightGame = (function () {
     }
 
     function newGame(anims, bg) {
-        const p1 = new Fighter(anims.reiffer, 180, 1);
+        // P1 matches the active theme where one exists (Wizard for $MIM/
+        // Bitcoin Wizard); P2 stays Conmen as the constant opponent - a
+        // real, visually distinct fighter in every matchup so it never
+        // ends up wizard-vs-wizard.
+        const p1Key = document.body.classList.contains('win95-mode') ? 'wizard' : 'reiffer';
+        const p1 = new Fighter(anims[p1Key], 180, 1);
         const p2 = new Fighter(anims.conmen, SW - 180 - 90, -1);
         return {
             p1, p2, bg,
@@ -762,11 +801,12 @@ window.FightGame = (function () {
             assetsPromise = Promise.all([
                 loadFighterAnims('reiffer'),
                 loadFighterAnims('conmen'),
+                loadFighterAnims('wizard'),
             ]);
         }
-        const [reifferAnims, conmenAnims] = await assetsPromise;
+        const [reifferAnims, conmenAnims, wizardAnims] = await assetsPromise;
         const bg = await loadArenaBackground(); // always fresh - depends on whichever theme is active right now, not cached
-        const anims = { reiffer: reifferAnims, conmen: conmenAnims };
+        const anims = { reiffer: reifferAnims, conmen: conmenAnims, wizard: wizardAnims };
 
         let g = newGame(anims, bg);
         const shake = new Shake();
