@@ -464,12 +464,13 @@ window.FightGame = (function () {
 
     function newGame(anims, bg) {
         // P1 matches the active theme where one exists (Wizard for $MIM/
-        // Bitcoin Wizard); P2 stays Conmen as the constant opponent - a
-        // real, visually distinct fighter in every matchup so it never
-        // ends up wizard-vs-wizard.
+        // Bitcoin Wizard, Reiffer otherwise). P2 is random from the
+        // remaining two characters each match, rather than always Conmen.
         const p1Key = document.body.classList.contains('win95-mode') ? 'wizard' : 'reiffer';
+        const p2Pool = ['reiffer', 'conmen', 'wizard'].filter(k => k !== p1Key);
+        const p2Key = p2Pool[Math.floor(Math.random() * p2Pool.length)];
         const p1 = new Fighter(anims[p1Key], 180, 1);
-        const p2 = new Fighter(anims.conmen, SW - 180 - 90, -1);
+        const p2 = new Fighter(anims[p2Key], SW - 180 - 90, -1);
         return {
             p1, p2, bg,
             timer: ROUND_T,
