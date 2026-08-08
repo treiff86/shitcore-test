@@ -39,13 +39,25 @@ function _conmenEggHide() {
 }
 
 function _conmenEggTick() {
-    if (document.body.classList.contains('conmen-mode')) {
+    // Real LIVE ownership only - isConmenHolder is set exclusively by
+    // applyCosmeticThemes()'s genuine NFT check and is never touched by
+    // Theme Preview (TEST Play), unlike the conmen-mode CSS class which
+    // both real holders AND TEST preview apply. Checking the class here
+    // used to let this fire during TEST preview too - not intended.
+    if (typeof isConmenHolder !== 'undefined' && isConmenHolder) {
         _conmenEggShow();
     }
     setTimeout(_conmenEggTick, _conmenEggRandomGap());
 }
 
 function openConmenLauncher() {
+    // Real-ownership gate, same as the tick above - plus a master-wallet
+    // bypass so the "Easter Egg" test button (master wallet only, see
+    // web3.js) can still open the launcher for testing without needing
+    // to actually hold a Conmen NFT.
+    const isRealHolder = typeof isConmenHolder !== 'undefined' && isConmenHolder;
+    const isMaster = typeof walletAddress !== 'undefined' && typeof MASTER_WALLET !== 'undefined' && walletAddress === MASTER_WALLET;
+    if (!isRealHolder && !isMaster) return;
     clearTimeout(_conmenEggHideTimeout);
     _conmenEggHide();
     const overlay = document.getElementById('conmenLauncherOverlay');
