@@ -73,6 +73,7 @@ function enterWin95Desktop() {
     if (win95Active) return;
     win95Active = true;
     document.body.classList.add('win95-mode');
+    if (typeof window.WizardPopups !== 'undefined') window.WizardPopups.init();
 
     const desktop = document.createElement('div');
     desktop.id = 'win95Desktop';
@@ -172,6 +173,7 @@ function exitWin95Desktop() {
     if (!win95Active) return;
     win95Active = false;
     document.body.classList.remove('win95-mode');
+    if (typeof window.WizardPopups !== 'undefined') window.WizardPopups.stop();
     clearInterval(window._win95ClockInterval);
     window.removeEventListener('resize', positionWin95Desktop);
 
