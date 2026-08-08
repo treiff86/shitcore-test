@@ -176,6 +176,15 @@ window.FightGame = (function () {
             jump_kick:    ['assets/fight_game/undead_jump_kick.webp', 2],
             crouch_kick:  ['assets/fight_game/undead_crouch_kick.webp', 1],
             crouch_punch: ['assets/fight_game/undead_crouch_punch.webp', 2],
+            // Dedicated poses for blocking/getting hit while crouching or
+            // airborne. Any character without these four falls back to
+            // their normal block/hurt pose (see resolveBlockPose/
+            // resolveHurtPose below) - purely additive, doesn't touch
+            // Reiffer/Conmen/Wizard.
+            crouch_block: ['assets/fight_game/undead_crouch_block.webp', 1],
+            crouch_hurt:  ['assets/fight_game/undead_crouch_hurt.webp', 1],
+            jump_block:   ['assets/fight_game/undead_jump_block.webp', 1],
+            jump_hurt:    ['assets/fight_game/undead_jump_hurt.webp', 1],
         },
     };
 
@@ -449,10 +458,22 @@ window.FightGame = (function () {
 
         _surf() {
             if (this.hurtT > 0) {
-                const hf = this.anims.hurt;
+                let hf = this.anims.hurt;
+                if (!this.grounded && this.anims.jump_hurt && this.anims.jump_hurt.length) hf = this.anims.jump_hurt;
+                else if (this.grounded && this.crouching && this.anims.crouch_hurt && this.anims.crouch_hurt.length) hf = this.anims.crouch_hurt;
                 if (hf && hf.length) return hf[0];
             }
-            const frames = this.anims[this.state] && this.anims[this.state].length ? this.anims[this.state] : this.anims.idle;
+            // Block has its own crouch/jump variants the same way hurt does
+            // above - state stays 'block' either way (so anything checking
+            // f.state === 'block' elsewhere is unaffected), this only picks
+            // which art to draw. Falls back to the plain block pose for any
+            // character without the crouch/jump variants.
+            let stateForFrames = this.state;
+            if (this.state === 'block') {
+                if (!this.grounded && this.anims.jump_block && this.anims.jump_block.length) stateForFrames = 'jump_block';
+                else if (this.grounded && this.crouching && this.anims.crouch_block && this.anims.crouch_block.length) stateForFrames = 'crouch_block';
+            }
+            const frames = this.anims[stateForFrames] && this.anims[stateForFrames].length ? this.anims[stateForFrames] : this.anims.idle;
             if (!frames || !frames.length) return null;
             const s = frames[this.fr % frames.length];
             if (s && s.width !== this._fw) this._fw = s.width;
@@ -539,19 +560,25 @@ window.FightGame = (function () {
 
         const blockHeld = !!(keys[bind.block]);
         const attacking = isAttackState(f.state);
+        const crouchHeld = !!keys[bind.crouch];
 
-        f.blocking = blockHeld && !attacking && f.grounded;
+        // Blocking works airborne now too (see jump_block art) - grounded
+        // blocking still stops input dead like before; airborne blocking
+        // falls through so gravity/landing keeps running underneath it.
+        f.blocking = blockHeld && !attacking;
         if (f.blocking) {
+            f.crouching = f.grounded && crouchHeld; // holding crouch+block on the ground gives the crouch_block pose
             f.state = 'block'; f.fr = 0;
             f.timeSinceBlockOrHit = 0; // holding block also resets the recovery clock, not just getting hit while blocking
-            return;
+            if (f.grounded) return;
         }
 
         if (f.stop > 0) { f.stop--; return; }
 
         // --- jump physics (runs regardless of attack state, so you can
-        // still fall/land mid-attack). Helicopter kick drastically slows
-        // the fall while it's active, then hands back to normal gravity. ---
+        // still fall/land mid-attack, and now also mid-air-block).
+        // Helicopter kick drastically slows the fall while it's active,
+        // then hands back to normal gravity. ---
         if (!f.grounded) {
             const heliActive = f.heliT > 0 && f.state === 'jump_kick';
             const g = heliActive ? GRAVITY * HELI_GRAVITY_MULT : GRAVITY;
@@ -578,6 +605,8 @@ window.FightGame = (function () {
         } else if (justPressed[bind.jump]) {
             f.vy = JUMP_VELOCITY; f.grounded = false;
         }
+
+        if (f.blocking) return; // airborne block: physics above already ran (including landing) - skip movement/attack input
 
         if (!attacking) {
             // --- crouch (grounded only, cancels moving) ---
