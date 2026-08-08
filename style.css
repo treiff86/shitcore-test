@@ -1044,6 +1044,19 @@ body.win95-mode nav button[class*="border-blue-500"] {
 .win95-window * {
     font-family: 'BonusStagePixel', monospace !important;
 }
+/* The rule above steamrolls the FontAwesome icon font too, since icons
+   are just <i> elements with a special font-family - this restores it
+   specifically for icon elements so they render as icons again instead
+   of "tofu" missing-glyph boxes, while everything else (titles, button
+   text, menus) still gets the pixel font as intended. */
+.win95-window i.fa-solid,
+.win95-window i.fa-regular {
+    font-family: 'Font Awesome 6 Free' !important;
+    font-weight: 900;
+}
+.win95-window i.fa-brands {
+    font-family: 'Font Awesome 6 Brands' !important;
+}
 
 .win95-titlebar {
     background: #000080; /* flat, no gradient - older/cruder digital look */
