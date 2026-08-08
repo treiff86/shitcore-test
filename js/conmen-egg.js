@@ -39,23 +39,25 @@ function _conmenEggHide() {
 }
 
 function _conmenEggTick() {
-    // Real LIVE ownership only - isConmenHolder is set exclusively by
-    // applyCosmeticThemes()'s genuine NFT check and is never touched by
-    // Theme Preview (TEST Play), unlike the conmen-mode CSS class which
-    // both real holders AND TEST preview apply. Checking the class here
-    // used to let this fire during TEST preview too - not intended.
-    if (typeof isConmenHolder !== 'undefined' && isConmenHolder) {
+    // Requires BOTH genuine ownership AND the Conmen theme actually being
+    // the one active right now - isConmenHolder alone isn't enough for a
+    // dual holder (owns Conmen + another collection) currently viewing a
+    // different theme; this used to still fire for them in the
+    // background even though they weren't "on" the Conmen theme.
+    if (typeof isConmenHolder !== 'undefined' && isConmenHolder
+        && document.body.classList.contains('conmen-mode')) {
         _conmenEggShow();
     }
     setTimeout(_conmenEggTick, _conmenEggRandomGap());
 }
 
 function openConmenLauncher() {
-    // Real-ownership gate, same as the tick above - plus a master-wallet
-    // bypass so the "Easter Egg" test button (master wallet only, see
-    // web3.js) can still open the launcher for testing without needing
-    // to actually hold a Conmen NFT.
-    const isRealHolder = typeof isConmenHolder !== 'undefined' && isConmenHolder;
+    // Same real-ownership + active-theme gate as the tick above - plus a
+    // master-wallet bypass so the "Easter Egg" test button (master wallet
+    // only, see web3.js) can still open the launcher for testing without
+    // needing to actually hold a Conmen NFT or have the theme active.
+    const isRealHolder = typeof isConmenHolder !== 'undefined' && isConmenHolder
+        && document.body.classList.contains('conmen-mode');
     const isMaster = typeof walletAddress !== 'undefined' && typeof MASTER_WALLET !== 'undefined' && walletAddress === MASTER_WALLET;
     if (!isRealHolder && !isMaster) return;
     clearTimeout(_conmenEggHideTimeout);
