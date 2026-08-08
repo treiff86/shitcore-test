@@ -1148,3 +1148,105 @@ body.win95-mode nav button[class*="border-blue-500"] {
     padding: 3px 8px;
     color: #000;
 }
+
+/* ============================================================
+   BITCOIN WIZARD - AOL-STYLE IM POPUPS (js/wizardpopup.js)
+   ============================================================
+   Classic AIM buddy-IM window: gradient blue titlebar (distinct
+   from the flat-navy Win95 windows on purpose, closer to real
+   AIM), bottom-right corner, sits above the taskbar. Square
+   wizard image on the left, one-line quote on the right.
+   ============================================================ */
+.wizard-im-popup {
+    position: fixed;
+    right: 14px;
+    bottom: 50px; /* clears the 36px win95 taskbar + a little breathing room */
+    width: 300px;
+    max-width: calc(100vw - 28px);
+    background: #c0c0c0;
+    border: 3px solid #dfdfdf;
+    box-shadow:
+        inset -2px -2px 0 #0a0a0a,
+        inset 2px 2px 0 #ffffff,
+        inset -4px -4px 0 #808080,
+        inset 4px 4px 0 #dfdfdf,
+        4px 4px 0 rgba(0,0,0,0.5);
+    z-index: 60; /* above the win95 taskbar (41) */
+    display: flex;
+    flex-direction: column;
+    image-rendering: pixelated;
+    opacity: 0;
+    transform: translateY(24px);
+    pointer-events: none;
+    transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.wizard-im-popup.wizard-im-show {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+}
+.wizard-im-popup.wizard-im-hide {
+    opacity: 0;
+    transform: translateY(12px);
+}
+
+.wizard-im-popup .wizard-im-titlebar {
+    background: linear-gradient(180deg, #3a7bd5 0%, #1b4fa0 100%);
+    color: #fff;
+    font-family: 'BonusStagePixel', monospace;
+    font-size: 10px;
+    letter-spacing: 0.5px;
+    padding: 6px 4px 6px 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+    text-shadow: 1px 1px 0 rgba(0,0,0,0.6);
+}
+
+.wizard-im-popup .wizard-im-close {
+    width: 18px;
+    height: 16px;
+    background: #c0c0c0;
+    border: 1px solid #dfdfdf;
+    box-shadow: inset -1px -1px 0 #0a0a0a, inset 1px 1px 0 #ffffff;
+    color: #000;
+    font-size: 11px;
+    line-height: 14px;
+    text-align: center;
+    cursor: pointer;
+    padding: 0;
+}
+.wizard-im-popup .wizard-im-close:active {
+    box-shadow: inset 1px 1px 0 #0a0a0a, inset -1px -1px 0 #ffffff;
+}
+
+.wizard-im-popup .wizard-im-body {
+    background: #ffffff;
+    padding: 10px;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+}
+
+.wizard-im-popup .wizard-im-avatar {
+    width: 64px;
+    height: 64px;
+    object-fit: cover;
+    border: 2px solid #808080;
+    box-shadow: inset -1px -1px 0 #0a0a0a, inset 1px 1px 0 #ffffff;
+    flex-shrink: 0;
+}
+
+.wizard-im-popup .wizard-im-quote {
+    margin: 0;
+    font-family: 'BonusStagePixel', monospace;
+    font-size: 10px;
+    line-height: 1.5;
+    color: #000;
+}
+
+@media (max-width: 480px) {
+    .wizard-im-popup { width: calc(100vw - 20px); right: 10px; }
+    .wizard-im-popup .wizard-im-avatar { width: 52px; height: 52px; }
+}
