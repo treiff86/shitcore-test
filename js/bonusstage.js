@@ -1,1227 +1,821 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Shitcore (USDSHT) — The Ultimate L1 for Absolute Rugs</title>
-    <meta name="description" content="A satirical idle-tycoon game about meme-coin rug pulls. 100% fake money, 100% fake blockchain, 100% real bad decisions.">
+/* ============================================================
+   BONUS STAGE: DESTROY THE FRY MACHINE! - web port
+   ============================================================
+   Ported from the standalone Python/Pygame version (bonus_stage.py).
+   Every constant, formula, and behavior here is a direct translation -
+   the two should stay in sync if either one changes.
 
-    <!-- Debug error catcher - deliberately the FIRST script on the page,
-         before anything else that could throw, so the TEST PLAY debug
-         menu (master wallet only) can show a real error log instead of
-         guessing. Always installed, harmless no-op if TEST PLAY is never
-         opened. -->
-    <script>
-        window._debugErrorLog = [];
-        window.addEventListener('error', function (e) {
-            window._debugErrorLog.push({
-                type: 'error',
-                message: e.message,
-                source: (e.filename || '').split('/').pop() + (e.lineno ? ':' + e.lineno : ''),
-                time: new Date().toLocaleTimeString(),
-            });
+   Usage: BonusStage.start(canvasEl) to begin, BonusStage.stop() to
+   fully tear down (cancels the loop and removes input listeners - safe
+   to call even if never started).
+   ============================================================ */
+window.BonusStage = (function () {
+    'use strict';
+
+    // ---------------------------------------------------------------
+    // CONSTANTS (matches bonus_stage.py exactly)
+    // ---------------------------------------------------------------
+    const SW = 960, SH = 540;
+    const GROUND = 410;
+
+    const P_H = 220;
+    const FM_CX = 475;
+    const FM_DW = 295;
+    const FM_DH = 185;
+    const FM_Y_PUSH = 0;
+    const FM_HP = 5200;
+    // The last damage-state image is deliberately a tiny sliver of the HP
+    // bar - just a couple of hits from "critical" to destroyed, not an
+    // even 1/6th share like the rest. Everything else splits the
+    // remaining HP evenly. Keep this in sync with bonus_stage.py.
+    const FM_FINAL_TIER_HP = 130;
+    const ROUND_T = 45.0;
+
+    const P_SPD = 5.2;
+    const P_Y = GROUND - P_H;
+
+    const LEFT_WALL_X = [0, 300];
+    const RIGHT_WALL_X = [650, 830];
+    const WALL_COLLIDE_W = 95;
+
+    const DMG = { punch_lo: 55, kick_lo: 85 };
+    const ATK_DUR = { punch_lo: 0.26, kick_lo: 0.32 };
+    const HEAVY = new Set(['kick_lo']);
+    const HS_LT = 5, HS_HV = 9;
+    const HITSTUN = 0.15;
+    const CANCEL_W = 0.18;
+    const BUF_WIN = 0.13;
+
+    const WIN_CASH_REWARD = 2500;  // real Shitcore account cash awarded on winning, via window.addCash()
+    // in-game SCORE now mirrors live progress toward that same $2500 -
+    // no more open-ended point piling, it's capped here to match
+    const VICTORY_FPS = 8;
+    const DEFEAT_FPS = 7;
+    const AUTO_CLOSE_SECONDS = 3.0;
+
+    const PLAYER_MAX_HP = 100;
+    const SELF_DMG = [0, 1];
+    const DEBRIS_HIT_CHANCE = 0.10;
+    const DEBRIS_DMG_LIGHT = [2, 6];
+    const DEBRIS_DMG_HEAVY = [14, 25];
+    const HEAVY_BASE = 0.08;
+    const HEAVY_PER_STREAK = 0.018;
+    const HEAVY_CAP = 0.35;
+    const STREAK_RESET_T = 1.3;
+    const HURT_FLASH_T = 0.3;
+
+    const COL = {
+        W: '#ffffff', RD: '#dc1e1e', OR: '#ff8c00', YL: '#ffd700',
+        GN: '#1ec846', GY: '#787878', DK: '#323232', LG: '#c8c8c8',
+    };
+
+    const ASSET_BASE = 'assets/bonus_stage/';
+
+    const ANIM_FILES = {
+        walk: ['reiffer_walk.webp', 6],
+        victory: ['reiffer_victory.webp', 6],
+        punch_lo: ['reiffer_punch_lo.webp', 6],
+        kick_lo: ['reiffer_kick_lo.webp', 4],
+        hurt: ['hit.webp', 1],
+        defeat: ['midevils_defeat.webp?v=3', 3],
+    };
+    // Conmen holders get their own character - same animation states, own
+    // art and frame counts (this set has fewer frames per animation, which
+    // is fine, loadStrip just divides each strip's width by its own count).
+    const CONMEN_ANIM_FILES = {
+        walk: ['conmen_walk.webp', 4],
+        victory: ['conmen_victory.webp', 4],
+        punch_lo: ['conmen_punch_lo.webp', 3],
+        kick_lo: ['conmen_kick_lo.webp', 3],
+        hurt: ['conmen_hit.webp', 1],
+        defeat: ['conmen_defeat.webp?v=2', 4],
+    };
+    const FRYER_FILES = ['tier_01.webp','tier_02.webp','tier_03.webp','tier_04.webp','tier_05.webp','tier_06.webp'];
+    const DEBRIS_FILES = ['debris_1.webp','debris_2.webp','debris_3.webp','debris_4.webp','debris_5.webp','debris_6.webp','debris_7.webp','debris_8.webp','debris_9.webp','debris_10.webp','debris_11.webp','debris_12.webp'];
+    const SPARK_FILES = ['spark_1.webp','spark_2.webp','spark_3.webp','spark_4.webp','spark_5.webp','spark_6.webp'];
+
+    // ---------------------------------------------------------------
+    // small helpers (JS equivalents of Python's random module)
+    // ---------------------------------------------------------------
+    function randInt(a, b) { return a + Math.floor(Math.random() * (b - a + 1)); } // inclusive both ends, like random.randint
+    function randUniform(a, b) { return a + Math.random() * (b - a); }
+    function choice(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+    function rectsOverlap(a, b) { return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y; }
+
+    function loadImage(src) {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => resolve(img);
+            img.onerror = () => reject(new Error('failed to load ' + src));
+            img.src = src;
         });
-        window.addEventListener('unhandledrejection', function (e) {
-            window._debugErrorLog.push({
-                type: 'promise rejection',
-                message: String(e.reason && e.reason.message ? e.reason.message : e.reason),
-                source: '',
-                time: new Date().toLocaleTimeString(),
-            });
-        });
-    </script>
-
-    <!-- Tailwind CSS (CDN, no build step needed) -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&family=MedievalSharp&family=UnifrakturMaguntia&family=Special+Elite&family=Rye&display=swap" rel="stylesheet">
-    <!-- FontAwesome icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Local styles (FIXED PATH) -->
-    <link rel="stylesheet" href="style.css?v=46">
-    <link rel="stylesheet" href="bonusstage.css?v=7">
-</head>
-<body class="overflow-x-hidden min-h-screen flex flex-col justify-between">
-    <!-- Hand-drawn wobble filter for the chart canvas in Mid Evils mode -
-         not visible itself, just defines a filter effect referenced from CSS -->
-    <svg width="0" height="0" style="position:absolute">
-        <filter id="mc-hand-drawn">
-            <feTurbulence type="fractalNoise" baseFrequency="0.02 0.06" numOctaves="2" seed="7" result="noise"></feTurbulence>
-            <feDisplacementMap in="SourceGraphic" in2="noise" scale="4" xChannelSelector="R" yChannelSelector="G"></feDisplacementMap>
-        </filter>
-    </svg>
-
-    <!-- ============================================================ -->
-    <!-- CONMEN NFT GATE - hidden unless enabled in js/gate.js -->
-    <!-- ============================================================ -->
-    <div id="gateOverlay" class="hidden fixed inset-0 bg-black z-[100] flex items-center justify-center p-4">
-        <div class="max-w-md w-full bg-[#0C0F16] border border-amber-500/40 rounded-xl p-8 text-center space-y-4 shadow-2xl">
-            <div class="text-4xl">🔒</div>
-            <h2 class="text-xl font-black text-white">Conmen Holders Only</h2>
-            <p class="text-sm text-gray-400">Connect a wallet holding a Conmen NFT to play Shitcore.</p>
-            <button id="gateVerifyBtn" class="w-full py-3 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-lg transition">
-                Connect Wallet to Verify
-            </button>
-            <p id="gateStatus" class="text-xs text-gray-500 min-h-[1em]"></p>
-        </div>
-    </div>
-
-    <!-- ============================================================ -->
-    <!-- HEADER -->
-    <!-- ============================================================ -->
-    <header class="bg-[#090C12] border-b border-[#1A2232] px-4 py-3 sticky top-0 z-50 shadow-md">
-        <audio id="bgMusicEl" src="assets/midevil-theme.mp3" loop preload="none" volume="0.3"></audio>
-        <div class="max-w-7xl mx-auto flex items-center justify-between gap-3 flex-wrap">
-            <div class="flex items-center space-x-3">
-                <button id="audioToggleBtn" onclick="toggleBgMusic()" title="Toggle background music" class="hidden bg-gradient-to-tr from-amber-600 to-amber-950 p-2 rounded-lg shadow-lg sm:flex">
-                    <i id="audioToggleIcon" class="fa-solid fa-volume-xmark text-white text-lg"></i>
-                </button>
-                <div class="bg-gradient-to-tr from-amber-600 to-amber-950 p-2 rounded-lg shadow-lg hidden sm:flex">
-                    <i class="fa-solid fa-toilet-paper text-white text-lg"></i>
-                </div>
-                <div>
-                    <div class="flex items-center space-x-2">
-                        <span class="text-white font-extrabold text-base md:text-lg uppercase flex items-center gap-1.5">
-                            <span class="mc-title-accent">USDSHT</span> <span class="text-[10px] bg-[#1B2130] text-amber-500 px-1.5 py-0.5 rounded font-bold normal-case">Layer 1 Shitcoin Tycoon</span>
-                        </span>
-                        <div class="flex flex-col gap-0.5">
-                            <button id="bonusStageBtn" onclick="openBonusStage()" title="Mid Evils holders: play the Bonus Stage mini-game" class="hidden items-center gap-1 text-[10px] bg-gradient-to-b from-amber-500 to-amber-700 hover:from-amber-400 hover:to-amber-600 text-black px-2 py-0.5 rounded font-bold normal-case shadow">
-                                <i class="fa-solid fa-gamepad"></i> Play mini game
-                            </button>
-                            <button id="fightGameBtn" onclick="openFightGame()" title="TEST PLAY only: 1v1 fight game, Conmen vs Mid Evils" class="hidden items-center gap-1 text-[10px] bg-gradient-to-b from-rose-500 to-rose-700 hover:from-rose-400 hover:to-rose-600 text-black px-2 py-0.5 rounded font-bold normal-case shadow">
-                                <i class="fa-solid fa-hand-fist"></i> Play fight game
-                            </button>
-                        </div>
-                        <button id="conmenEggTestBtn" onclick="testConmenEgg()" title="Master wallet only: force-trigger the Conmen easter egg popup for testing" class="hidden items-center gap-1 text-[10px] bg-gradient-to-b from-gray-400 to-gray-600 hover:from-gray-300 hover:to-gray-500 text-black px-2 py-0.5 rounded font-bold normal-case shadow">
-                            <i class="fa-solid fa-egg"></i> Easter Egg
-                        </button>
-                    </div>
-                    <div id="levelBadge" class="text-[11px] text-amber-400 font-mono mt-0.5">LVL 1 — The Basement Dev</div>
-                </div>
-            </div>
-
-            <!-- Core stats -->
-            <div class="flex items-center gap-3 flex-wrap text-xs md:text-sm">
-                <button onclick="openDepositModal()" class="bg-[#121926] border border-[#1E293B] text-amber-400 font-mono px-2.5 py-1.5 rounded flex items-center gap-1.5 font-bold" title="Move cash into your Rugged Savings / Lambo goal">
-                    <i class="fa-solid fa-piggy-bank text-[10px]"></i> Deposit
-                </button>
-                <span id="cashDisplayWrapper" onclick="addTestCash()" class="cursor-pointer bg-[#121926] border border-[#1E293B] text-green-400 font-mono px-2.5 py-1.5 rounded flex items-center gap-1.5" title="Testing only: click to add $4,200">
-                    <i class="fa-solid fa-wallet text-[10px]"></i> $<span id="cashDisplay">1,000.00</span>
-                </span>
-                <div class="hidden md:flex flex-col w-32">
-                    <div class="flex justify-between text-[9px] text-gray-400 font-mono">
-                        <span>HEAT</span><span id="heatPct">0%</span>
-                    </div>
-                    <div class="w-full bg-[#10141D] h-1.5 rounded-full overflow-hidden border border-[#1A2232]">
-                        <div id="heatBarFill" class="bg-gradient-to-r from-amber-500 to-rose-600 h-full w-0 transition-all duration-500"></div>
-                    </div>
-                </div>
-                <button onclick="openLeaderboard()" title="Live leaderboard" class="text-gray-500 hover:text-amber-400 transition text-xs border border-[#1A2232] rounded px-2 py-1.5">
-                    <i class="fa-solid fa-ranking-star"></i>
-                </button>
-                <button id="themePreviewBtn" onclick="openThemePreview()" title="Preview cosmetic themes (master wallet only)" class="hidden text-gray-500 hover:text-purple-400 transition text-xs border border-[#1A2232] rounded px-2 py-1.5">
-                    <i class="fa-solid fa-palette"></i>
-                </button>
-                <button id="themeSwitchBtn" onclick="openThemeChoice()" title="Switch cosmetic theme (this wallet holds more than one)" class="hidden text-gray-500 hover:text-emerald-400 transition text-xs border border-[#1A2232] rounded px-2 py-1.5">
-                    <i class="fa-solid fa-shuffle"></i>
-                </button>
-                <button id="debugMenuBtn" onclick="openDebugMenu()" title="Debug menu (TEST Play only)" class="hidden text-gray-500 hover:text-amber-400 transition text-xs border border-[#1A2232] rounded px-2 py-1.5">
-                    <i class="fa-solid fa-bug"></i>
-                </button>
-                <button id="walletConnectBtn" title="Connect a wallet to save your progress and appear on the leaderboard - read-only, never asks you to sign a transaction" class="text-gray-400 hover:text-emerald-400 transition text-[10px] font-bold border border-[#1A2232] rounded px-2 py-1.5 whitespace-nowrap">
-                    Connect Wallet
-                </button>
-                <button id="btcWalletConnectBtn" onclick="document.getElementById('btcWalletChoiceModal')?.classList.remove('hidden')" title="Connect a Bitcoin wallet (Xverse or UniSat) to unlock Ordinals-gated content - TEST Play only" class="hidden text-gray-400 hover:text-orange-400 transition text-[10px] font-bold border border-[#1A2232] rounded px-2 py-1.5 whitespace-nowrap">
-                    🟠 BTC
-                </button>
-                <button id="btcWalletDisplay" onclick="disconnectBitcoinWallet()" title="Click to disconnect" class="hidden text-orange-400 hover:text-rose-400 transition text-[10px] font-bold border border-[#1A2232] rounded px-2 py-1.5 whitespace-nowrap">
-                    🟠 <span id="btcWalletAddressText"></span>
-                </button>
-                <button id="resetGameBtn" title="Refresh your funds to $1,000" class="text-gray-500 hover:text-rose-400 transition text-xs border border-[#1A2232] rounded px-2 py-1.5">
-                    <i class="fa-solid fa-arrows-rotate"></i>
-                </button>
-            </div>
-        </div>
-    </header>
-
-    <!-- ============================================================ -->
-    <!-- NAV -->
-    <!-- ============================================================ -->
-    <nav class="bg-[#070A0F] border-b border-[#121721] sticky top-[70px] z-40 shadow-sm">
-        <div class="max-w-7xl mx-auto px-4 flex space-x-5 overflow-x-auto">
-            <button onclick="switchTab('markets')" id="tab-markets" class="py-3 text-sm font-medium border-b-2 border-blue-500 text-white whitespace-nowrap transition-all">
-                Markets 📊
-            </button>
-            <button onclick="switchTab('ai')" id="tab-ai" class="py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-white whitespace-nowrap flex items-center gap-1.5 transition-all">
-                AI Solidity Auditor 🤖 <span class="bg-[#1C212E] text-[9px] text-blue-400 px-1.5 py-0.5 rounded font-bold">LOCAL</span>
-            </button>
-            <button onclick="switchTab('deployer')" id="tab-deployer" class="py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-white whitespace-nowrap flex items-center gap-1.5 transition-all">
-                Rug Creator <i class="fa-solid fa-rocket text-xs text-amber-500 animate-pulse"></i>
-            </button>
-            <button onclick="switchTab('staking')" id="tab-staking" class="py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-white whitespace-nowrap flex items-center gap-1.5 transition-all">
-                Ponzi Yield Pools <i id="stakingLockIcon" class="fa-solid fa-lock text-[10px] text-gray-500"></i>
-            </button>
-            <!-- NEW MEMPOOL TAB BUTTON -->
-            <button onclick="switchTab('mempool')" id="tab-mempool" class="py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-white whitespace-nowrap flex items-center gap-1.5 transition-all">
-                Mempool Roulette <i class="fa-solid fa-dice text-xs text-cyan-400 animate-pulse"></i>
-                <span class="bg-rose-500/20 text-rose-400 text-[8px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wide">Soon</span>
-            </button>
-            <button onclick="switchTab('onlinelobby')" id="tab-onlinelobby" class="py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-white whitespace-nowrap flex items-center gap-1.5 transition-all">
-                Online Fight Club <i class="fa-solid fa-globe text-xs text-purple-400 animate-pulse"></i>
-                <span id="onlineLobbySoonBadge" class="bg-rose-500/20 text-rose-400 text-[8px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wide">NFT</span>
-            </button>
-            <button onclick="switchTab('info')" id="tab-info" class="py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-white whitespace-nowrap transition-all">
-                How to Play 📖
-            </button>
-        </div>
-    </nav>
-
-    <main class="max-w-7xl mx-auto px-4 py-6 flex-grow w-full">
-
-        <!-- ================= LORE / INFO TAB ================= -->
-        <section id="content-info" class="hidden space-y-6">
-            <div class="bg-[#0C0F16] rounded-xl p-6 border border-[#1A2232] shadow-2xl relative overflow-hidden">
-                <div class="absolute right-6 bottom-6 text-[150px] font-black text-[#1C212E]/5 select-none pointer-events-none uppercase">RUG</div>
-                <div class="flex items-center space-x-3 mb-6">
-                    <div class="bg-gradient-to-tr from-amber-600 to-amber-950 p-2.5 rounded-lg flex items-center justify-center shadow-lg">
-                        <i class="fa-solid fa-toilet-paper text-white text-xl"></i>
-                    </div>
-                    <span class="text-white font-extrabold text-2xl tracking-tight">Shitcore</span>
-                </div>
-                <div class="space-y-4 text-gray-300 text-sm md:text-base leading-relaxed tracking-wide font-light max-w-5xl">
-                    <p class="font-bold text-white text-base md:text-lg mb-2">
-                        Shitcore is a satirical Layer 1 for Meme 3.0 — a fictional universe where every meme coin is a ticking time bomb and you, the player, are the one holding the detonator.
-                    </p>
-                    <p>
-                        This is a 100% fake, 100% client-side idle game. There is no real blockchain, no real wallet, and no real money anywhere in this code. Every number you see is generated by <code class="text-amber-400">Math.random()</code> running in your own browser. It exists to satirize rug-pull culture, not to teach or enable it.
-                    </p>
-                </div>
-            </div>
-
-            <!-- HOW TO PLAY -->
-            <div id="howToPlaySection" class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-6 shadow-lg">
-                <h3 class="text-white font-bold text-lg mb-4 flex items-center gap-2"><i class="fa-solid fa-gamepad text-blue-400"></i> How To Play</h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-300 font-light leading-relaxed">
-                    <div class="bg-[#070A0F] p-4 rounded-lg border border-[#131924]">
-                        <h4 class="text-amber-400 font-bold text-xs uppercase mb-1.5">1. Deploy a Token</h4>
-                        <p>Go to <strong class="text-white">Rug Creator</strong>, name your token, set an initial liquidity pool, and hit Launch. Watch fake investors pour money in while the Audit Threat meter slowly climbs.</p>
-                    </div>
-                    <div class="bg-[#070A0F] p-4 rounded-lg border border-[#131924]">
-                        <h4 class="text-amber-400 font-bold text-xs uppercase mb-1.5">2. Hype It</h4>
-                        <p>Higher Hype = faster capital inflow. Pay a Y Social Influencer (90% works, 10% they hack you), or buy the Telegram Bot perk to generate hype passively while you sleep.</p>
-                    </div>
-                    <div class="bg-[#070A0F] p-4 rounded-lg border border-[#131924]">
-                        <h4 class="text-amber-400 font-bold text-xs uppercase mb-1.5">3. Run A Campaign</h4>
-                        <p>2 Marketing Campaigns unlock at Level 2, 2 more at Level 4. Each one <strong class="text-white">permanently</strong> speeds up capital inflow AND Audit Threat for that deployment. They stack — more campaigns, more chaos.</p>
-                    </div>
-                    <div class="bg-[#070A0F] p-4 rounded-lg border border-[#131924]">
-                        <h4 class="text-amber-400 font-bold text-xs uppercase mb-1.5">4. Balance Greed vs. Heat</h4>
-                        <p>The Toxicity Tax extracts cash faster but accelerates Audit Threat. Let the meter hit 100% and the feds show up — seizing that token AND adding to your account-wide Regulatory Heat.</p>
-                    </div>
-                    <div class="bg-[#070A0F] p-4 rounded-lg border border-[#131924]">
-                        <h4 class="text-amber-400 font-bold text-xs uppercase mb-1.5">5. Pull The Rug</h4>
-                        <p>Cash out before the meter explodes. Stolen liquidity becomes real wallet cash and pushes you toward your fake Lambo and the next Degen Level.</p>
-                    </div>
-                    <div class="bg-[#070A0F] p-4 rounded-lg border border-[#131924]">
-                        <h4 class="text-amber-400 font-bold text-xs uppercase mb-1.5">6. Launch an NFT on OpenShit 🎨</h4>
-                        <p>Type a prompt, generate real AI art via Pollinations.ai, configure your collection, and launch. Watch 500 fake buyers mint over ~15 min. Exit via <strong class="text-white">Mint & Rug</strong> (ghost the community) or <strong class="text-white">Floor Pump & Dump</strong> (1.5x–4x multiplier).</p>
-                    </div>
-                    <div class="bg-[#070A0F] p-4 rounded-lg border border-[#131924] md:col-span-2">
-                        <h4 class="text-amber-400 font-bold text-xs uppercase mb-1.5">7. Trade on Markets & Reduce Your Heat</h4>
-                        <p>Markets lets you Pump or Dump with leverage (25x–100x) using a wager system. Higher leverage = bigger swings and higher bust chance. The AI Solidity Auditor is the <strong class="text-white">only</strong> way to reduce Regulatory Heat — compile unique code to chip 4–10% off each run, but every compile carries its own risk of backfiring.</p>
-                    </div>
-                </div>
-                <div class="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-                    <div class="bg-[#070A0F] p-3 rounded-lg border border-[#131924] text-center">
-                        <p class="text-gray-400 mb-1">LVL 1</p><p class="text-white font-bold">The Basement Dev</p>
-                    </div>
-                    <div class="bg-[#070A0F] p-3 rounded-lg border border-[#131924] text-center">
-                        <p class="text-gray-400 mb-1">LVL 2</p><p class="text-white font-bold">The Shiller</p>
-                    </div>
-                    <div class="bg-[#070A0F] p-3 rounded-lg border border-[#131924] text-center">
-                        <p class="text-gray-400 mb-1">LVL 3</p><p class="text-white font-bold">The Shadow Validator</p>
-                    </div>
-                    <div class="bg-[#070A0F] p-3 rounded-lg border border-[#131924] text-center">
-                        <p class="text-gray-400 mb-1">LVL 4</p><p class="text-white font-bold">The Institutional Rugger</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- WAYS TO EARN -->
-            <div id="waysToEarnSection" class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-6 shadow-lg">
-                <h3 class="text-white font-bold text-lg mb-4 flex items-center gap-2"><i class="fa-solid fa-sack-dollar text-emerald-400"></i> Ways To Earn Money</h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-300 font-light leading-relaxed">
-                    <div class="bg-[#070A0F] p-4 rounded-lg border border-[#131924]">
-                        <h4 class="text-emerald-400 font-bold text-xs uppercase mb-1.5">Pull The Rug</h4>
-                        <p>Rug Creator's main loop. Whatever's in the liquidity pool when you exit-scam goes straight to your wallet and counts toward your Lambo goal.</p>
-                    </div>
-                    <div class="bg-[#070A0F] p-4 rounded-lg border border-[#131924]">
-                        <h4 class="text-emerald-400 font-bold text-xs uppercase mb-1.5">Leveraged Wagers</h4>
-                        <p>Markets tab: pick a wager (10%/50%/custom) and a leverage tier (25x–100x), then Pump or Dump. Win big — or get liquidated, rugged, or drained on the spot.</p>
-                    </div>
-                    <div class="bg-[#070A0F] p-4 rounded-lg border border-[#131924]">
-                        <h4 class="text-emerald-400 font-bold text-xs uppercase mb-1.5">MEV Sandwich (Level 3)</h4>
-                        <p>Unlocked at Level 3. Click once every 12 seconds for guaranteed cash ($100–$1,000). Always costs Regulatory Heat. 10% chance you get counter-sandwiched and lose money instead.</p>
-                    </div>
-                    <div class="bg-[#070A0F] p-4 rounded-lg border border-[#131924]">
-                        <h4 class="text-emerald-400 font-bold text-xs uppercase mb-1.5">OpenShit NFT Collections 🎨</h4>
-                        <p>Generate real AI art, launch a fake NFT collection, hype it with Y Social influencers, and exit via Mint & Rug or Floor Pump & Dump (1.5x–4x multiplier). Neither counts toward your Lambo goal — pure wallet cash.</p>
-                    </div>
-                    <div class="bg-[#070A0F] p-4 rounded-lg border border-[#131924]">
-                        <h4 class="text-emerald-400 font-bold text-xs uppercase mb-1.5">Ponzi Yield Pools</h4>
-                        <p>Stake into one of three unhinged APY pools (420% / 6,900% / 42,069%), then Harvest or Withdraw. Both hit wallet cash only — neither counts toward your Lambo goal.</p>
-                    </div>
-                    <div class="bg-[#070A0F] p-4 rounded-lg border border-[#131924]">
-                        <h4 class="text-emerald-400 font-bold text-xs uppercase mb-1.5">AI Auditor Jackpot</h4>
-                        <p>1% chance per compile that liquidity shows "100% UNLOCKED" — hit DRAIN for $1,000–$10,000 free cash.</p>
-                    </div>
-                    <div class="bg-[#070A0F] p-4 rounded-lg border border-[#131924]">
-                        <h4 class="text-emerald-400 font-bold text-xs uppercase mb-1.5">🍀 Hidden: Binance Pump &amp; Dump</h4>
-                        <p>Deploy any token under a custom name — 1% chance a real exchange listing bot notices it. Instant $10,000 toward your Lambo goal.</p>
-                    </div>
-                    <div class="bg-[#070A0F] p-4 rounded-lg border border-[#131924]">
-                        <h4 class="text-emerald-400 font-bold text-xs uppercase mb-1.5">🍀 Hidden: Heman Tusk</h4>
-                        <p>Pay a Y Social Influencer on OpenShit — 1% chance Heman Tusk (CEO of Y) changes his pfp to your AI art using your actual generated image. Instant collection sellout.</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- REGULATORY HEAT -->
-            <div id="regulatoryHeatSection" class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-6 shadow-lg">
-                <h3 class="text-white font-bold text-lg mb-2 flex items-center gap-2"><i class="fa-solid fa-temperature-high text-amber-400"></i> Regulatory Heat</h3>
-                <p class="text-sm text-gray-300 font-light leading-relaxed mb-4">Heat is account-wide and separate from any single token's Audit Threat. Hit 100% and it's instant game over — every asset you have gets seized.</p>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-300 font-light leading-relaxed">
-                    <div class="bg-[#070A0F] p-4 rounded-lg border border-rose-900/40">
-                        <h4 class="text-rose-400 font-bold text-xs uppercase mb-1.5">What raises it</h4>
-                        <p>Token seized by Audit Threat (+25%), pulling the rug (scales with Toxicity Tax), MEV Sandwich (+5–9% every use), OpenShit events like IP Lawsuit or DMCA Strike (+7–20%).</p>
-                    </div>
-                    <div class="bg-[#070A0F] p-4 rounded-lg border border-emerald-900/40">
-                        <h4 class="text-emerald-400 font-bold text-xs uppercase mb-1.5">What lowers it</h4>
-                        <p>Only one thing: the AI Solidity Auditor. Every successful compile chips 4–10% off Heat. It's no longer free — every compile risks a wallet penalty. Use it carefully.</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- THE RISKS -->
-            <div class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-6 shadow-lg">
-                <h3 class="text-white font-bold text-lg mb-2 flex items-center gap-2"><i class="fa-solid fa-skull-crossbones text-rose-500"></i> The Risks</h3>
-                <p class="text-sm text-gray-300 font-light leading-relaxed mb-4">Almost every button in this game has a small chance of going badly — much like real degen life. Here's everywhere that can bite you:</p>
-                <ul class="space-y-2.5 text-sm text-gray-300 font-light leading-relaxed list-disc list-inside marker:text-rose-500">
-                    <li><strong class="text-white">Deploying a token:</strong> 0.01% chance the act of deploying drains your whole wallet.</li>
-                    <li><strong class="text-white">Paying a Y Social Influencer (Rug Creator):</strong> 10% chance they take your $50 and hack 10–50% of whatever's left.</li>
-                    <li><strong class="text-white">Quantum Audit:</strong> rare instant seizure of your active token deployment — can strike any second, regardless of Audit Threat level.</li>
-                    <li><strong class="text-white">Placing a Markets wager:</strong> 1% RUGGED (wager + 10% of wallet), 0.01% total DRAIN, plus a leverage-scaled bust chance (13%/25%/38%/50% for 25x/50x/75x/100x).</li>
-                    <li><strong class="text-white">Running an MEV Sandwich:</strong> 10% chance a bigger bot sandwiches you back and you lose money instead of gaining it.</li>
-                    <li><strong class="text-white">Compiling in the AI Auditor:</strong> 0.01% full wallet wipe, 10% costs 10% of wallet, 0.01% costs 35% — every single compile.</li>
-                    <li><strong class="text-white">Harvesting Ponzi Yield rewards:</strong> 15% "Protocol Exploit" wipes 100% of your staked principal.</li>
-                    <li><strong class="text-white">Withdrawing Ponzi Yield principal:</strong> 0.01% chance it gets rugged mid-withdrawal.</li>
-                    <li><strong class="text-white">OpenShit — general interaction:</strong> 0.01%/sec drain while a collection is live.</li>
-                    <li><strong class="text-white">OpenShit — IP Lawsuit:</strong> 0.03%/sec instant collection seizure, revenue forfeited.</li>
-                    <li><strong class="text-white">OpenShit — DMCA Strike:</strong> 0.07%/sec hype drops 28% instantly.</li>
-                    <li><strong class="text-white">Paying a Y Social Influencer (OpenShit):</strong> 0.01% DRAINED, 10% scam (fee + 10–50% of wallet).</li>
-                </ul>
-                <p class="text-xs text-gray-500 font-light mt-4">Every "DRAINED" outcome resets your wallet to $0. Your Degen Level and lifetime earnings stay — you just have to claw your way back.</p>
-            </div>
-            <div class="bg-[#1C0D0D] border border-[#441818] rounded-xl p-5 flex items-start space-x-3 shadow-md">
-                <i class="fa-solid fa-triangle-exclamation text-rose-500 text-lg mt-0.5"></i>
-                <div>
-                    <h4 class="text-rose-400 font-bold text-sm">Real-World Risk Warning</h4>
-                    <p class="text-gray-300 text-xs mt-1 leading-normal font-light">
-                        This is satire. In real life, rug pulls and honeypot tokens steal real money from real people and are illegal in most jurisdictions. Never invest in anything you don't understand, and never trust a token whose entire pitch is "trust me."
-                    </p>
-                </div>
-            </div>
-        </section>
-
-        <!-- ================= MARKETS TAB ================= -->
-        <section id="content-markets" class="space-y-6">
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div data-win95-window="SHITCORE_Chart.exe" class="lg:col-span-2 bg-[#0C0F16] border border-[#1A2232] rounded-xl p-5 flex flex-col justify-between shadow-lg">
-                    <div>
-                        <div class="flex items-center justify-between mb-4 gap-2">
-                            <div class="flex items-center space-x-3">
-                                <span class="font-extrabold text-lg text-white mc-title-accent">SHITCORE / USDSHT Ambient Chart</span>
-                                <span class="bg-red-500/10 text-rose-400 px-2 py-0.5 rounded text-xs animate-pulse font-semibold">LIVE DRAIN</span>
-                            </div>
-                        </div>
-                        <div class="flex items-center gap-3 mb-4">
-                            <button onclick="forcePump()" class="flex-1 py-3 bg-green-500 hover:bg-green-600 text-black font-bold rounded-lg text-sm shadow-lg flex items-center justify-center gap-2">
-                                <i class="fa-solid fa-arrow-trend-up"></i> PUMP IT
-                            </button>
-                            <button onclick="forceDump()" class="flex-1 py-3 bg-red-500 hover:bg-red-600 text-white font-bold rounded-lg text-sm shadow-lg flex items-center justify-center gap-2">
-                                <i class="fa-solid fa-arrow-trend-down"></i> DUMP IT
-                            </button>
-                        </div>
-                        <div class="relative w-full h-[300px] bg-[#040609] rounded-lg border border-[#1A2232] overflow-hidden">
-                            <canvas id="tradingCanvas" class="w-full h-full block"></canvas>
-                            <div id="mcChartPainterWrap" class="hidden mc-chart-painter absolute bottom-0 right-1 w-28 h-28 md:w-36 md:h-36 pointer-events-none select-none">
-                                <img src="assets/Reiffer painting.png" alt="" class="mc-painter-body absolute inset-0 w-full h-full">
-                                <img id="mcChartPainterTorso" src="assets/Reiffer painting.png" alt="" class="mc-painter-torso absolute inset-0 w-full h-full">
-                                <img id="mcChartPainterArm" src="assets/Reiffer painting.png" alt="" class="mc-painter-arm absolute inset-0 w-full h-full">
-                            </div>
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-3 gap-2 mt-4 pt-3 border-t border-[#1A2232] text-center">
-                        <div><span class="text-[10px] text-gray-400 block">24h High</span><span id="statHigh" class="text-green-400 text-xs font-semibold">0.02450000</span></div>
-                        <div><span class="text-[10px] text-gray-400 block">24h Low</span><span id="statLow" class="text-rose-400 text-xs font-semibold">0.00000012</span></div>
-                        <div><span class="text-[10px] text-gray-400 block">24h Vol</span><span id="statVol" class="text-gray-200 text-xs font-semibold">9.81B</span></div>
-                    </div>
-                </div>
-
-                <div data-win95-window="Orderbook.exe" class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-5 flex flex-col justify-between shadow-lg space-y-4">
-                    <div>
-                        <div class="border-b border-[#1A2232] pb-3 mb-3 flex items-center justify-between">
-                            <h3 class="font-bold text-sm text-gray-200 mc-title-accent">Live Orderbook</h3>
-                        </div>
-                        <div class="space-y-1 text-[11px] mono">
-                            <div class="space-y-0.5" id="orderBookAsks"></div>
-                            <div class="border-y border-[#1C212E] py-1 text-center my-2 bg-[#10141D] rounded mc-inset-panel">
-                                <span class="text-gray-400">Spread:</span> <span id="liveSpread" class="text-amber-500 font-bold ml-1">99.8% (Danger)</span>
-                            </div>
-                            <div class="space-y-0.5" id="orderBookBids"></div>
-                        </div>
-                    </div>
-
-                    <!-- Wager + Leverage controls get injected here by markets.js -->
-                    <div id="marketWagerAnchor"></div>
-
-                    <!-- MEV Frontrun: unlocked at Level 3 -->
-                    <div id="mevPanel" class="hidden pt-4 border-t border-[#1A2232] space-y-2">
-                        <h4 class="text-xs font-bold text-rose-400 uppercase flex items-center gap-1.5"><i class="fa-solid fa-bolt"></i> Shadow Validator Tools</h4>
-                        <p class="text-[10px] text-gray-400 font-light leading-relaxed">Sandwich your own community's swaps straight from the mempool. Free cash, guaranteed trust damage and Regulatory Heat.</p>
-                        <button id="mevFrontrunBtn" onclick="runMevFrontrun()" class="w-full py-2.5 bg-gradient-to-r from-purple-600 to-fuchsia-700 hover:from-purple-500 hover:to-fuchsia-600 text-white font-bold rounded-lg text-xs shadow-lg transition uppercase">
-                            <i class="fa-solid fa-robot mr-1"></i> Frontrun The Mempool
-                        </button>
-                    </div>
-                    <div id="mevLockedNotice" class="pt-4 border-t border-[#1A2232] text-center text-[11px] text-gray-500 font-light">
-                        <i class="fa-solid fa-lock mr-1"></i> Reach Level 3: The Shadow Validator to unlock MEV frontrunning.
-                    </div>
-                </div>
-            </div>
-
-            <div data-win95-window="ChainFeed.exe" class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-4 shadow-lg">
-                <div class="flex items-center justify-between mb-3">
-                    <h4 class="text-sm font-semibold flex items-center gap-2">
-                        <span>Live Shitcore Chain Feed</span>
-                        <span class="w-2.5 h-2.5 bg-green-500 rounded-full animate-ping"></span>
-                    </h4>
-                    <span class="text-[10px] text-gray-500 font-mono" id="simulatedBlockNum">BLOCK #942,012</span>
-                </div>
-                <div class="space-y-2 text-xs mono max-h-[220px] overflow-y-auto" id="blockchainLogs"></div>
-            </div>
-        </section>
-
-        <!-- ================= AI AUDITOR TAB ================= -->
-        <section id="content-ai" class="hidden space-y-6">
-            <div class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-6 shadow-lg">
-                <div class="flex items-center space-x-3 border-b border-[#1A2232] pb-4 mb-4">
-                    <div class="bg-blue-500/20 p-2.5 rounded-lg text-blue-400">
-                        <i class="fa-solid fa-robot text-xl animate-bounce"></i>
-                    </div>
-                    <div>
-                        <h2 class="text-lg font-bold text-white">Shit-GPT Smart Auditor</h2>
-                        <p class="text-xs text-gray-400">Paste a toy contract (or just type anything) and get a fully local, procedurally-generated roast. No network calls, no API keys.</p>
-                    </div>
-                </div>
-                <div class="space-y-4">
-                    <div class="flex justify-between items-center flex-wrap gap-2">
-                        <label class="block text-xs text-gray-400 uppercase tracking-wider font-semibold">Code / Address / Vibe:</label>
-                        <div class="flex gap-1.5 flex-wrap">
-                            <button onclick="loadTemplate('safemoon')" class="bg-[#1C212E] hover:bg-[#252E3E] text-[11px] text-gray-300 px-2 py-1 rounded border border-[#1A2232]">SafePlunge.sol</button>
-                            <button onclick="loadTemplate('infinite')" class="bg-[#1C212E] hover:bg-[#252E3E] text-[11px] text-gray-300 px-2 py-1 rounded border border-[#1A2232]">LamboSqueeze.sol</button>
-                            <button onclick="loadTemplate('gigapump')" class="bg-[#1C212E] hover:bg-[#252E3E] text-[11px] text-gray-300 px-2 py-1 rounded border border-[#1A2232]">GigaPumpPresale.sol</button>
-                            <button onclick="loadTemplate('taxrug')" class="bg-[#1C212E] hover:bg-[#252E3E] text-[11px] text-gray-300 px-2 py-1 rounded border border-[#1A2232]">TaxRugBooster.sol</button>
-                        </div>
-                    </div>
-                    <textarea id="contractInput" rows="7" class="w-full bg-[#10141D] text-white font-mono px-4 py-3 rounded-lg border border-[#1A2232] focus:outline-none focus:border-blue-500 text-xs" placeholder="Paste toy Solidity, a fake address, or just a token name to roast..."></textarea>
-                    <button onclick="auditContract()" class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white py-3 rounded-lg font-bold text-sm tracking-wide shadow-lg transition">
-                        Compile &amp; Audit Bytecode
-                    </button>
-
-                    <div id="auditResults" class="hidden bg-[#10141D] rounded-lg p-5 border border-dashed border-[#1A2232] space-y-4">
-                        <div class="flex items-center justify-between border-b border-[#1A2232] pb-3 mb-1">
-                            <span class="font-bold text-sm tracking-wider uppercase text-gray-300">Risk Vector Analysis</span>
-                            <span id="auditSafetyBadge" class="px-2.5 py-1 text-[11px] rounded-full font-bold"></span>
-                        </div>
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-                            <div class="bg-[#070A0F] p-3 rounded-md">
-                                <span class="text-gray-400 block mb-1">Probability of Instant Dev Exit:</span>
-                                <span id="auditProb" class="text-xl font-bold"></span>
-                            </div>
-                            <div class="bg-[#070A0F] p-3 rounded-md">
-                                <span class="text-gray-400 block mb-1">Detected Bytecode Signature:</span>
-                                <span id="auditDevSentiment" class="text-xl font-bold text-amber-500"></span>
-                            </div>
-                            <div class="bg-[#070A0F] p-3 rounded-md">
-                                <span class="text-gray-400 block mb-1">Liquidity Lock Status:</span>
-                                <span id="auditLiqStatus" class="text-xl font-bold"></span>
-                            </div>
-                        </div>
-                        <div class="bg-[#070A0F] p-4 rounded-md">
-                            <span class="text-xs text-gray-400 font-semibold block mb-2"><i class="fa-solid fa-comment-dots mr-1"></i> Auditor Verdict:</span>
-                            <p id="auditParagraph" class="text-sm italic text-gray-200 leading-relaxed font-light"></p>
-                        </div>
-                        <div class="bg-[#040609] p-3 rounded-md border border-[#1E293B]">
-                            <span class="text-[10px] text-rose-400 uppercase font-bold tracking-wider block mb-1.5"><i class="fa-solid fa-bug mr-1"></i> Line-by-Line Roast Console:</span>
-                            <div id="lineRoastLogs" class="space-y-1.5 text-[11px] font-mono text-gray-400 max-h-[140px] overflow-y-auto"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- ================= RUG DEPLOYER ================= -->
-        <section id="content-deployer" class="hidden space-y-6">
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <!-- Config panel -->
-                <div class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-6 flex flex-col justify-between shadow-lg space-y-4">
-                    <div class="space-y-3.5 text-xs">
-                        <div class="border-b border-[#1A2232] pb-3 mb-1 flex justify-between items-center">
-                            <h3 class="font-bold text-base flex items-center gap-1.5 text-amber-500"><i class="fa-solid fa-rocket animate-pulse"></i> Token Creator</h3>
-                        </div>
-                        <div>
-                            <label class="block text-gray-400 mb-1.5 uppercase font-semibold">Token Name</label>
-                            <input type="text" id="deployName" value="Golden Toilet Elon" class="w-full bg-[#10141D] text-white px-3 py-2 rounded border border-[#1A2232] focus:outline-none focus:border-amber-500">
-                        </div>
-                        <div>
-                            <label class="block text-gray-400 mb-1.5 uppercase font-semibold">Token Ticker</label>
-                            <input type="text" id="deployTicker" value="GTE" class="w-full bg-[#10141D] text-white px-3 py-2 rounded border border-[#1A2232] focus:outline-none focus:border-amber-500 uppercase">
-                        </div>
-                        <div>
-                            <label class="block text-gray-400 mb-1.5 uppercase font-semibold">Initial Liquidity Pool (USDT)</label>
-                            <input type="number" id="deployLiquidity" value="200" min="50" class="w-full bg-[#10141D] text-white px-3 py-2 rounded border border-[#1A2232] focus:outline-none focus:border-amber-500">
-                            <p class="text-[10px] text-gray-500 mt-1">Spent from your wallet. Seeds the pool so it looks legit.</p>
-                        </div>
-
-                        <!-- Toxicity Tax slider -->
-                        <div>
-                            <div class="flex justify-between mb-1">
-                                <label class="text-gray-400 uppercase font-semibold">Contract Toxicity Tax</label>
-                                <span id="toxicityTaxVal" class="text-rose-400 font-bold font-mono">10%</span>
-                            </div>
-                            <input type="range" id="toxicityTaxSlider" min="0" max="99" value="10" class="w-full accent-rose-500 bg-[#10141D] rounded h-2">
-                            <p class="text-[10px] text-rose-400/70 mt-1 leading-normal">Higher tax = faster cash extraction, faster Audit Threat growth.</p>
-                        </div>
-
-                        <!-- Marketing -->
-                        <div>
-                            <label class="block text-gray-400 mb-1.5 uppercase font-semibold">Manual Marketing</label>
-                            <button onclick="manualShill()" id="manualShillBtn" class="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded text-xs transition">
-                                📱 Pay TikTok Influencer ($50 → +Hype)
-                            </button>
-                        </div>
-                        <div id="campaignPanel" class="hidden">
-                            <label class="block text-gray-400 mb-1.5 uppercase font-semibold">Marketing Campaign <span class="text-[9px] text-blue-400">(Lvl 2+)</span></label>
-                            <select id="campaignSelect" class="w-full bg-[#10141D] text-white px-3 py-2 rounded border border-[#1A2232] focus:outline-none focus:border-amber-500 mb-2"></select>
-                            <button onclick="runCampaign()" class="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded text-xs transition">
-                                🚀 Run Campaign
-                            </button>
-                        </div>
-
-                        <!-- Honeypot toggle: Level 4 -->
-                        <div id="honeypotPanel" class="hidden bg-[#1C0D0D] border border-[#441818] rounded-lg p-3">
-                            <label class="flex items-center justify-between cursor-pointer">
-                                <span class="text-rose-400 font-bold text-[11px] uppercase">🍯 Honeypot Backdoor</span>
-                                <input type="checkbox" id="honeypotToggle" onchange="toggleHoneypot()" class="accent-rose-500 w-4 h-4">
-                            </label>
-                            <p class="text-[9px] text-gray-400 mt-1 leading-normal">Locks all sells on this token. Guarantees you keep every dollar raised — and guarantees a faster Audit Threat climb.</p>
-                        </div>
-                    </div>
-
-                    <div class="space-y-2">
-                        <button onclick="launchToken()" id="launchBtn" class="w-full py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-extrabold rounded-lg text-sm tracking-wide shadow-lg transition">
-                            Deploy Toxic Contract
-                        </button>
-                        <button onclick="pullTheRug()" id="pullRugBtn" disabled class="w-full py-3 bg-gradient-to-r from-red-600 to-rose-700 text-white font-extrabold rounded-lg text-xs shadow-lg transition uppercase opacity-40 cursor-not-allowed">
-                            <i class="fa-solid fa-skull-crossbones mr-1"></i> Pull The Rug (Exit Scam)
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Live monitor -->
-                <div class="lg:col-span-2 bg-[#0C0F16] border border-[#1A2232] rounded-xl p-6 flex flex-col justify-between relative overflow-hidden shadow-lg min-h-[560px]">
-                    <div id="deployerPlaceholder" class="absolute inset-0 bg-[#0C0F16]/95 z-30 flex flex-col items-center justify-center text-center p-6">
-                        <i class="fa-solid fa-toilet-paper text-6xl text-gray-600 mb-4 animate-bounce"></i>
-                        <h4 class="font-bold text-lg text-gray-300">No Active Deployment</h4>
-                        <p class="text-xs text-gray-400 max-w-sm mt-1 leading-relaxed font-light">Configure parameters on the left, then hit "Deploy Toxic Contract" to start collecting victims.</p>
-                    </div>
-
-                    <div class="z-10 space-y-4 flex-grow flex flex-col justify-between">
-                        <div>
-                            <div class="flex items-center justify-between border-b border-[#1A2232] pb-3 mb-3">
-                                <div>
-                                    <h3 id="monitorTokenName" class="font-extrabold text-xl tracking-wide text-white">TOKEN_NAME</h3>
-                                    <p id="monitorTokenTicker" class="text-xs text-amber-500 font-mono">TICKER</p>
-                                </div>
-                                <span id="monitorStatus" class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-green-500/10 text-green-400">NO DEPLOYMENT</span>
-                            </div>
-
-                            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-center mb-4">
-                                <div class="bg-[#070A0F] p-2 rounded border border-[#131924]"><span class="text-gray-400 text-[10px] block">Capital Raised</span><span id="monitorRaised" class="text-green-400 font-bold text-sm font-mono">$0</span></div>
-                                <div class="bg-[#070A0F] p-2 rounded border border-[#131924]"><span class="text-gray-400 text-[10px] block">Suckers</span><span id="monitorSuckers" class="text-white font-bold text-sm font-mono">0</span></div>
-                                <div class="bg-[#070A0F] p-2 rounded border border-[#131924]"><span class="text-gray-400 text-[10px] block">Price</span><span id="monitorPrice" class="text-amber-400 font-bold text-sm font-mono">$0.0001</span></div>
-                                <div class="bg-[#070A0F] p-2 rounded border border-[#131924]"><span class="text-gray-400 text-[10px] block">Honeypot</span><span id="monitorHoneypot" class="text-gray-500 font-bold text-sm font-mono">OFF</span></div>
-                            </div>
-
-                            <!-- Hype meter -->
-                            <div class="space-y-1 mb-3">
-                                <div class="flex justify-between text-[11px] font-semibold"><span class="text-gray-400 uppercase">Hype Meter</span><span id="hypePct" class="text-blue-400">0%</span></div>
-                                <div class="w-full bg-[#10141D] h-2.5 rounded-full overflow-hidden border border-[#1A2232]">
-                                    <div id="hypeBar" class="bg-gradient-to-r from-blue-500 to-cyan-400 h-full w-0 transition-all duration-300"></div>
-                                </div>
-                            </div>
-
-                            <!-- Audit Threat meter -->
-                            <div class="space-y-1">
-                                <div class="flex justify-between text-[11px] font-semibold"><span class="text-gray-400 uppercase">Audit Threat</span><span id="auditThreatPct" class="text-rose-400">0%</span></div>
-                                <div class="w-full bg-[#10141D] h-2.5 rounded-full overflow-hidden border border-[#1A2232]">
-                                    <div id="auditThreatBar" class="bg-gradient-to-r from-amber-500 to-rose-600 h-full w-0 transition-all duration-300"></div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Chat Feed -->
-                        <div class="p-3 bg-[#10141D] rounded-lg border border-[#1A2232]">
-                            <span class="text-[10px] text-gray-400 font-bold block mb-1.5"><i class="fa-solid fa-comments mr-1"></i> Degen Chat Feed:</span>
-                            <div id="chatFeed" class="space-y-1 h-28 overflow-y-auto text-[11px] mono text-gray-300"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- ================= PONZI YIELD FARM ================= -->
-        <section id="content-staking" class="hidden space-y-6">
-            <div id="stakingLocked" class="hidden bg-[#0C0F16] border border-[#1A2232] rounded-xl p-10 text-center shadow-lg">
-                <i class="fa-solid fa-lock text-5xl text-gray-600 mb-4"></i>
-                <h3 class="text-white font-bold text-lg">Ponzi Yield Pools Locked</h3>
-                <p class="text-gray-400 text-sm mt-2">Reach <strong class="text-amber-400">Degen Level 2: The Shiller</strong> to unlock yield farming.</p>
-            </div>
-
-            <div id="stakingUnlocked" class="hidden space-y-6">
-                <div class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-6 shadow-lg">
-                    <div class="flex flex-col md:flex-row md:items-center justify-between border-b border-[#1A2232] pb-4 mb-6 gap-4">
-                        <div class="flex items-center space-x-3">
-                            <div class="bg-amber-500/10 text-amber-500 p-2.5 rounded-lg"><i class="fa-solid fa-tractor text-xl"></i></div>
-                            <div>
-                                <h2 class="text-lg font-bold text-white">Shit-Staking Yield Vaults</h2>
-                                <p class="text-xs text-gray-400 font-light">Lock funds into unstable yield traps. APY is fully unhinged. Harvesting is risky.</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div id="poolCardsContainer" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6"></div>
-
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div class="bg-[#10141D] p-5 rounded-lg border border-[#1A2232] space-y-3">
-                            <h4 class="font-bold text-sm text-gray-300 uppercase tracking-wider">Deposit Funds</h4>
-                            <div class="bg-[#070A0F] p-2.5 rounded border border-[#1A2232] flex justify-between items-center">
-                                <input type="number" id="stakeAmount" value="200" class="bg-transparent text-white font-bold font-mono focus:outline-none w-2/3 text-sm" placeholder="Amount">
-                                <span class="text-xs font-semibold text-amber-500">CASH</span>
-                            </div>
-                            <button onclick="stakeTokens()" class="w-full py-3 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-black font-extrabold text-xs rounded-lg transition shadow-md uppercase tracking-wider">
-                                Deposit Into Selected Pool
-                            </button>
-                            <div class="text-[11px] font-mono space-y-1.5 pt-2 border-t border-[#1A2232]">
-                                <div class="flex justify-between"><span class="text-gray-400">Currently Staked:</span><span id="stakedLocked" class="text-white font-bold">$0.00</span></div>
-                                <div class="flex justify-between"><span class="text-gray-400">Active Pool:</span><span id="stakedPoolType" class="text-amber-500 font-bold">—</span></div>
-                            </div>
-                        </div>
-
-                        <div class="bg-[#10141D] p-5 rounded-lg border border-[#1A2232] space-y-3">
-                            <h4 class="font-bold text-sm text-gray-300 uppercase tracking-wider">Rewards Vault</h4>
-                            <div class="bg-[#070A0F] p-3 rounded-md text-center">
-                                <span class="text-gray-400 text-[10px] block">Unclaimed Shitcoins</span>
-                                <span id="unclaimedShitcoins" class="text-green-400 font-extrabold text-2xl font-mono">0.00</span>
-                            </div>
-                            <button onclick="harvestRewards()" class="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-lg transition shadow uppercase">
-                                Harvest Rewards
-                            </button>
-                            <p class="text-[9px] text-rose-400/80 text-center leading-relaxed">⚠️ 15% chance of a "Protocol Exploit" on every harvest — liquidates 100% of your staked principal.</p>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-5 shadow-lg">
-                    <h4 class="font-bold text-sm text-gray-300 border-b border-[#1A2232] pb-2 mb-3 uppercase tracking-wider">Live Yield Logs</h4>
-                    <div class="space-y-2 h-[160px] overflow-y-auto text-[10px] mono text-gray-400" id="stakingEventLog">
-                        <div class="text-gray-500 italic">[System] Pool modules initialized.</div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- ================= MEMPOOL ROULETTE TAB ================= -->
-        <section id="content-mempool" class="hidden space-y-6">
-            <div class="relative">
-                <div class="absolute inset-0 z-20 bg-black/70 backdrop-blur-sm rounded-xl flex items-center justify-center pointer-events-auto">
-                    <span class="text-3xl md:text-5xl font-black uppercase text-rose-500 border-4 border-rose-500 px-6 py-3 rounded-lg -rotate-6 shadow-2xl tracking-widest" style="text-shadow: 0 0 20px rgba(244,63,94,0.6);">
-                        Coming Soon
-                    </span>
-                </div>
-                <div class="pointer-events-none opacity-50 space-y-6">
-            <!-- Header Metrics -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div class="bg-[#0b0f19] border border-cyan-500/30 p-4 rounded shadow-[0_0_15px_rgba(6,182,212,0.15)] text-center">
-                    <div class="text-xs text-gray-400 font-mono tracking-wider uppercase">Target Bitcoin Block</div>
-                    <div id="mempool-target-block" class="text-2xl font-black text-cyan-400 font-mono tracking-normal mt-1">#910,251</div>
-                </div>
-                <div class="bg-[#0b0f19] border border-amber-500/30 p-4 rounded shadow-[0_0_15px_rgba(245,158,11,0.15)] text-center">
-                    <div class="text-xs text-gray-400 font-mono tracking-wider uppercase">Est. Time Remaining</div>
-                    <div id="mempool-timer" class="text-2xl font-black text-amber-400 font-mono tracking-normal mt-1">~06m 42s</div>
-                </div>
-                <div class="bg-[#0b0f19] border border-emerald-500/30 p-4 rounded shadow-[0_0_15px_rgba(16,185,129,0.15)] text-center">
-                    <div class="text-xs text-gray-400 font-mono tracking-wider uppercase">Total Alkane Pot Size</div>
-                    <div id="mempool-pot-size" class="text-2xl font-black text-emerald-400 font-mono tracking-normal mt-1">125,000 $ALK</div>
-                </div>
-            </div>
-
-            <!-- Main Game Board -->
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <!-- Left Column: Network Status & Ratios -->
-                <div class="bg-[#070b12] border border-slate-800 p-5 rounded font-mono">
-                    <h3 class="text-sm font-bold text-gray-300 border-b border-slate-800 pb-2 mb-4 uppercase tracking-wider">// Network Hashes & Pool Distribution</h3>
-                    
-                    <div class="space-y-4">
-                        <!-- Foundry -->
-                        <div>
-                            <div class="flex justify-between text-xs mb-1">
-                                <span class="text-gray-400">Foundry USA</span>
-                                <span id="ratio-foundry-text" class="text-cyan-400">52%</span>
-                            </div>
-                            <div class="w-full bg-slate-900 h-3 rounded-full overflow-hidden border border-slate-800">
-                                <div id="ratio-foundry-bar" class="bg-cyan-500 h-full shadow-[0_0_8px_#06b6d4]" style="width: 52%"></div>
-                            </div>
-                        </div>
-                        <!-- AntPool -->
-                        <div>
-                            <div class="flex justify-between text-xs mb-1">
-                                <span class="text-gray-400">AntPool</span>
-                                <span id="ratio-antpool-text" class="text-amber-400">30%</span>
-                            </div>
-                            <div class="w-full bg-slate-900 h-3 rounded-full overflow-hidden border border-slate-800">
-                                <div id="ratio-antpool-bar" class="bg-amber-500 h-full shadow-[0_0_8px_#f59e0b]" style="width: 30%"></div>
-                            </div>
-                        </div>
-                        <!-- ViaBTC -->
-                        <div>
-                            <div class="flex justify-between text-xs mb-1">
-                                <span class="text-gray-400">ViaBTC / Others</span>
-                                <span id="ratio-viabtc-text" class="text-emerald-400">18%</span>
-                            </div>
-                            <div class="w-full bg-slate-900 h-3 rounded-full overflow-hidden border border-slate-800">
-                                <div id="ratio-viabtc-bar" class="bg-emerald-500 h-full shadow-[0_0_8px_#10b981]" style="width: 18%"></div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="mt-6 p-3 bg-cyan-950/20 border border-cyan-800/50 rounded text-center">
-                        <span id="mempool-lock-status" class="text-xs text-cyan-400 font-bold tracking-widest uppercase animate-pulse">
-                            ● LOCK STATUS: BETTING OPEN
-                        </span>
-                    </div>
-                </div>
-
-                <!-- Right Column: The Betting Desk -->
-                <div class="bg-[#070b12] border border-slate-800 p-5 rounded font-mono flex flex-col justify-between">
-                    <div>
-                        <h3 class="text-sm font-bold text-gray-300 border-b border-slate-800 pb-2 mb-4 uppercase tracking-wider">// The Betting Desk</h3>
-                        
-                        <!-- Radio Options -->
-                        <div class="space-y-2 mb-4">
-                            <label class="flex items-center justify-between p-2 rounded border border-slate-800 bg-[#090d16] hover:border-slate-700 cursor-pointer text-sm">
-                                <div class="flex items-center space-x-3">
-                                    <input type="radio" name="miningPool" value="Foundry USA" checked class="accent-cyan-500">
-                                    <span class="text-gray-300">Foundry USA</span>
-                                </div>
-                                <span class="text-cyan-400 text-xs font-bold bg-cyan-950/50 px-2 py-0.5 rounded border border-cyan-900/50">1.8x Odds</span>
-                            </label>
-                            <label class="flex items-center justify-between p-2 rounded border border-slate-800 bg-[#090d16] hover:border-slate-700 cursor-pointer text-sm">
-                                <div class="flex items-center space-x-3">
-                                    <input type="radio" name="miningPool" value="AntPool" class="accent-cyan-500">
-                                    <span class="text-gray-300">AntPool</span>
-                                </div>
-                                <span class="text-amber-400 text-xs font-bold bg-amber-950/50 px-2 py-0.5 rounded border border-amber-900/50">2.4x Odds</span>
-                            </label>
-                            <label class="flex items-center justify-between p-2 rounded border border-slate-800 bg-[#090d16] hover:border-slate-700 cursor-pointer text-sm">
-                                <div class="flex items-center space-x-3">
-                                    <input type="radio" name="miningPool" value="ViaBTC" class="accent-cyan-500">
-                                    <span class="text-gray-300">ViaBTC / Others</span>
-                                </div>
-                                <span class="text-emerald-400 text-xs font-bold bg-emerald-950/50 px-2 py-0.5 rounded border border-emerald-900/50">4.5x Odds</span>
-                            </label>
-                        </div>
-
-                        <!-- Input Amount -->
-                        <div class="mb-4">
-                            <label class="block text-xs text-gray-400 mb-1 uppercase tracking-wider">Wager Amount ($ALK / Fake USD)</label>
-                            <div class="relative">
-                                <input type="number" id="mempool-wager-amount" value="500" min="10" class="w-full bg-[#05070b] border border-slate-800 rounded p-2 text-sm text-gray-200 font-mono focus:outline-none focus:border-cyan-500">
-                                <span class="absolute right-3 top-2.5 text-xs text-gray-500 font-bold">TOKENS</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <button onclick="placeMempoolBet()" id="btn-place-mempool" class="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-2.5 px-4 rounded transition duration-200 text-sm uppercase tracking-wider shadow-[0_0_15px_rgba(6,182,212,0.4)]">
-                        Place On-Chain Wager
-                    </button>
-                </div>
-            </div>
-
-            <!-- History Log Feed -->
-            <div class="bg-[#070b12] border border-slate-800 p-4 rounded font-mono">
-                <h3 class="text-xs font-bold text-gray-400 mb-2 uppercase tracking-wider">// Recent Mined Blocks & Payout Log</h3>
-                <div id="mempool-log-feed" class="text-xs space-y-1.5 max-h-32 overflow-y-auto pr-2 text-slate-400">
-                    <div class="border-b border-slate-900 pb-1"><span class="text-slate-500">[02:14:11]</span> Block #910,250 → Mined by <span class="text-amber-400 font-bold">[AntPool]</span> → Global Pot: 180k $ALK → <span class="text-emerald-400 font-bold">Paid out to winners!</span></div>
-                    <div class="border-b border-slate-900 pb-1"><span class="text-slate-500">[02:01:45]</span> Block #910,249 → Mined by <span class="text-cyan-400 font-bold">[Foundry USA]</span> → Global Pot: 95k $ALK → <span class="text-emerald-400 font-bold">Paid out to winners!</span></div>
-                </div>
-            </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- ================= ONLINE FIGHT CLUB TAB (Stage 1: lobby only, no live match sync yet) ================= -->
-        <section id="content-onlinelobby" class="hidden space-y-6">
-            <div class="relative">
-                <div id="onlineLobbySoonOverlay" class="absolute inset-0 z-20 bg-black/70 backdrop-blur-sm rounded-xl flex flex-col items-center justify-center gap-4 pointer-events-auto">
-                    <span class="text-3xl md:text-5xl font-black uppercase text-rose-500 border-4 border-rose-500 px-6 py-3 rounded-lg -rotate-6 shadow-2xl tracking-widest" style="text-shadow: 0 0 20px rgba(244,63,94,0.6);">
-                        Holders Only
-                    </span>
-                    <div class="text-center text-[11px] md:text-xs text-gray-300 space-y-1">
-                        <div><span class="text-gray-500 uppercase tracking-wide">Unlocks with:</span> Mid Evils NFT &bull; The Conmen NFT</div>
-                        <div class="text-gray-500"><span class="uppercase tracking-wide">Coming soon:</span> Bitcoin Wizards &bull; Skull X &bull; $MIM Rune Holders</div>
-                    </div>
-                </div>
-                <div class="space-y-6">
-                    <div class="bg-[#0C0F16] rounded-xl p-6 border border-[#1A2232] shadow-2xl">
-                        <div class="flex items-center justify-between mb-4">
-                            <h3 class="text-lg font-black text-white flex items-center gap-2"><i class="fa-solid fa-globe text-purple-400"></i>Online Fight Club</h3>
-                            <button onclick="createLobbyRoom()" class="bg-purple-600/20 hover:bg-purple-600/40 border border-purple-500/30 text-purple-300 rounded px-4 py-2 text-xs font-bold transition">
-                                <i class="fa-solid fa-plus mr-1"></i>Create Room
-                            </button>
-                        </div>
-                        <div class="text-[11px] text-gray-500 mb-4">Stage 1: matchmaking only, relayed through the same Supabase setup as your leaderboard - not a direct connection between players. Getting matched opens the Fight Game on both sides, but each side is still its own local game for now - real synced play between two devices isn't wired up yet.</div>
-                        <div id="lobbyRoomList" class="space-y-1"></div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-    </main>
-
-    <!-- ============================================================ -->
-    <!-- COMMAND CENTER (always visible) -->
-    <!-- ============================================================ -->
-    <section id="commandCenterSection" class="max-w-7xl mx-auto px-4 pb-6 w-full">
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-            <!-- Lambo + Level progress -->
-            <div data-win95-window="LamboTracker.exe" class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-5 shadow-lg space-y-5">
-                <div>
-                    <h4 class="font-bold text-xs uppercase text-amber-500 tracking-widest mb-2"><i class="fa-solid fa-car"></i> Lambo Target Tracker</h4>
-                    <div class="bg-[#10141D] p-4 rounded-lg border border-[#1A2232] space-y-3 mc-inset-panel">
-                        <div class="flex justify-between items-center text-xs">
-                            <span class="text-gray-400">Rugged Savings:</span>
-                            <span class="text-green-400 font-bold font-mono">$<span id="ruggedSavingsDisplay">0.00</span> / $1,000,000</span>
-                        </div>
-                        <div class="flex justify-between items-center text-xs">
-                            <span class="text-gray-400">Current Lambo Tier:</span>
-                            <span id="lamboTierDisplay" class="text-amber-500 font-extrabold uppercase">Hot Wheels Lambo</span>
-                        </div>
-                        <div class="w-full bg-[#070A0F] h-2 rounded-full overflow-hidden border border-[#1A2232]">
-                            <div id="lamboProgressBar" class="bg-gradient-to-r from-amber-500 to-yellow-400 h-full w-0 transition-all duration-300"></div>
-                        </div>
-                    </div>
-                </div>
-                <div>
-                    <h4 class="font-bold text-xs uppercase text-blue-400 tracking-widest mb-2"><i class="fa-solid fa-ranking-star"></i> Degen Level Progress</h4>
-                    <div class="bg-[#10141D] p-4 rounded-lg border border-[#1A2232] space-y-2 mc-inset-panel">
-                        <div class="flex justify-between text-xs"><span id="levelProgressLabel" class="text-gray-300 font-semibold">LVL 1 — The Basement Dev</span><span id="levelProgressNext" class="text-gray-500">Next: $3,000</span></div>
-                        <div class="w-full bg-[#070A0F] h-2 rounded-full overflow-hidden border border-[#1A2232]">
-                            <div id="levelProgressBar" class="bg-gradient-to-r from-blue-500 to-indigo-400 h-full w-0 transition-all duration-300"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Perk shop -->
-            <div data-win95-window="PerkShop.exe" class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-5 shadow-lg">
-                <h4 class="font-bold text-xs uppercase text-emerald-400 tracking-widest mb-3"><i class="fa-solid fa-cart-shopping"></i> Perk Shop (Permanent Upgrades)</h4>
-                <div id="perkShopContainer" class="space-y-2.5"></div>
-            </div>
-        </div>
-
-        <!-- Victim leaderboard -->
-        <div data-win95-window="VictimHOF.exe" class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-5 shadow-lg mt-6">
-            <h4 class="font-bold text-xs uppercase text-rose-500 tracking-widest mb-3"><i class="fa-solid fa-skull"></i> Live Degen Victim Hall of Fame</h4>
-            <div id="victimLeaderboard" class="bg-[#10141D] p-4 rounded-lg border border-[#1A2232] space-y-2 max-h-[160px] overflow-y-auto text-xs mono mc-inset-panel">
-                <div class="text-gray-500 italic text-[11px]">No rugs pulled yet. Get to work.</div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Toast -->
-    <!-- Default toast - shown unless medieval-mode is active -->
-    <div id="toastDefault" class="fixed bottom-6 right-6 z-50 bg-[#0C0F16] border-l-4 border-blue-500 px-5 py-3.5 rounded-lg shadow-2xl flex items-center space-x-3 text-sm text-gray-100 hidden max-w-sm">
-        <span id="toastIconDefault" class="text-blue-400"><i class="fa-solid fa-info-circle text-lg"></i></span>
-        <span id="toastMessageDefault">Default Alert State</span>
-    </div>
-
-    <!-- Mid Evils toast - the character himself slides up bottom-left, speech bubble to his right -->
-    <div id="toastMedieval" class="fixed bottom-0 left-6 z-50 hidden flex items-end gap-2 max-w-md">
-        <img src="assets/pfp.png" alt="" class="w-48 h-auto flex-shrink-0 drop-shadow-2xl">
-        <div id="toastBubble" class="bg-white text-black px-4 py-3 rounded-2xl shadow-2xl text-sm font-semibold mb-6 relative border-[3px] border-black">
-            <span id="toastMessageMedieval">Default Alert State</span>
-            <div class="absolute -bottom-[9px] left-6 w-4 h-4 bg-white border-l-[3px] border-b-[3px] border-black" style="transform: rotate(45deg);"></div>
-        </div>
-    </div>
-
-    <!-- Conmen toast - same slide-up-from-bottom-left treatment as Mid Evils, own character art -->
-    <div id="toastConmen" class="fixed bottom-0 left-6 z-50 hidden flex items-end gap-2 max-w-md">
-        <img src="assets/conmen-pfp.png" alt="" class="w-48 h-auto flex-shrink-0 drop-shadow-2xl">
-        <div id="toastBubbleConmen" class="bg-white text-black px-4 py-3 rounded-2xl shadow-2xl text-sm font-semibold mb-6 relative border-[3px] border-black">
-            <span id="toastMessageConmen">Default Alert State</span>
-            <div class="absolute -bottom-[9px] left-6 w-4 h-4 bg-white border-l-[3px] border-b-[3px] border-black" style="transform: rotate(45deg);"></div>
-        </div>
-    </div>
-
-    <!-- McDonald's mini-game promo popup - random interval, only when the Bonus
-         Stage is actually available (see js/mcdonalds-egg.js). Clicking the
-         bubble opens the mini-game. -->
-    <div id="mcdEggPopup" class="fixed bottom-0 left-6 z-[60] hidden flex items-end gap-2 max-w-md" style="pointer-events: auto;">
-        <img src="assets/mcdonalds-pfp.png" alt="" class="w-40 h-auto flex-shrink-0 drop-shadow-2xl">
-        <div id="mcdEggBubble" onclick="openBonusStage()" class="bg-white text-black px-4 py-3 rounded-2xl shadow-2xl text-sm font-semibold mb-6 relative border-[3px] border-black cursor-pointer">
-            Would you like <span class="mcd-fries-link">fries</span> with that?
-            <div class="absolute -bottom-[9px] left-6 w-4 h-4 bg-white border-l-[3px] border-b-[3px] border-black" style="transform: rotate(45deg);"></div>
-        </div>
-    </div>
-
-
-    <!-- Generic alert modal -->
-    <div id="customAlertModal" class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 hidden p-4">
-        <div class="bg-[#0C0F16] border border-rose-500/40 max-w-md w-full p-6 rounded-xl shadow-2xl text-center space-y-4">
-            <div class="w-16 h-16 bg-red-500/10 text-rose-500 rounded-full flex items-center justify-center mx-auto text-3xl animate-pulse"><i class="fa-solid fa-biohazard"></i></div>
-            <h3 class="text-rose-500 font-black text-xl tracking-tight">NOTICE</h3>
-            <p id="alertModalMessage" class="text-gray-300 text-sm leading-relaxed font-light"></p>
-            <button onclick="closeAlertModal()" class="px-6 py-2 bg-rose-500 text-white hover:bg-rose-600 rounded-lg text-xs font-bold uppercase transition">I accept and wash my hands</button>
-        </div>
-    </div>
-
-    <!-- Live leaderboard modal -->
-    <div id="leaderboardModal" class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 hidden p-4">
-        <div class="bg-[#0C0F16] border border-amber-500/40 max-w-sm w-full p-6 rounded-xl shadow-2xl space-y-3">
-            <div class="flex items-center justify-between">
-                <h3 class="text-amber-400 font-black text-lg tracking-tight"><i class="fa-solid fa-ranking-star mr-1.5"></i>Top Degens</h3>
-                <button onclick="closeLeaderboard()" class="text-gray-500 hover:text-white text-xl leading-none">&times;</button>
-            </div>
-            <p class="text-[10px] text-gray-500">Ranked by lifetime earned. Updates live.</p>
-            <div id="leaderboardBody" class="max-h-80 overflow-y-auto space-y-0.5">
-                <div class="text-gray-500 italic text-xs">Loading...</div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Theme preview panel - only ever shown to MASTER_WALLET, lets you
-         preview any cosmetic theme without needing to actually hold the NFT -->
-    <div id="themePreviewModal" class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 hidden p-4">
-        <div class="bg-[#0C0F16] border border-purple-500/40 max-w-sm w-full p-6 rounded-xl shadow-2xl space-y-3">
-            <div class="flex items-center justify-between">
-                <h3 class="text-purple-400 font-black text-lg tracking-tight"><i class="fa-solid fa-palette mr-1.5"></i>Theme Preview</h3>
-                <button onclick="closeThemePreview()" class="text-gray-500 hover:text-white text-xl leading-none">&times;</button>
-            </div>
-            <p class="text-[10px] text-gray-500">Master wallet only. Preview any cosmetic theme without owning the NFT - doesn't affect real holder detection.</p>
-            <div id="themePreviewButtons" class="space-y-2"></div>
-            <button onclick="previewTheme(null)" class="w-full py-2 border border-[#1A2232] hover:border-gray-500 text-gray-400 hover:text-white rounded text-xs transition">
-                Reset to normal
-            </button>
-        </div>
-    </div>
-
-    <!-- Wallet picker - shown when more than one Solana wallet is detected -->
-    <div id="walletPickerModal" class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 hidden p-4">
-        <div class="bg-[#0C0F16] border border-cyan-500/40 max-w-sm w-full p-6 rounded-xl shadow-2xl space-y-3">
-            <div class="flex items-center justify-between">
-                <h3 class="text-cyan-400 font-black text-lg tracking-tight"><i class="fa-solid fa-wallet mr-1.5"></i>Choose a Wallet</h3>
-                <button onclick="closeWalletPicker()" class="text-gray-500 hover:text-white text-xl leading-none">&times;</button>
-            </div>
-            <p class="text-[10px] text-gray-500">More than one Solana wallet was found on this browser - pick which one to connect with.</p>
-            <div id="walletPickerButtons" class="space-y-2"></div>
-        </div>
-    </div>
-
-    <!-- Theme choice - shown when a wallet holds NFTs from more than one
-         cosmetic-theme collection (e.g. both Mid Evils and Conmen). The
-         "switch theme" button in the header re-opens this any time. -->
-    <div id="themeChoiceModal" class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 hidden p-4">
-        <div class="bg-[#0C0F16] border border-emerald-500/40 max-w-sm w-full p-6 rounded-xl shadow-2xl space-y-3">
-            <div class="flex items-center justify-between">
-                <h3 class="text-emerald-400 font-black text-lg tracking-tight"><i class="fa-solid fa-shuffle mr-1.5"></i>Choose Your Theme</h3>
-                <button onclick="closeThemeChoice()" class="text-gray-500 hover:text-white text-xl leading-none">&times;</button>
-            </div>
-            <p class="text-[10px] text-gray-500">This wallet holds NFTs from more than one collection - pick which look you want.</p>
-            <div id="themeChoiceButtons" class="space-y-2"></div>
-        </div>
-    </div>
-
-    <!-- Bitcoin wallet provider choice - separate from the Solana connect
-         flow entirely. Ordinals-gated content (Skull X, Bitcoin Wizards)
-         checks whichever Bitcoin wallet gets connected here. -->
-    <div id="btcWalletChoiceModal" class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 hidden p-4">
-        <div class="bg-[#0C0F16] border border-orange-500/40 max-w-sm w-full p-6 rounded-xl shadow-2xl space-y-3">
-            <div class="flex items-center justify-between">
-                <h3 class="text-orange-400 font-black text-lg tracking-tight">🟠 Connect Bitcoin Wallet</h3>
-                <button onclick="document.getElementById('btcWalletChoiceModal')?.classList.add('hidden')" class="text-gray-500 hover:text-white text-xl leading-none">&times;</button>
-            </div>
-            <p class="text-[10px] text-gray-500">Unlocks Ordinals-gated content (Skull X, Bitcoin Wizards). Read-only, never asks you to sign a transaction.</p>
-            <button onclick="document.getElementById('btcWalletChoiceModal')?.classList.add('hidden'); connectXverse();" class="w-full py-2.5 bg-orange-600/20 hover:bg-orange-600/40 border border-orange-500/30 text-orange-300 rounded font-bold text-sm transition">Xverse</button>
-            <button onclick="document.getElementById('btcWalletChoiceModal')?.classList.add('hidden'); connectUnisat();" class="w-full py-2.5 bg-orange-600/20 hover:bg-orange-600/40 border border-orange-500/30 text-orange-300 rounded font-bold text-sm transition">UniSat</button>
-        </div>
-    </div>
-
-    <!-- Play Mode choice - master wallet only, shown every time it connects.
-         LIVE PLAY = exactly what any real player experiences, no bypasses.
-         TEST PLAY = every testing tool unlocked, plus the debug menu. -->
-    <div id="playModeModal" class="fixed inset-0 bg-black/90 flex items-center justify-center z-[60] hidden p-4">
-        <div class="bg-[#0C0F16] border border-cyan-500/40 max-w-md w-full p-6 rounded-xl shadow-2xl space-y-4">
-            <div class="flex items-center justify-between">
-                <h3 class="text-cyan-400 font-black text-lg tracking-tight"><i class="fa-solid fa-user-shield mr-1.5"></i>Master Wallet Detected</h3>
-            </div>
-            <p class="text-xs text-gray-400">Choose how you want to play this session.</p>
-            <button onclick="choosePlayMode('live')" class="w-full text-left p-4 bg-emerald-600/10 hover:bg-emerald-600/25 border border-emerald-500/30 rounded-lg transition group">
-                <div class="text-emerald-400 font-black text-sm mb-1"><i class="fa-solid fa-play mr-1.5"></i>LIVE Play</div>
-                <div class="text-[11px] text-gray-400">The exact experience every real player gets. No test buttons, no cheats, no bypasses - only what your real NFT holdings actually unlock.</div>
-            </button>
-            <button onclick="choosePlayMode('test')" class="w-full text-left p-4 bg-amber-600/10 hover:bg-amber-600/25 border border-amber-500/30 rounded-lg transition group">
-                <div class="text-amber-400 font-black text-sm mb-1"><i class="fa-solid fa-flask mr-1.5"></i>TEST Play</div>
-                <div class="text-[11px] text-gray-400">Every testing tool unlocked - Theme Preview, Bonus Stage, the Easter Egg trigger - plus a debug menu for tracking down errors.</div>
-            </button>
-        </div>
-    </div>
-
-    <!-- Debug menu - TEST PLAY only. Surfaces exactly the kind of info
-         that's slow to dig out through DevTools by hand: which script
-         versions are actually loaded, what theme is active, and any JS
-         errors caught since page load. "Copy Debug Report" packages all
-         of it as plain text to hand over for troubleshooting. -->
-    <div id="debugMenuModal" class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 hidden p-4">
-        <div class="bg-[#0C0F16] border border-amber-500/40 max-w-lg w-full p-6 rounded-xl shadow-2xl space-y-3 max-h-[85vh] overflow-y-auto">
-            <div class="flex items-center justify-between">
-                <h3 class="text-amber-400 font-black text-lg tracking-tight"><i class="fa-solid fa-bug mr-1.5"></i>Debug Menu</h3>
-                <button onclick="closeDebugMenu()" class="text-gray-500 hover:text-white text-xl leading-none">&times;</button>
-            </div>
-            <div>
-                <div class="text-[10px] uppercase tracking-wide text-gray-500 mb-1">Current State</div>
-                <div id="debugStateBox" class="bg-black/40 border border-[#1A2232] rounded p-3 text-[11px] font-mono text-gray-300 space-y-0.5"></div>
-            </div>
-            <div>
-                <div class="text-[10px] uppercase tracking-wide text-gray-500 mb-1">Loaded Script Versions</div>
-                <div id="debugVersionsBox" class="bg-black/40 border border-[#1A2232] rounded p-3 text-[11px] font-mono text-gray-300 space-y-0.5"></div>
-            </div>
-            <div>
-                <div class="text-[10px] uppercase tracking-wide text-gray-500 mb-1">Caught Errors (this page load)</div>
-                <div id="debugErrorsBox" class="bg-black/40 border border-[#1A2232] rounded p-3 text-[11px] font-mono text-rose-300 space-y-1 max-h-40 overflow-y-auto"></div>
-            </div>
-            <div>
-                <div class="flex items-center justify-between mb-1">
-                    <div class="text-[10px] uppercase tracking-wide text-gray-500">Connectivity</div>
-                    <button onclick="checkConnectivity()" class="text-[10px] text-amber-400 hover:text-amber-300 transition"><i class="fa-solid fa-wifi mr-1"></i>Check</button>
-                </div>
-                <div id="connectivityCheckResult" class="bg-black/40 border border-[#1A2232] rounded p-3 text-[11px] font-mono text-gray-300">Not checked yet.</div>
-            </div>
-            <div class="flex gap-2">
-                <button onclick="refreshDebugInfo()" class="flex-1 py-2 border border-[#1A2232] hover:border-gray-500 text-gray-400 hover:text-white rounded text-xs transition">
-                    <i class="fa-solid fa-rotate mr-1"></i>Refresh
-                </button>
-                <button onclick="copyDebugReport()" class="flex-1 py-2 bg-amber-600/20 hover:bg-amber-600/40 border border-amber-500/30 text-amber-300 rounded text-xs font-bold transition">
-                    <i class="fa-solid fa-copy mr-1"></i>Copy Debug Report
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Deposit to Rugged Savings -->
-    <div id="depositModal" class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 hidden p-4">
-        <div class="bg-[#0C0F16] border border-amber-500/40 max-w-sm w-full p-6 rounded-xl shadow-2xl space-y-3">
-            <div class="flex items-center justify-between">
-                <h3 class="text-amber-400 font-black text-lg tracking-tight"><i class="fa-solid fa-piggy-bank mr-1.5"></i>Deposit to Savings</h3>
-                <button onclick="closeDepositModal()" class="text-gray-500 hover:text-white text-xl leading-none">&times;</button>
-            </div>
-            <p class="text-[10px] text-gray-500">Move cash out of your spendable balance and into Rugged Savings, toward your $1,000,000 Lambo goal. Available: $<span id="depositAvailableCash">0.00</span></p>
-            <div class="grid grid-cols-3 gap-2">
-                <button onclick="depositPercent(25)" class="py-2.5 bg-[#1C212E] hover:bg-[#252E3E] text-gray-200 text-sm font-bold rounded transition">25%</button>
-                <button onclick="depositPercent(50)" class="py-2.5 bg-[#1C212E] hover:bg-[#252E3E] text-gray-200 text-sm font-bold rounded transition">50%</button>
-                <button onclick="depositPercent(100)" class="py-2.5 bg-[#1C212E] hover:bg-[#252E3E] text-gray-200 text-sm font-bold rounded transition">100%</button>
-            </div>
-            <div class="flex items-center gap-2">
-                <input id="depositCustomInput" type="number" min="0" step="1" placeholder="Custom $" class="flex-1 bg-[#10141D] text-white text-sm font-mono px-3 py-2 rounded border border-[#1A2232] focus:outline-none focus:border-amber-500">
-                <button onclick="depositCustom()" class="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white text-sm font-bold rounded transition">Deposit</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Bonus Stage mini-game - Windows 95 style window, Mid Evils exclusive -->
-    <div id="bonusStageOverlay" class="fixed inset-0 bg-black/70 hidden items-center justify-center z-[100] p-4">
-        <div class="win95-window">
-            <div class="win95-titlebar">
-                <span class="win95-title"><i class="fa-solid fa-gamepad"></i> BONUS_STAGE.EXE</span>
-                <div class="win95-controls">
-                    <button class="win95-btn" disabled title="Minimize (not implemented)">_</button>
-                    <button class="win95-btn" disabled title="Maximize (not implemented)">&#9633;</button>
-                    <button class="win95-btn win95-close" onclick="closeBonusStage()" title="Close">&times;</button>
-                </div>
-            </div>
-            <div class="win95-menubar">
-                <span>File</span><span>Edit</span><span>View</span><span>Help</span>
-            </div>
-            <div class="win95-content">
-                <canvas id="bonusStageCanvas" width="960" height="540"></canvas>
-            </div>
-            <div class="win95-statusbar">
-                <span class="win95-statusfield">Ready</span>
-                <span class="win95-statusfield">Mid Evils Exclusive</span>
-            </div>
-        </div>
-    </div>
-
-    <!-- Fight Game - TEST PLAY only for now. Conmen vs Mid Evils, CPU
-         opponent. Same window chrome as the Bonus Stage on purpose. -->
-    <div id="fightGameOverlay" class="fixed inset-0 bg-black/70 hidden items-center justify-center z-[100] p-4">
-        <div class="win95-window">
-            <div class="win95-titlebar">
-                <span class="win95-title"><i class="fa-solid fa-hand-fist"></i> FIGHT_CLUB.EXE</span>
-                <div class="win95-controls">
-                    <button class="win95-btn" disabled title="Minimize (not implemented)">_</button>
-                    <button class="win95-btn" disabled title="Maximize (not implemented)">&#9633;</button>
-                    <button class="win95-btn win95-close" onclick="closeFightGame()" title="Close">&times;</button>
-                </div>
-            </div>
-            <div class="win95-menubar">
-                <span>File</span><span>Edit</span><span>View</span><span>Help</span>
-            </div>
-            <div class="win95-content">
-                <canvas id="fightGameCanvas" width="960" height="540"></canvas>
-            </div>
-            <div class="win95-statusbar">
-                <span class="win95-statusfield">Ready</span>
-                <span class="win95-statusfield">TEST PLAY Only</span>
-            </div>
-        </div>
-    </div>
-
-    <!-- Conmen easter egg: roaming clickable popup (Conmen-mode only, see js/conmen-egg.js) -->
-    <div id="conmenEggPopup" onclick="openConmenLauncher()">
-        <span class="conmen-egg-tag">psst...</span>
-        <img src="assets/conmen-easteregg.png" alt="">
-    </div>
-
-    <!-- Conmen easter egg: full-screen Win95-style launcher for the marketplace link -->
-    <div id="conmenLauncherOverlay" class="fixed inset-0 bg-black hidden z-[110]">
-        <div class="win95-window-full">
-            <div class="win95-titlebar">
-                <span class="win95-title"><i class="fa-solid fa-store"></i> CONMEN_EASTER.EGG</span>
-                <div class="win95-controls">
-                    <button class="win95-btn" disabled title="Minimize (not implemented)">_</button>
-                    <button class="win95-btn" disabled title="Maximize (not implemented)">&#9633;</button>
-                    <button class="win95-btn win95-close" onclick="closeConmenLauncher()" title="Close">&times;</button>
-                </div>
-            </div>
-            <div class="win95-menubar">
-                <span>File</span><span>Edit</span><span>View</span><span>Help</span>
-            </div>
-            <div class="win95-content-full">
-                <div class="conmen-launcher-inner">
-                    <img src="assets/conmen-easteregg.png" alt="">
-                    <h2>You Found the CON!</h2>
-                    <p>Congrats ya filthy animal, you found the easter egg. The right man in the wrong place can make all the difference in the world. So, wake up, Mister Freeman. Wake up and... smell the ashes.</p>
-                    <a class="conmen-launcher-btn" href="https://www.tensor.trade/trade/theconmen" target="_blank" rel="noopener noreferrer">
-                        <i class="fa-solid fa-arrow-up-right-from-square"></i> Welcome to City 17!
-                    </a>
-                </div>
-            </div>
-            <div class="win95-statusbar">
-                <span class="win95-statusfield">Ready</span>
-                <span class="win95-statusfield">Conmen Exclusive</span>
-            </div>
-        </div>
-    </div>
-
-    <!-- WIN modal -->
-    <div id="winModal" class="fixed inset-0 bg-black/85 flex items-center justify-center z-50 hidden p-4">
-        <div class="bg-[#0C0F16] border-2 border-emerald-500/60 neon-glow-green max-w-md w-full p-7 rounded-xl shadow-2xl text-center space-y-4">
-            <div class="w-20 h-20 bg-emerald-500/10 text-emerald-400 rounded-full flex items-center justify-center mx-auto text-4xl"><i class="fa-solid fa-car"></i></div>
-            <h3 class="text-emerald-400 font-black text-2xl tracking-tight">YOU BOUGHT A REAL LAMBO! 🎉</h3>
-            <p class="text-gray-300 text-sm leading-relaxed font-light">One million fake dollars later, you've made it. Somewhere, a regulator is crying. Want to do it all again?</p>
-            <button onclick="restartGame()" class="px-6 py-2.5 bg-emerald-500 text-black hover:bg-emerald-400 rounded-lg text-xs font-bold uppercase transition">Play Again From Zero</button>
-        </div>
-    </div>
-
-    <!-- LOSS modal -->
-    <div id="lossModal" class="fixed inset-0 bg-black/85 flex items-center justify-center z-50 hidden p-4">
-        <div class="bg-[#0C0F16] border-2 border-rose-500/60 neon-glow-red max-w-md w-full p-7 rounded-xl shadow-2xl text-center space-y-4">
-            <div class="w-20 h-20 bg-rose-500/10 text-rose-500 rounded-full flex items-center justify-center mx-auto text-4xl"><i class="fa-solid fa-handcuffs"></i></div>
-            <h3 id="lossTitle" class="text-rose-500 font-black text-2xl tracking-tight">GAME OVER</h3>
-            <p id="lossMessage" class="text-gray-300 text-sm leading-relaxed font-light"></p>
-            <button onclick="restartGame()" class="px-6 py-2.5 bg-rose-500 text-white hover:bg-rose-600 rounded-lg text-xs font-bold uppercase transition">Start A New Scam</button>
-        </div>
-    </div>
-
-    <!-- Zero-balance choice - shown when cash hits $0. No close/backdrop-dismiss
-         on purpose, this blocks until a choice is made. -->
-    <div id="zeroBalanceModal" class="fixed inset-0 bg-black/85 flex items-center justify-center z-[110] hidden p-4">
-        <div class="bg-[#0C0F16] border-2 border-rose-500/60 max-w-md w-full p-7 rounded-xl shadow-2xl text-center space-y-4">
-            <div class="w-20 h-20 bg-rose-500/10 text-rose-500 rounded-full flex items-center justify-center mx-auto text-4xl">💀</div>
-            <h3 class="text-rose-500 font-black text-2xl tracking-tight">YOU'RE REKT</h3>
-            <p class="text-gray-300 text-sm leading-relaxed font-light">Your wallet's at $0. Grind out some quick cash, or wipe the slate and start over.</p>
-            <div class="space-y-2 pt-1">
-                <button onclick="closeZeroBalanceModalForBonusStage()" class="w-full py-3 bg-amber-600/20 hover:bg-amber-600/40 border border-amber-500/30 text-amber-300 rounded-lg font-bold transition">
-                    🍟 Play Bonus Stage for Cash
-                    <div class="text-[10px] font-normal text-gray-500 mt-0.5 normal-case">Rugged Savings stays exactly where it is</div>
-                </button>
-                <button onclick="confirmZeroBalanceGameOver()" class="w-full py-3 bg-rose-600/20 hover:bg-rose-600/40 border border-rose-500/30 text-rose-300 rounded-lg font-bold transition">
-                    💀 GAME OVER — Start Fresh
-                    <div class="text-[10px] font-normal text-gray-500 mt-0.5 normal-case">Resets everything, including Rugged Savings, back to $1,000</div>
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <footer class="bg-[#090C12] border-t border-[#1A2232] py-3 px-4 text-center text-[10px] text-gray-500 font-mono flex flex-col md:flex-row justify-between items-center max-w-7xl mx-auto w-full gap-2">
-        <div class="flex items-center space-x-3">
-            <span>NETWORK: <span class="text-green-400 font-bold">SHITCORE_MAINNET-3.0 (FAKE)</span></span>
-            <span class="text-gray-700">|</span>
-            <span>GAS: <span class="text-amber-500">4,206 GWEI</span></span>
-        </div>
-        <div>
-            <span>Satire. No real funds, blockchain, or smart contracts involved. <a href="https://github.com/" class="underline hover:text-gray-300">View source</a></span>
-        </div>
-    </footer>
-
-    <!-- ============================================================ -->
-    <!-- SCRIPTS (ALL FIXED FOR ROOT DEPLOYMENT IN SHITCORE-TEST)     -->
-    <!-- ============================================================ -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>
-<script src="js/audio.js?v=8" defer></script>
-<script src="js/state.js?v=14" defer></script>
-<script src="js/ui.js?v=5" defer></script>
-<script src="js/markets.js?v=17" defer></script>
-<script src="js/auditor.js" defer></script>
-<script src="js/deployer.js?v=3" defer></script>
-<script src="js/volatility.js" defer></script>
-<script src="js/staking.js" defer></script>
-<script src="js/perks.js?v=2" defer></script>
-<script src="js/bonusstage.js?v=18" defer></script>
-<script src="js/fightgame.js?v=24" defer></script>
-<script src="js/conmen-egg.js?v=5" defer></script>
-<script src="js/mcdonalds-egg.js?v=4" defer></script>
-<script src="js/web3.js?v=37" defer></script>
-<script src="js/wizardpopup.js?v=1" defer></script>
-<script src="js/win95desktop.js?v=4" defer></script>
-<script src="js/btcwallet.js?v=4" defer></script>
-<script src="js/onlinelobby.js?v=4" defer></script>
-<script type="module" src="js/sns.js?v=5"></script>
-<script type="module" src="js/nftgate.js?v=3"></script>
-<script src="js/gate.js?v=2" defer></script>
-<script src="js/main.js?v=6" defer></script>
-<script src="js/openshit.js?v=3" defer></script>
-</body>
-</html>
+    }
+
+    // Slices a horizontal sprite strip into `frameCount` equal frames, each
+    // scaled (whole-cell, not cropped) to display height outH - mirrors
+    // load_strip() in the Python version exactly, including the "scale the
+    // whole cell so feet line up automatically" reasoning.
+    async function loadStrip(fname, frameCount, outH) {
+        let img;
+        try { img = await loadImage(ASSET_BASE + fname); }
+        catch (e) { console.warn('[bonusstage] missing sprite', fname, e); return []; }
+        const cellW = img.width / frameCount;
+        const cellH = img.height;
+        const scale = outH / cellH;
+        const outW = Math.max(1, Math.round(cellW * scale));
+        const frames = [];
+        for (let i = 0; i < frameCount; i++) {
+            const c = document.createElement('canvas');
+            c.width = outW; c.height = outH;
+            const ctx = c.getContext('2d');
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(img, i * cellW, 0, cellW, cellH, 0, 0, outW, outH);
+            frames.push(c);
+        }
+        return frames;
+    }
+
+    async function loadReifferAnims() {
+        const isConmen = document.body.classList.contains('conmen-mode');
+        const files = isConmen ? CONMEN_ANIM_FILES : ANIM_FILES;
+        const anims = {};
+        for (const state in files) {
+            const [fname, count] = files[state];
+            anims[state] = await loadStrip(fname, count, P_H);
+        }
+        anims.idle = anims.walk.length ? [anims.walk[0]] : [];
+        return anims;
+    }
+
+    // Loads every fry-machine tier, pre-scaled (aspect preserved, fit inside
+    // FM_DW x FM_DH) exactly once at load time - mirrors load_fryer().
+    async function loadFryer() {
+        const imgs = [];
+        for (const fname of FRYER_FILES) {
+            let img;
+            try { img = await loadImage(ASSET_BASE + 'fry_machine/' + fname); }
+            catch (e) { continue; }
+            const scale = Math.min(FM_DW / img.width, FM_DH / img.height);
+            const w = Math.max(1, Math.round(img.width * scale));
+            const h = Math.max(1, Math.round(img.height * scale));
+            const c = document.createElement('canvas');
+            c.width = w; c.height = h;
+            const ctx = c.getContext('2d');
+            ctx.imageSmoothingEnabled = true;
+            ctx.drawImage(img, 0, 0, w, h);
+            imgs.push(c);
+        }
+        return imgs;
+    }
+
+    async function loadFxSet(files, folder) {
+        const imgs = [];
+        for (const fname of files) {
+            try { imgs.push(await loadImage(ASSET_BASE + (folder ? folder + '/' : '') + fname)); }
+            catch (e) { /* fine if missing, fx are decorative */ }
+        }
+        return imgs;
+    }
+
+    async function loadBackground() {
+        let img;
+        try { img = await loadImage(ASSET_BASE + 'mcdonalds_background.webp'); }
+        catch (e) { return null; }
+        const kitchenH = Math.floor(img.height * 0.73);
+        const c = document.createElement('canvas');
+        c.width = SW; c.height = SH;
+        const ctx = c.getContext('2d');
+        ctx.imageSmoothingEnabled = true;
+        ctx.drawImage(img, 0, 0, img.width, kitchenH, 0, 0, SW, SH);
+        return c;
+    }
+
+    // ---------------------------------------------------------------
+    // INPUT BUFFER - direct port of IBuf
+    // ---------------------------------------------------------------
+    class IBuf {
+        constructor() { this.q = []; }
+        push(a) { this.q.push([a, performance.now() / 1000]); }
+        pop(a) {
+            const now = performance.now() / 1000;
+            const nq = []; let found = false;
+            for (const [act, t] of this.q) {
+                if (now - t > BUF_WIN) continue;
+                if (act === a && !found) found = true;
+                else nq.push([act, t]);
+            }
+            this.q = nq;
+            return found;
+        }
+        flush() {
+            const now = performance.now() / 1000;
+            this.q = this.q.filter(([, t]) => now - t <= BUF_WIN);
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // SCREEN SHAKE - direct port
+    // ---------------------------------------------------------------
+    class Shake {
+        constructor() { this.v = 0.0; }
+        hit(a) { this.v = Math.max(this.v, a); }
+        update() { this.v *= 0.74; if (this.v < 0.4) this.v = 0.0; }
+        off() {
+            if (this.v < 0.4) return [0, 0];
+            return [randUniform(-this.v, this.v), randUniform(-this.v * 0.45, this.v * 0.45)];
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // DEBRIS + SPARK BURST - direct port
+    // ---------------------------------------------------------------
+    class Debris {
+        constructor(x, y, img, heavy) {
+            this.x = x; this.y = y; this.img = img;
+            const spd = randUniform(3.5, 7.5) * (heavy ? 1.4 : 1.0);
+            const ang = randUniform(-2.5, -0.6);
+            this.vx = Math.cos(ang) * spd * choice([-1, 1]);
+            this.vy = Math.sin(ang) * spd;
+            this.rot = randUniform(0, 360);
+            this.rotSpd = randUniform(-360, 360);
+            this.life = randUniform(0.5, 0.9);
+            this.age = 0.0;
+        }
+        update(dt) {
+            this.age += dt;
+            if (this.age >= this.life) return false;
+            this.vy += 22 * dt;
+            this.x += this.vx; this.y += this.vy;
+            this.rot += this.rotSpd * dt;
+            return true;
+        }
+        draw(ctx, ox, oy) {
+            const t = 1.0 - this.age / this.life;
+            ctx.save();
+            ctx.globalAlpha = t < 0.35 ? Math.max(0, t / 0.35) : 1.0;
+            ctx.translate(this.x + ox, this.y + oy);
+            ctx.rotate(this.rot * Math.PI / 180);
+            ctx.drawImage(this.img, -this.img.width / 2, -this.img.height / 2);
+            ctx.restore();
+        }
+    }
+
+    class SparkBurst {
+        constructor(x, y, img, heavy) {
+            this.x = x; this.y = y; this.img = img;
+            this.life = heavy ? 0.22 : 0.14;
+            this.age = 0.0;
+            this.scale = heavy ? 1.3 : 1.0;
+        }
+        update(dt) { this.age += dt; return this.age < this.life; }
+        draw(ctx, ox, oy) {
+            const t = 1.0 - this.age / this.life;
+            const w = this.img.width * this.scale, h = this.img.height * this.scale;
+            ctx.save();
+            ctx.globalAlpha = Math.max(0, t);
+            ctx.drawImage(this.img, this.x + ox - w / 2, this.y + oy - h / 2, w, h);
+            ctx.restore();
+        }
+    }
+
+    function spawnHitFx(fx, x, y, heavy, debrisImgs, sparkImgs) {
+        if (sparkImgs.length) fx.push(new SparkBurst(x, y, choice(sparkImgs), heavy));
+        if (debrisImgs.length) {
+            const n = heavy ? randInt(2, 4) : randInt(1, 2);
+            for (let i = 0; i < n; i++) fx.push(new Debris(x, y, choice(debrisImgs), heavy));
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // FRY MACHINE - direct port
+    // ---------------------------------------------------------------
+    class FryMachine {
+        constructor(imgs) {
+            this.imgs = imgs; this.hp = FM_HP;
+            this.x = FM_CX - Math.floor(FM_DW / 2);
+            this.y = GROUND - FM_DH + FM_Y_PUSH;
+            this.dead = false;
+            this.stun = 0.0; this.flash = 0.0;
+            this.flashX = FM_CX; this.flashY = this.y + FM_DH / 2;  // where the glow renders - set per-hit in hit()
+            this.shkT = 0.0; this.shkA = 0.0; this.shkX = 0;
+        }
+        rect() { return { x: this.x, y: this.y, w: FM_DW, h: FM_DH }; }
+        idx() {
+            const n = this.imgs.length;
+            if (n === 0) return 0;
+            if (n === 1) return 0;
+            const finalHp = Math.min(FM_FINAL_TIER_HP, FM_HP - 1);
+            const otherTiers = n - 1;
+            const chunk = (FM_HP - finalHp) / otherTiers;
+            if (this.hp <= finalHp) return n - 1;
+            const i = Math.floor((FM_HP - this.hp) / chunk);
+            return Math.min(i, n - 2);
+        }
+        hit(dmg, heavy, hitX, hitY) {
+            if (this.stun > 0 || this.dead) return false;
+            this.hp = Math.max(0, this.hp - dmg);
+            this.stun = HITSTUN; this.flash = 0.10;
+            if (hitX !== undefined) this.flashX = hitX;
+            if (hitY !== undefined) this.flashY = hitY;
+            this.shkT = heavy ? 0.17 : 0.08;
+            this.shkA = heavy ? 10.0 : 5.0;
+            if (this.hp === 0) this.dead = true;
+            return true;
+        }
+        update(dt) {
+            this.stun = Math.max(0.0, this.stun - dt);
+            this.flash = Math.max(0.0, this.flash - dt);
+            if (this.shkT > 0) { this.shkT -= dt; this.shkX = randUniform(-this.shkA, this.shkA); }
+            else this.shkX = 0;
+        }
+        draw(ctx, so) {
+            const img = this.imgs.length && this.idx() < this.imgs.length ? this.imgs[this.idx()] : null;
+            if (img) {
+                const iw = img.width, ih = img.height;
+                const ox = Math.round(this.x + this.shkX + so[0] + (FM_DW - iw) / 2);
+                const oy = Math.round(this.y + so[1] + (FM_DH - ih));
+                ctx.drawImage(img, ox, oy);
+            }
+            if (this.flash > 0) {
+                // small glow right at the point of impact instead of
+                // lighting up the whole machine
+                const t = Math.min(1, this.flash / 0.10);
+                const fx = this.flashX + so[0], fy = this.flashY + so[1];
+                const r = 50;
+                ctx.save();
+                const grad = ctx.createRadialGradient(fx, fy, 0, fx, fy, r);
+                grad.addColorStop(0, `rgba(255,255,255,${0.85 * t})`);
+                grad.addColorStop(1, 'rgba(255,255,255,0)');
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.arc(fx, fy, r, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // PLAYER - direct port
+    // ---------------------------------------------------------------
+    class Player {
+        constructor(anims) {
+            this.anims = anims; this.fw = 95;
+            this.x = 312.0; this.y = P_Y;
+            this.vx = 0.0; this.facing = 1;
+            this.state = 'idle'; this.fr = 0; this.frT = 0.0;
+            this.atkT = 0.0; this.atkDur = 0.0;
+            this.hitReg = false; this.canW = false; this.canT = 0.0;
+            this.stop = 0;
+            this.ib = new IBuf();
+            this.hp = PLAYER_MAX_HP;
+            this.hurtT = 0.0;
+            this.streak = 0; this.streakT = 0.0;
+        }
+        _surf() {
+            if (this.hurtT > 0) {
+                const hf = this.anims.hurt;
+                if (hf && hf.length) return hf[0];
+            }
+            const frames = this.anims[this.state] && this.anims[this.state].length ? this.anims[this.state] : this.anims.idle;
+            if (!frames || !frames.length) return null;
+            const s = frames[this.fr % frames.length];
+            if (s && s.width !== this.fw) this.fw = s.width;
+            return s;
+        }
+        _adv(dt, fps) {
+            this.frT += dt;
+            if (this.frT >= 1 / fps) {
+                this.frT = 0.0;
+                const n = (this.anims[this.state] || [null]).length;
+                this.fr = (this.fr + 1) % Math.max(1, n);
+            }
+        }
+        _hb() {
+            const fw = this.fw;
+            if (this.state === 'punch_lo' && !this.hitReg) {
+                const ex = this.facing === 1 ? this.x + fw + 8 : this.x - 50;
+                return { x: ex, y: this.y + 180, w: 46, h: 32 };
+            }
+            if (this.state === 'kick_lo' && !this.hitReg) {
+                const ex = this.facing === 1 ? this.x + fw + 6 : this.x - 52;
+                return { x: ex, y: this.y + 195, w: 54, h: 28 };
+            }
+            return null;
+        }
+        _wallBlocks(x) {
+            const w = WALL_COLLIDE_W;
+            for (const [wx0, wx1] of [LEFT_WALL_X, RIGHT_WALL_X]) {
+                if (x < wx1 && x + w > wx0) return true;
+            }
+            return false;
+        }
+        _begin(kind) {
+            this.state = kind; this.atkT = 0.0;
+            this.hitReg = false; this.canW = false; this.canT = 0.0;
+            this.fr = 0; this.frT = 0.0; this.atkDur = ATK_DUR[kind] || 0.28;
+        }
+        update(dt, keys, fm, fx, shake, scoreRef, debrisImgs, sparkImgs) {
+            if (this.hurtT > 0) this.hurtT = Math.max(0.0, this.hurtT - dt);
+            if (this.streakT > 0) { this.streakT -= dt; if (this.streakT <= 0) this.streak = 0; }
+            if (this.stop > 0) { this.stop -= 1; return; }
+            this.ib.flush();
+            const atk = this.state === 'punch_lo' || this.state === 'kick_lo';
+            if (!atk) {
+                this.vx = 0.0;
+                let moving = false;
+                if (keys.left) { this.vx = -P_SPD; this.facing = -1; moving = true; }
+                else if (keys.right) { this.vx = P_SPD; this.facing = 1; moving = true; }
+                this.state = moving ? 'walk' : 'idle';
+
+                let newX = this.x + this.vx;
+                newX = Math.max(0.0, Math.min(newX, SW - this.fw));
+                if (!this._wallBlocks(newX)) this.x = newX;
+            }
+            const canStart = !atk || (this.canW && this.canT > 0);
+            if (canStart) {
+                if (this.ib.pop('punch_lo')) this._begin('punch_lo');
+                else if (this.ib.pop('kick_lo')) this._begin('kick_lo');
+            }
+            if (atk) {
+                this.atkT += dt;
+                if (this.canT > 0) this.canT -= dt;
+                if (!this.canW && this.atkT >= this.atkDur * 0.4) { this.canW = true; this.canT = CANCEL_W; }
+                const hb = this._hb();
+                if (hb && !this.hitReg && rectsOverlap(hb, fm.rect())) {
+                    const heavy = HEAVY.has(this.state);
+                    const cx = hb.x + hb.w / 2 + randInt(-8, 8);
+                    const cy = hb.y + hb.h / 2 + randInt(-8, 8);
+                    if (fm.hit(DMG[this.state] || 55, heavy, cx, cy)) {
+                        this.hitReg = true;
+                        this.stop = heavy ? HS_HV : HS_LT;
+                        fm.stun = this.stop / 60;
+                        shake.hit(heavy ? 8.0 : 3.8);
+                        spawnHitFx(fx, cx, cy, heavy, debrisImgs || [], sparkImgs || []);
+                        if (typeof playSfxFile === 'function') {
+                            playSfxFile(fm.dead ? 'assets/sfx/bonusstage/metal_punch_finisher.mp3' : 'assets/sfx/bonusstage/metal_punch.mp3', fm.dead ? 0.7 : 0.55);
+                        }
+                        this.hp = Math.max(0, this.hp - randInt(SELF_DMG[0], SELF_DMG[1]));
+                        this.streak += 1; this.streakT = STREAK_RESET_T;
+                        if (Math.random() < DEBRIS_HIT_CHANCE) {
+                            const heavyChance = Math.min(HEAVY_BASE + this.streak * HEAVY_PER_STREAK, HEAVY_CAP);
+                            let dmg;
+                            if (Math.random() < heavyChance) dmg = randInt(DEBRIS_DMG_HEAVY[0], DEBRIS_DMG_HEAVY[1]);
+                            else dmg = randInt(DEBRIS_DMG_LIGHT[0], DEBRIS_DMG_LIGHT[1]);
+                            this.hp = Math.max(0, this.hp - dmg);
+                            this.hurtT = HURT_FLASH_T;
+                            if (typeof playSfxRandom === 'function') {
+                                playSfxRandom(['assets/sfx/fight/hit_body_small.mp3', 'assets/sfx/fight/hit_body_large.mp3', 'assets/sfx/fight/hit_face_large.mp3'], 0.5);
+                            }
+                            shake.hit(5.0);
+                        }
+                    }
+                }
+                if (this.atkT >= this.atkDur) {
+                    this.state = 'idle';
+                    this.atkT = 0.0; this.canW = false; this.fr = 0;
+                }
+            }
+            const fpsMap = { idle: 5, walk: 10, punch_lo: 16, kick_lo: 14 };
+            this._adv(dt, fpsMap[this.state] || 8);
+        }
+        draw(ctx, so) {
+            const img = this._surf();
+            const sx = Math.round(this.x + so[0]), sy = Math.round(this.y + so[1]);
+            if (img) {
+                if (this.facing === -1) {
+                    ctx.save();
+                    ctx.translate(sx + img.width, sy);
+                    ctx.scale(-1, 1);
+                    ctx.drawImage(img, 0, 0);
+                    ctx.restore();
+                } else {
+                    ctx.drawImage(img, sx, sy);
+                }
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // HUD + END SCREENS - direct port
+    // ---------------------------------------------------------------
+    function drawHud(ctx, score, t, playerHp, fmHp, fmMaxHp) {
+        ctx.textBaseline = 'top';
+        ctx.font = "24px 'BonusStagePixel', monospace";
+        ctx.fillStyle = COL.YL;
+        ctx.fillText(`SCORE  $${score}`, 22, 10);
+
+        const sec = Math.max(0, Math.ceil(t));
+        const secStr = String(sec).padStart(2, '0');
+        ctx.font = "24px 'BonusStagePixel', monospace";
+        ctx.fillStyle = sec <= 9 ? COL.RD : COL.W;
+        const secW = ctx.measureText(secStr).width;
+        ctx.fillText(secStr, SW / 2 - secW / 2, 8);
+
+        ctx.font = "14px 'BonusStagePixel', monospace";
+        ctx.fillStyle = COL.LG;
+        const lblW = ctx.measureText('TIME').width;
+        ctx.fillText('TIME', SW / 2 - lblW / 2, 52);
+
+        const bw = 170, bh = 13;
+        const bx = SW - 22 - bw, by = 14;
+        ctx.fillStyle = COL.LG;
+        const youW = ctx.measureText('YOU').width;
+        ctx.fillText('YOU', bx - youW - 8, by - 1);
+        drawBar(ctx, bx, by, bw, bh, Math.max(0, playerHp / PLAYER_MAX_HP));
+
+        const by2 = by + bh + 8;
+        const friesW = ctx.measureText('FRIES').width;
+        ctx.fillStyle = COL.LG;
+        ctx.fillText('FRIES', bx - friesW - 8, by2 - 1);
+        drawBar(ctx, bx, by2, bw, bh, Math.max(0, fmHp / fmMaxHp));
+    }
+
+    function drawBar(ctx, bx, by, bw, bh, rat) {
+        ctx.fillStyle = COL.DK;
+        ctx.fillRect(bx, by, bw, bh);
+        ctx.fillStyle = rat > 0.5 ? COL.GN : (rat > 0.25 ? COL.OR : COL.RD);
+        ctx.fillRect(bx, by, bw * rat, bh);
+        ctx.strokeStyle = COL.W; ctx.lineWidth = 2;
+        ctx.strokeRect(bx, by, bw, bh);
+    }
+
+    function drawEnd(ctx, won, score, reason, closeCountdown) {
+        let title, col;
+        if (won) { title = 'BONUS CLEAR!!'; col = COL.YL; }
+        else if (reason === 'ko') { title = "KO'd BY THE FRYER"; col = COL.RD; }
+        else { title = 'TIME OVER'; col = COL.RD; }
+
+        ctx.textBaseline = 'top';
+        ctx.font = "24px 'BonusStagePixel', monospace";
+        ctx.fillStyle = col;
+        const t1w = ctx.measureText(title).width;
+        ctx.fillText(title, SW / 2 - t1w / 2, SH / 2 - 72);
+
+        ctx.font = "14px 'BonusStagePixel', monospace";
+        const t2 = won ? `BONUS  +$${WIN_CASH_REWARD.toLocaleString()}` : `SCORE  $${score}`;
+        ctx.fillStyle = won ? COL.OR : COL.LG;
+        const t2w = ctx.measureText(t2).width;
+        ctx.fillText(t2, SW / 2 - t2w / 2, SH / 2 + 10);
+
+        ctx.font = "14px 'BonusStagePixel', monospace";
+        ctx.fillStyle = COL.GY;
+        const h = 'ENTER = Replay    ESC = Quit';
+        const hw = ctx.measureText(h).width;
+        ctx.fillText(h, SW / 2 - hw / 2, SH / 2 + 76);
+
+        if (closeCountdown !== null && closeCountdown !== undefined) {
+            ctx.font = "12px 'BonusStagePixel', monospace";
+            ctx.fillStyle = COL.GY;
+            const secs = Math.max(0, Math.ceil(closeCountdown));
+            const c = `Closing in ${secs}...`;
+            const cw = ctx.measureText(c).width;
+            ctx.fillText(c, SW / 2 - cw / 2, SH / 2 + 100);
+        }
+    }
+
+    function drawFallbackBg(ctx) {
+        ctx.fillStyle = '#504636';
+        ctx.fillRect(0, 0, SW, SH);
+        for (let tx = 0; tx < SW; tx += 64) {
+            for (let ty = GROUND; ty < SH; ty += 64) {
+                ctx.fillStyle = ((tx / 64 + ty / 64) % 2 === 0) ? '#5a5044' : '#64584a';
+                ctx.fillRect(tx, ty, 64, 64);
+            }
+        }
+        ctx.strokeStyle = '#3c3024'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(0, GROUND); ctx.lineTo(SW, GROUND); ctx.stroke();
+        ctx.fillStyle = '#736454';
+        ctx.fillRect(0, 0, SW, GROUND);
+    }
+
+    // ---------------------------------------------------------------
+    // MAIN GAME - owns the loop, input, and lifecycle
+    // ---------------------------------------------------------------
+    let rafId = null;
+    let keydownHandler = null;
+    let assetsPromise = null;
+    let reifferAnimsPromise = null;
+    let conmenAnimsPromise = null;
+
+    function newGame(reifferAnims, fryerImgs) {
+        return {
+            player: new Player(reifferAnims),
+            fm: new FryMachine(fryerImgs),
+            timer: ROUND_T,
+            score: { value: 0 },
+            phase: 'playing',
+            fx: [],
+            reason: null,
+            rewardGiven: false,
+            closeCountdown: null, // set to AUTO_CLOSE_SECONDS the instant the round ends (won or lost)
+        };
+    }
+
+    let themeMusic = null;
+    function getThemeMusic() {
+        if (typeof Audio === 'undefined') return null;
+        if (!themeMusic) {
+            themeMusic = new Audio('assets/bonus_stage/fry-bonus-game-theme.mp3');
+            themeMusic.loop = true;
+            themeMusic.volume = 0.5;
+        }
+        return themeMusic;
+    }
+
+    async function start(canvas) {
+        if (typeof _refreshMiniGameAudioButtons === 'function') _refreshMiniGameAudioButtons(); // reflect whatever music/SFX state carried over from a previous session
+        stop(); // safety: never run two loops at once
+
+        const ctx = canvas.getContext('2d');
+        canvas.width = SW; canvas.height = SH;
+
+        const music = getThemeMusic();
+        if (music) {
+            if (typeof setActiveMiniGameMusicEl === 'function') setActiveMiniGameMusicEl(music);
+            music.currentTime = 0;
+            // Always starts (ignores the main site's music toggle on purpose,
+            // same as Fight Game) unless the in-game music button has been
+            // switched off - see js/audio.js's miniGameMusicMuted.
+            if (typeof isMiniGameMusicMuted !== 'function' || !isMiniGameMusicMuted()) {
+                music.play().catch(() => {}); // browsers can block autoplay w/ sound until a user gesture - fine, it just won't play silently instead of throwing
+            }
+        }
+
+        if (!assetsPromise) {
+            assetsPromise = Promise.all([
+                loadBackground(),
+                loadFryer(),
+                loadFxSet(DEBRIS_FILES, 'fx'),
+                loadFxSet(SPARK_FILES, 'fx'),
+            ]);
+        }
+        // Character art is cached separately, keyed by theme - loadBackground/
+        // loadFryer/loadFxSet never change, but which wallet (and therefore
+        // which cosmetic theme) is connected can change between plays, so this
+        // can't be folded into the assetsPromise cache above without serving
+        // stale art after a wallet switch.
+        const isConmen = document.body.classList.contains('conmen-mode');
+        let characterAnimsPromise;
+        if (isConmen) {
+            if (!conmenAnimsPromise) conmenAnimsPromise = loadReifferAnims();
+            characterAnimsPromise = conmenAnimsPromise;
+        } else {
+            if (!reifferAnimsPromise) reifferAnimsPromise = loadReifferAnims();
+            characterAnimsPromise = reifferAnimsPromise;
+        }
+
+        const [[bg, fryerImgs, debrisImgs, sparkImgs], reifferAnims] = await Promise.all([assetsPromise, characterAnimsPromise]);
+
+        const shakeObj = new Shake();
+        let g = newGame(reifferAnims, fryerImgs);
+
+        const keys = { left: false, right: false };
+        keydownHandler = (ev) => {
+            const k = ev.key;
+            if (k === 'ArrowLeft' || k === 'a' || k === 'A') keys.left = true;
+            if (k === 'ArrowRight' || k === 'd' || k === 'D') keys.right = true;
+            if (g.phase === 'playing') {
+                if (k === 'z' || k === 'Z' || k === 'j' || k === 'J') g.player.ib.push('punch_lo');
+                else if (k === 'x' || k === 'X' || k === 'k' || k === 'K') g.player.ib.push('kick_lo');
+            } else if (g.phase === 'won' || g.phase === 'lost') {
+                if (k === 'Enter') { g = newGame(reifferAnims, fryerImgs); }
+            }
+            if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' '].includes(k)) ev.preventDefault();
+        };
+        const keyupHandler = (ev) => {
+            const k = ev.key;
+            if (k === 'ArrowLeft' || k === 'a' || k === 'A') keys.left = false;
+            if (k === 'ArrowRight' || k === 'd' || k === 'D') keys.right = false;
+        };
+        window.addEventListener('keydown', keydownHandler);
+        window.addEventListener('keyup', keyupHandler);
+        keydownHandler._keyupPair = keyupHandler; // stash so stop() can remove it too
+
+        let last = performance.now();
+        function frame(now) {
+            const dt = Math.min((now - last) / 1000, 0.05);
+            last = now;
+            const so = shakeObj.off(); shakeObj.update();
+
+            if (g.phase === 'playing') {
+                g.timer -= dt;
+                g.player.update(dt, keys, g.fm, g.fx, shakeObj, g.score, debrisImgs, sparkImgs);
+                g.fm.update(dt);
+                g.fx = g.fx.filter((e) => e.update(dt));
+                g.score.value = Math.round(WIN_CASH_REWARD * (1.0 - g.fm.hp / FM_HP));
+                if (g.fm.dead) {
+                    shakeObj.hit(22); g.phase = 'won';
+                    g.player.state = 'victory'; g.player.fr = 0; g.player.frT = 0.0;
+                    g.player.hurtT = 0.0;  // don't let a lingering hurt-flash mask the victory pose
+                    g.fm.flash = 0.0; g.fm.shkT = 0.0; g.fm.shkX = 0;  // fm.update() stops running once won - freeze it clean, not mid-flash
+                    g.closeCountdown = AUTO_CLOSE_SECONDS;
+                    if (!g.rewardGiven) {
+                        g.rewardGiven = true;
+                        if (typeof window.addCash === 'function') {
+                            window.addCash(WIN_CASH_REWARD);
+                            if (typeof window.updateUI === 'function') window.updateUI();
+                            if (typeof window.showToast === 'function') {
+                                window.showToast(`Bonus Stage cleared! +$${WIN_CASH_REWARD.toLocaleString()} added to your account.`, 'success');
+                            }
+                        } else {
+                            console.warn('[bonusstage] window.addCash() not found - main game cash was not credited');
+                        }
+                    }
+                } else if (g.player.hp <= 0) {
+                    g.phase = 'lost'; g.reason = 'ko';
+                    g.player.state = 'defeat'; g.player.fr = 0; g.player.frT = 0.0;
+                    g.player.hurtT = 0.0;  // don't let a lingering hurt-flash mask the defeat pose
+                    g.fm.flash = 0.0; g.fm.shkT = 0.0; g.fm.shkX = 0;
+                    g.closeCountdown = AUTO_CLOSE_SECONDS;
+                } else if (g.timer <= 0) {
+                    g.timer = 0.0; g.phase = 'lost'; g.reason = 'time';
+                    g.player.state = 'defeat'; g.player.fr = 0; g.player.frT = 0.0;
+                    g.player.hurtT = 0.0;
+                    g.closeCountdown = AUTO_CLOSE_SECONDS;
+                    g.fm.flash = 0.0; g.fm.shkT = 0.0; g.fm.shkX = 0;
+                }
+            } else if (g.phase === 'won') {
+                g.player._adv(dt, VICTORY_FPS);
+            } else if (g.phase === 'lost') {
+                // Play through once and freeze on the last (down-for-the-count)
+                // frame, rather than looping like victory does - a defeat
+                // animation that repeats forever looks like he keeps getting
+                // back up and falling again. Both Mid Evils and Conmen have
+                // their own defeat set now; the (|| 1) fallback just protects
+                // against any future character that doesn't.
+                const defeatN = (g.player.anims.defeat && g.player.anims.defeat.length) || 1;
+                if (g.player.fr < defeatN - 1) {
+                    g.player.frT += dt;
+                    if (g.player.frT >= 1 / DEFEAT_FPS) {
+                        g.player.frT = 0.0;
+                        g.player.fr = Math.min(defeatN - 1, g.player.fr + 1);
+                    }
+                }
+            }
+
+            if (g.phase === 'won' || g.phase === 'lost') {
+                if (g.closeCountdown !== null) {
+                    g.closeCountdown -= dt;
+                    if (g.closeCountdown <= 0) {
+                        if (typeof window.closeBonusStage === 'function') window.closeBonusStage();
+                        return; // stop here - the canvas/overlay are already torn down by closeBonusStage()
+                    }
+                }
+            }
+
+            if (bg) ctx.drawImage(bg, Math.round(so[0]), Math.round(so[1]));
+            else drawFallbackBg(ctx);
+
+            g.fm.draw(ctx, so);
+            g.player.draw(ctx, so);
+            for (const e of g.fx) e.draw(ctx, so[0], so[1]);
+
+            drawHud(ctx, g.score.value, g.timer, g.player.hp, g.fm.hp, FM_HP);
+            if (g.phase === 'won' || g.phase === 'lost') drawEnd(ctx, g.phase === 'won', g.score.value, g.reason, g.closeCountdown);
+
+            ctx.textBaseline = 'top';
+            ctx.font = "9px 'BonusStagePixel', monospace";
+            ctx.fillStyle = 'rgb(175,175,175)';
+            const leg = 'Arrows/A D Move  Z/J Punch  X/K Kick';
+            const legW = ctx.measureText(leg).width;
+            ctx.fillText(leg, SW / 2 - legW / 2, SH - 22);
+
+            rafId = requestAnimationFrame(frame);
+        }
+        rafId = requestAnimationFrame(frame);
+    }
+
+    function stop() {
+        if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
+        if (keydownHandler) {
+            window.removeEventListener('keydown', keydownHandler);
+            if (keydownHandler._keyupPair) window.removeEventListener('keyup', keydownHandler._keyupPair);
+            keydownHandler = null;
+        }
+        if (themeMusic) { themeMusic.pause(); themeMusic.currentTime = 0; }
+    }
+
+    return {
+        start, stop,
+        // Exposed so the real classes/logic can be driven directly in
+        // tests, instead of a separately hand-written re-implementation
+        // that could silently drift from what actually ships (that exact
+        // mistake happened once already in this project's Python version).
+        _internal: {
+            Player, FryMachine, IBuf, Shake, Debris, SparkBurst, spawnHitFx,
+            rectsOverlap, randInt, randUniform, choice,
+            loadReifferAnims, loadFryer, loadFxSet, loadBackground, loadStrip,
+            newGame, drawHud, drawEnd, drawFallbackBg,
+            constants: {
+                SW, SH, GROUND, P_H, FM_CX, FM_DW, FM_DH, FM_Y_PUSH, FM_HP, FM_FINAL_TIER_HP, ROUND_T,
+                P_SPD, P_Y, LEFT_WALL_X, RIGHT_WALL_X, WALL_COLLIDE_W,
+                DMG, ATK_DUR, HEAVY, HS_LT, HS_HV, HITSTUN, CANCEL_W, BUF_WIN,
+                VICTORY_FPS, DEFEAT_FPS, PLAYER_MAX_HP, SELF_DMG, DEBRIS_HIT_CHANCE, WIN_CASH_REWARD,
+                DEBRIS_DMG_LIGHT, DEBRIS_DMG_HEAVY, HEAVY_BASE, HEAVY_PER_STREAK,
+                HEAVY_CAP, STREAK_RESET_T, HURT_FLASH_T,
+            },
+        },
+    };
+})();
