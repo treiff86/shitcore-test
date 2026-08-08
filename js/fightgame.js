@@ -116,7 +116,7 @@ window.FightGame = (function () {
             walk:     ['assets/bonus_stage/reiffer_walk.webp', 6],
             victory:  ['assets/bonus_stage/reiffer_victory.webp', 6],
             punch_lo: ['assets/bonus_stage/reiffer_punch_lo.webp?v=2', 3],
-            kick_lo:  ['assets/bonus_stage/reiffer_kick_lo.webp?v=2', 3],
+            kick_lo:  ['assets/bonus_stage/reiffer_kick_lo.webp?v=3', 3],
             hurt:     ['assets/bonus_stage/hit.webp', 1],
             defeat:   ['assets/bonus_stage/midevils_defeat.webp?v=3', 3],
             block:    ['assets/fight_game/reiffer_block.webp', 1],
@@ -250,7 +250,7 @@ window.FightGame = (function () {
     // crouch_punch) was already scaled to his true reference size directly
     // - applying the correction to those too was the bug that made his
     // crouch (and other new poses) render oversized.
-    const REIFFER_LEGACY_PADDED_STATES = new Set(['walk', 'victory', 'punch_lo', 'kick_lo', 'hurt']);
+    const REIFFER_LEGACY_PADDED_STATES = new Set(['walk', 'victory', 'punch_lo', 'hurt']); // kick_lo re-cropped tight (see reiffer_kick_lo.webp?v=3 fix) - no longer needs the padding boost
     const REIFFER_SIZE_CORRECTION = 1.255;
 
     // Conmen's cloak flows almost to the ground even while he's crouching,
