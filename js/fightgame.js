@@ -193,6 +193,18 @@ window.FightGame = (function () {
 
     const BACKGROUNDS = ['assets/fight_game/bg_prison.webp', 'assets/fight_game/bg_market.webp', 'assets/fight_game/bg_wizard.webp', 'assets/fight_game/bg_undead.webp'];
 
+    // ---------------------------------------------------------------
+    // SOUND EFFECTS (real recorded files, not the synthesized tones in
+    // audio.js). Whoosh plays the instant a swing starts; hit/block/
+    // finisher play on impact via playSfxRandom() so the same exact
+    // sample doesn't play every single time.
+    // ---------------------------------------------------------------
+    const SFX_PUNCH_WHOOSH = 'assets/sfx/fight/punch_whoosh.mp3';
+    const SFX_KICK_WHOOSH = 'assets/sfx/fight/kick_whoosh.mp3';
+    const SFX_HITS = ['assets/sfx/fight/hit_body_small.mp3', 'assets/sfx/fight/hit_body_large.mp3', 'assets/sfx/fight/hit_face_large.mp3'];
+    const SFX_FINISHERS = ['assets/sfx/fight/hit_finisher_body.mp3', 'assets/sfx/fight/hit_finisher_face.mp3'];
+    const SFX_BLOCKS = ['assets/sfx/fight/block_small.mp3', 'assets/sfx/fight/block_medium.mp3', 'assets/sfx/fight/block_large.mp3'];
+
     // Per-background overrides for floor height, P1's starting spot, and an
     // optional jumpable platform (x-range + top surface y). Any background
     // not listed here just uses the plain GROUND constant, no platform -
@@ -319,6 +331,7 @@ window.FightGame = (function () {
         else if (window.activePreviewThemeId === 'genuineundead') src = 'assets/fight_game/bg_undead.webp';
         else src = BACKGROUNDS[Math.floor(Math.random() * BACKGROUNDS.length)];
         currentArena = ARENA_CONFIG[src] || null;
+        if (typeof playFightMusicForBackground === 'function') playFightMusicForBackground(src);
         try {
             const img = await loadImage(src);
             const c = document.createElement('canvas');
@@ -395,6 +408,7 @@ window.FightGame = (function () {
             this.state = kind; this.atkT = 0; this.hitReg = false; this.canW = false; this.canT = 0;
             this.fr = 0; this.frT = 0;
             this.atkDur = ATK_DUR[baseAttackKind(kind)];
+            if (typeof playSfxFile === 'function') playSfxFile(baseKind === 'punch' ? SFX_PUNCH_WHOOSH : SFX_KICK_WHOOSH, 0.35);
         }
 
         // rawDmg has already had counter-hit and combo scaling applied by
@@ -837,8 +851,10 @@ window.FightGame = (function () {
             attacker.stop = heavy ? HS_HV : HS_LT;
             shake.hit(heavy ? 7.0 : 3.2);
             fx.push({ x: hb.x + hb.w / 2, y: hb.y + hb.h / 2, l: heavy ? 9 : 6, ml: heavy ? 9 : 6, heavy });
-            if (typeof window.playSound === 'function') {
-                window.playSound(defender.blocking ? 'fryer_hit' : 'player_hurt');
+            if (typeof playSfxRandom === 'function') {
+                if (defender.blocking) playSfxRandom(SFX_BLOCKS, 0.5);
+                else if (defender.ko) playSfxRandom(SFX_FINISHERS, 0.7); // this hit just finished them - the KO flag is already set by takeDamage() above
+                else playSfxRandom(SFX_HITS, 0.55);
             }
             if (isCounterHit && typeof showToast === 'function') {
                 showToast('⚡ Counter Hit!', 'success');
@@ -995,6 +1011,7 @@ window.FightGame = (function () {
         const anims = { reiffer: reifferAnims, conmen: conmenAnims, wizard: wizardAnims, undead: undeadAnims };
 
         let g = newGame(anims, bg);
+        if (typeof playSound === 'function') playSound('fight_start');
         const shake = new Shake();
         const fx = [];
 
@@ -1046,12 +1063,14 @@ window.FightGame = (function () {
                     } else {
                         g.phase = 'draw';
                     }
+                    if (typeof playSound === 'function') playSound('fight_game_over');
                 } else if (g.timer <= 0) {
                     g.timer = 0;
                     if (p1.hp > p2.hp) { g.phase = 'p1win'; p1.state = p1.grounded ? 'victory' : 'jump'; p2.state = 'defeat'; }
                     else if (p2.hp > p1.hp) { g.phase = 'p2win'; p2.state = p2.grounded ? 'victory' : 'jump'; p1.state = 'defeat'; }
                     else { g.phase = 'draw'; }
                     p1.fr = 0; p2.fr = 0; p1.hurtT = 0; p2.hurtT = 0;
+                    if (typeof playSound === 'function') playSound('fight_game_over');
                 }
             } else {
                 const winner = g.phase === 'p1win' ? g.p1 : (g.phase === 'p2win' ? g.p2 : null);
@@ -1124,6 +1143,7 @@ window.FightGame = (function () {
         if (onKeyUp) window.removeEventListener('keyup', onKeyUp);
         onKeyDown = onKeyUp = null;
         keys = {}; justPressed = {};
+        if (typeof stopFightMusic === 'function') stopFightMusic();
     }
 
     return { start, stop };
