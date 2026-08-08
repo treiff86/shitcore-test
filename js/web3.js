@@ -77,6 +77,16 @@ const COSMETIC_THEMES = [
             return holds;
         },
     },
+    {
+        id: "genuineundead",
+        label: "Genuine Undead",
+        cssClass: "", // uses the normal site background on purpose - only the Fight Game arena/fighter change for this one
+        toastMsg: "☠️ Genuine Undead detected!",
+        // TEST Play preview only, on purpose - no collectionAddress/checkFn
+        // means real ownership detection (applyCosmeticThemes) can never
+        // match this for an actual player; it only ever shows up via the
+        // Theme Preview modal, which is itself TEST-Play-gated already.
+    },
 ];
 
 // Trait-gated rewards - checked against the specific NFT's metadata
@@ -760,8 +770,10 @@ function renderThemePreviewButtons() {
 
 function previewTheme(themeId) {
     clearCosmeticThemes(); // also exits Win95 desktop if it was active
+    window.activePreviewThemeId = themeId || null; // read by fightgame.js for themes with no cssClass, like Genuine Undead
     if (!themeId) {
         showToast("Preview reset to normal.", "info");
+        closeThemePreview();
         return;
     }
     const theme = COSMETIC_THEMES.find((t) => t.id === themeId);
@@ -771,6 +783,11 @@ function previewTheme(themeId) {
     if (theme.id === "mimwizard" && typeof enterWin95Desktop === "function") {
         enterWin95Desktop();
     }
+    // Theme Preview is a full-screen modal (inset-0) - without this it just
+    // sits on top of everything after you pick a theme, silently eating
+    // clicks on stuff behind it (like the Play Fight Game button) until
+    // someone notices and hits the X. Closing on selection is the fix.
+    closeThemePreview();
 }
 
 function openThemePreview() {
