@@ -1,12 +1,15 @@
 /* ============================================================
    FIGHT GAME (TEST PLAY ONLY, FOR NOW)
    ============================================================
-   Local 2-player: Conmen vs Mid Evils, both human-controlled.
+   Player 1 is human-controlled, Player 2 is a CPU opponent
+   (see updateCPUInput() - medium difficulty: approaches, throws
+   punches/kicks in range, reacts to your attacks with a chance
+   to block. Feeds P2's decisions in as virtual key presses so it
+   reuses updateHumanFighter()'s physics/attack/block logic
+   instead of duplicating any of it).
 
    Player 1 - WASD
      A/D move, W jump, S crouch, Z punch, X kick, Space block
-   Player 2 - Arrow keys
-     Left/Right move, Up jump, Down crouch, Enter punch, / kick, Shift block
 
    Block: hold the block key. While blocking:
      - you cannot attack (inputs are ignored, same as a real fighting
@@ -591,6 +594,82 @@ window.FightGame = (function () {
         return false;
     }
 
+    // ---------------------------------------------------------------
+    // CPU OPPONENT (P2, TEST Play only)
+    // ---------------------------------------------------------------
+    // Deliberately simple: approach when far, throw a punch or kick when
+    // close, react to the player's attacks with a chance to block. Works
+    // by setting P2's virtual keys the same way a human mashing the
+    // keyboard would, then handing off to updateHumanFighter() below - so
+    // it gets movement/attack/block physics for free instead of
+    // duplicating any of that logic.
+    const CPU_MEDIUM = {
+        attackRange: 92,        // close enough to throw a hit
+        decisionInterval: 0.35, // seconds between re-deciding movement/attack intent
+        attackChance: 0.45,     // chance to attack per decision tick while in range
+        attackCooldown: 0.55,   // minimum seconds between attacks
+        blockChance: 0.55,      // chance to react-block an incoming attack
+        blockReactRange: 130,   // how close the opponent needs to be to bother blocking
+        jumpChance: 0.06,       // chance to hop per decision tick while approaching
+    };
+
+    function updateCPUInput(dt, cpu, target, bind) {
+        const ai = cpu._ai || (cpu._ai = {
+            timer: 0, moveDir: 0, wantAttack: null, attackCooldown: 0,
+            blockingReact: false, hasReactedToAttack: false,
+        });
+        const diff = CPU_MEDIUM;
+
+        // Release every virtual key first, then set only what this frame's
+        // decision calls for - same shape as a human's actual key state.
+        keys[bind.left] = false; keys[bind.right] = false; keys[bind.crouch] = false; keys[bind.block] = false;
+
+        ai.attackCooldown = Math.max(0, ai.attackCooldown - dt);
+
+        const dx = target.x - cpu.x;
+        const absDist = Math.abs(dx);
+
+        // Reactive blocking is checked every frame (not just on the
+        // decision timer) so it actually responds while the attack is
+        // still happening, rather than a frame late.
+        const targetAttacking = isAttackState(target.state);
+        if (targetAttacking && !ai.hasReactedToAttack) {
+            ai.hasReactedToAttack = true;
+            ai.blockingReact = absDist < diff.blockReactRange && Math.random() < diff.blockChance;
+        }
+        if (!targetAttacking) { ai.hasReactedToAttack = false; ai.blockingReact = false; }
+
+        if (ai.blockingReact) {
+            keys[bind.block] = true;
+            return; // don't also move/attack while committed to a block
+        }
+
+        ai.timer -= dt;
+        if (ai.timer <= 0) {
+            ai.timer = diff.decisionInterval;
+            if (absDist > diff.attackRange) {
+                ai.moveDir = dx > 0 ? 1 : -1;
+            } else {
+                ai.moveDir = 0;
+                if (ai.attackCooldown <= 0 && Math.random() < diff.attackChance) {
+                    ai.wantAttack = Math.random() < 0.5 ? 'punch' : 'kick';
+                    ai.attackCooldown = diff.attackCooldown;
+                }
+            }
+            if (cpu.grounded && ai.moveDir !== 0 && Math.random() < diff.jumpChance) {
+                justPressed[bind.jump] = true;
+            }
+        }
+
+        if (ai.moveDir > 0) keys[bind.right] = true;
+        else if (ai.moveDir < 0) keys[bind.left] = true;
+
+        if (ai.wantAttack) {
+            justPressed[bind[ai.wantAttack]] = true;
+            ai.wantAttack = null;
+        }
+    }
+
     function updateHumanFighter(dt, f, bind) {
         if (f.guardBroken) return; // fully vulnerable, no input accepted - see updateFighterCommon for the countdown
 
@@ -949,6 +1028,7 @@ window.FightGame = (function () {
                 const p1 = g.p1, p2 = g.p2;
 
                 updateHumanFighter(dt, p1, P1_BIND);
+                updateCPUInput(dt, p2, p1, P2_BIND);
                 updateHumanFighter(dt, p2, P2_BIND);
                 updateFighterCommon(dt, p1);
                 updateFighterCommon(dt, p2);
@@ -1020,7 +1100,7 @@ window.FightGame = (function () {
             if (g.phase === 'intro') drawIntro(ctx, g);
             else if (g.phase !== 'playing') drawEnd(ctx, g);
 
-            const leg = 'P1: AD Move  W Jump  S Crouch  Z Punch  X Kick  Space Block   |   P2: \u2190\u2192 Move  \u2191 Jump  \u2193 Crouch  Enter Punch  / Kick  Shift Block';
+            const leg = 'P1: AD Move  W Jump  S Crouch  Z Punch  X Kick  Space Block   |   P2: CPU';
             ctx.font = "9px 'BonusStagePixel', monospace";
             ctx.fillStyle = '#aaaaaa';
             ctx.textAlign = 'center';
