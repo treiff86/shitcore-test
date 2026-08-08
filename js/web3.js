@@ -107,6 +107,7 @@ const TRAIT_REWARDS = [
         traitValue: "Caravaggio",
         startingCashBonus: 4200,
         marketsLuckMultiplier: 10,
+        requiresThemeClass: "medieval-mode", // only recognized/granted once the Mid Evils theme has actually connected - not just on raw wallet connect
     },
 ];
 
@@ -497,7 +498,7 @@ async function connectToProvider({ name, kind, provider }) {
         if (walletAddress === MASTER_WALLET) {
             document.getElementById("playModeModal")?.classList.remove("hidden");
         } else {
-            applyCosmeticThemes(walletAddress);
+            await applyCosmeticThemes(walletAddress); // must finish (and apply the theme class) before the trait check below runs, not just fire-and-forget
         }
 
         await offerCloudLoadIfExists();
@@ -628,6 +629,8 @@ function updateWalletUI() {
 // multiplier is granted regardless (and permanently, once granted).
 async function applyTraitRewards(addr, isNewSave) {
     for (const reward of TRAIT_REWARDS) {
+        if (reward.requiresThemeClass && !document.body.classList.contains(reward.requiresThemeClass)) continue; // theme hasn't actually connected yet - don't even check, let alone recognize
+
         const has = await window.checkTraitOwnership(addr, reward.collectionAddress, reward.traitType, reward.traitValue);
         if (!has) continue;
 
