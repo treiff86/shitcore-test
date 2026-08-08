@@ -112,12 +112,26 @@ const FIGHT_MUSIC_FALLBACK = 'assets/bonus_stage/bonus-stage-theme.mp3';
 function playFightMusicForBackground(bgSrc) {
     if (!bgMusicEl) bgMusicEl = document.getElementById('bgMusicEl');
     if (!bgMusicEl) return;
+    setActiveMiniGameMusicEl(bgMusicEl);
     const src = FIGHT_ARENA_MUSIC[bgSrc] || FIGHT_MUSIC_FALLBACK;
-    if (bgMusicMuted) { bgMusicEl.pause(); return; }
+    // Ignores the main site's bgMusicMuted on purpose - Fight Game music
+    // starts every match regardless of whether the player has ever
+    // touched the site's own music toggle. Only the mini-game music
+    // button (miniGameMusicMuted) controls this.
     if (!bgMusicEl.src.endsWith(src)) bgMusicEl.src = src;
     bgMusicEl.volume = 0.3;
     bgMusicEl.currentTime = 0;
+    if (miniGameMusicMuted) return; // stays loaded and ready, just doesn't auto-play
     bgMusicEl.play().catch((err) => console.warn('[audio] fight music blocked:', err.name));
+}
+
+// Wraps the synthesized playSound() (used for the "FIGHT!" and "GAME
+// OVER" stingers) so those two respect the mini-game SFX mute too,
+// without making playSound() itself mute-aware everywhere else it's
+// used across the whole site.
+function playMiniGameSound(type) {
+    if (miniGameSfxMuted) return;
+    if (typeof playSound === 'function') playSound(type);
 }
 
 function stopFightMusic() {
@@ -305,12 +319,62 @@ function _playSoundNow(type) {
     }
 }
 
+// ---- Mini-game audio toggles (Fight Club / Bonus Stage) ----
+// Deliberately separate from the main site's bgMusicMuted toggle above -
+// mini-game music defaults to ON regardless of whether the player has
+// ever touched the main site's music button, per Tim's request. SFX mute
+// is its own independent flag. Neither persists across a page reload
+// (matches the rest of the site - no localStorage use).
+let miniGameMusicMuted = false; // false = ON, opposite default from bgMusicMuted
+let miniGameSfxMuted = false;
+let activeMiniGameMusicEl = null; // whichever Audio element the currently-open mini-game is using for music
+
+// Called by a mini-game the moment it starts/changes its music, so the
+// toggle buttons below know which element to actually pause/resume.
+function setActiveMiniGameMusicEl(el) { activeMiniGameMusicEl = el; }
+function isMiniGameMusicMuted() { return miniGameMusicMuted; }
+function isMiniGameSfxMuted() { return miniGameSfxMuted; }
+
+function toggleMiniGameMusic() {
+    miniGameMusicMuted = !miniGameMusicMuted;
+    if (activeMiniGameMusicEl) {
+        if (miniGameMusicMuted) activeMiniGameMusicEl.pause();
+        else activeMiniGameMusicEl.play().catch(() => {});
+    }
+    _refreshMiniGameAudioButtons();
+    return miniGameMusicMuted;
+}
+function toggleMiniGameSfx() {
+    miniGameSfxMuted = !miniGameSfxMuted;
+    _refreshMiniGameAudioButtons();
+    return miniGameSfxMuted;
+}
+// Updates every mini-game music/SFX button on the page at once (Fight
+// Club and Bonus Stage each have their own titlebar copy, both wired to
+// the same shared mute flags).
+function _refreshMiniGameAudioButtons() {
+    document.querySelectorAll('.mg-music-btn').forEach((btn) => {
+        btn.classList.toggle('mg-btn-off', miniGameMusicMuted);
+        btn.title = miniGameMusicMuted ? 'Music: OFF (click to unmute)' : 'Music: ON (click to mute)';
+    });
+    document.querySelectorAll('.mg-sfx-btn').forEach((btn) => {
+        btn.classList.toggle('mg-btn-off', miniGameSfxMuted);
+        btn.title = miniGameSfxMuted ? 'SFX: OFF (click to unmute)' : 'SFX: ON (click to mute)';
+        const icon = btn.querySelector('i');
+        if (icon) {
+            icon.classList.toggle('fa-volume-high', !miniGameSfxMuted);
+            icon.classList.toggle('fa-volume-xmark', miniGameSfxMuted);
+        }
+    });
+}
+
 // ---- Real audio-file SFX, as opposed to the synthesized tones above ----
 // Used by Fight Game/Bonus Stage for actual recorded hit/block/whoosh
 // sounds. Each call makes a fresh Audio element so overlapping hits (e.g.
 // two fighters landing shots close together, or a fast combo) don't cut
 // each other off the way a single shared <audio> element would.
 function playSfxFile(path, volume) {
+    if (miniGameSfxMuted) return;
     try {
         const el = new Audio(path);
         el.volume = volume == null ? 0.6 : volume;
