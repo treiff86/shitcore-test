@@ -99,6 +99,11 @@ const FIGHT_ARENA_MUSIC = {
     'assets/fight_game/bg_market.webp': 'assets/midevil-theme.mp3',
     'assets/fight_game/bg_prison.webp': 'assets/conmen-theme.mp3',
 };
+// Every arena without its own dedicated track (Wizard, Genuine Undead,
+// and the plain random-background case) falls back to this instead of
+// staying silent. Reuses Bonus Stage's track - swap this out the moment
+// a real Fight Game track exists.
+const FIGHT_MUSIC_FALLBACK = 'assets/bonus_stage/bonus-stage-theme.mp3';
 
 // Called by Fight Game once it knows which arena background got picked
 // for this match. Respects the player's existing mute preference - if
@@ -107,8 +112,8 @@ const FIGHT_ARENA_MUSIC = {
 function playFightMusicForBackground(bgSrc) {
     if (!bgMusicEl) bgMusicEl = document.getElementById('bgMusicEl');
     if (!bgMusicEl) return;
-    const src = FIGHT_ARENA_MUSIC[bgSrc];
-    if (!src || bgMusicMuted) { bgMusicEl.pause(); return; }
+    const src = FIGHT_ARENA_MUSIC[bgSrc] || FIGHT_MUSIC_FALLBACK;
+    if (bgMusicMuted) { bgMusicEl.pause(); return; }
     if (!bgMusicEl.src.endsWith(src)) bgMusicEl.src = src;
     bgMusicEl.volume = 0.3;
     bgMusicEl.currentTime = 0;
