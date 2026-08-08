@@ -888,7 +888,7 @@
     <!-- McDonald's mini-game promo popup - random interval, only when the Bonus
          Stage is actually available (see js/mcdonalds-egg.js). Clicking the
          bubble opens the mini-game. -->
-    <div id="mcdEggPopup" class="fixed bottom-0 left-6 z-50 hidden flex items-end gap-2 max-w-md">
+    <div id="mcdEggPopup" class="fixed bottom-0 left-6 z-[60] hidden flex items-end gap-2 max-w-md" style="pointer-events: auto;">
         <img src="assets/mcdonalds-pfp.png" alt="" class="w-40 h-auto flex-shrink-0 drop-shadow-2xl">
         <div id="mcdEggBubble" onclick="openBonusStage()" class="bg-white text-black px-4 py-3 rounded-2xl shadow-2xl text-sm font-semibold mb-6 relative border-[3px] border-black cursor-pointer">
             Would you like <span class="mcd-fries-link">fries</span> with that?
@@ -1211,9 +1211,9 @@
 <script src="js/perks.js?v=2" defer></script>
 <script src="js/bonusstage.js?v=16" defer></script>
 <script src="js/fightgame.js?v=23" defer></script>
-<script src="js/conmen-egg.js?v=4" defer></script>
+<script src="js/conmen-egg.js?v=5" defer></script>
 <script src="js/mcdonalds-egg.js?v=4" defer></script>
-<script src="js/web3.js?v=36" defer></script>
+<script src="js/web3.js?v=37" defer></script>
 <script src="js/wizardpopup.js?v=1" defer></script>
 <script src="js/win95desktop.js?v=4" defer></script>
 <script src="js/btcwallet.js?v=4" defer></script>
