@@ -1,6 +1,6 @@
 # Shitcore (USDSHT) — Layer 1 Shitcoin Tycoon
 
-> **v1.6.9: Leaders of Rugging** — The most unhinged fake blockchain tycoon game on GitHub Pages.
+> **v2.0.0: LET HIM COOK!** — The most unhinged fake blockchain tycoon game on GitHub Pages.
 
 A 100% free, 100% client-side satirical idle/tycoon game about meme-coin rug pulls, leveraged trading, NFT grifts, and Ponzi yield farms. No real blockchain. No real money ever moves — every dollar is `Math.random()` running in your browser. Wallet connect is real (optional, read-only, just for cloud saves and the leaderboard) but never touches funds or asks for a signature. It exists to satirize crypto culture, not teach or enable it.
 
@@ -95,6 +95,28 @@ Mock OpenSea. Generate real AI art via Pollinations.ai (free, no API key). Mint 
 
 ---
 
+### 🥊 Fight Club — Local Brawler *(New in v2.0.0, TEST Play preview)*
+A full side-scrolling fighter buried inside the tycoon game, because why not. Currently gated to TEST Play while it finishes cooking toward a LIVE release for real Mid Evils and Conmen holders.
+
+- **4 playable characters** — Reiffer (Mid Evils), the Conmen character, the $MIM/Bitcoin Wizard, and Genuine Undead (an office zombie in a suit, exclusive to that theme's preview)
+- **4 arenas** — a prison yard, a medieval market, a wizard's study (with a jumpable table), and a corporate office (with a jumpable reception desk) — each with matching background music where a track exists
+- **P2 is CPU-controlled** (medium difficulty) — approaches, throws punches and kicks in range, reacts to your attacks with a chance to block
+- Punch, kick, block, crouch, jump, and jump/crouch-specific block and hit-reaction poses; guard meter and chip damage; counter-hit and combo damage scaling
+- Real recorded hit/block/whoosh sound effects, mixed randomly so it doesn't repeat, plus a distinct sound for the finishing blow
+- P1 spawns as whichever character matches your active cosmetic theme; P2 and the arena are randomized from everything currently built
+
+---
+
+### 🍟 Bonus Stage — Destroy the Fry Machine *(Restored in v2.0.0)*
+A Street Fighter 2-style beat-em-up against a McDonald's fry machine, accessed via the roaming McDonald's popup easter egg. Available to real Mid Evils/Conmen holders in LIVE, not just TEST Play.
+
+- Punch and kick a fry machine through 6 damage tiers before the clock runs out
+- Debris and spark hit effects, screen shake, streak-based heavy-hit odds
+- Own dedicated theme music, own real metal-impact sound effects (regular hits vs. the machine-destroying finisher)
+- Character-specific defeat animation if the fryer's debris takes you out first; auto-closes a few seconds after the round ends
+
+---
+
 ## 🔗 Wallet Connect & Leaderboard *(New in v1.6.9)*
 
 Fully optional — the game works exactly the same with zero wallet ever connected, same as v1.0.0.
@@ -104,7 +126,7 @@ Fully optional — the game works exactly the same with zero wallet ever connect
 - **Live Leaderboard** — ranks players by lifetime earned (the same number your Degen Level is based on). Updates live across every open browser tab the instant anyone's score changes, via Supabase Realtime — no refreshing.
 - **.sol domain display** — if your connected wallet owns a Solana Name Service domain, it replaces your wallet address everywhere it'd otherwise show up: the header button, and your row on the leaderboard.
 
-**Trust note:** writes aren't signature-verified, on purpose — it keeps connecting frictionless for a leaderboard with zero real stakes. That does mean someone could technically spoof a fake score via the browser console rather than actually playing. Fine for bragging rights on a satire game; noted here for transparency.
+**Trust note:** writes aren't signature-verified, on purpose — it keeps connecting frictionless for a leaderboard with zero real stakes. Someone could still technically inflate their own local numbers via the browser console since progress lives client-side, but as of v2.0.0 a database-level rule clamps how much a score can jump in a single save, so a spoofed number can't actually land on the shared leaderboard everyone else sees. Fine for bragging rights on a satire game; noted here for transparency.
 
 **Setup required to enable this:** run `supabase_setup.sql` once in your own Supabase project's SQL Editor, then fill in that project's URL and public API key at the top of `js/web3.js`.
 
@@ -204,12 +226,33 @@ js/perks.js           Perk shop
 js/web3.js            Wallet connect, cloud save/load, live leaderboard (needs your Supabase URL/key)
 js/sns.js             .sol domain resolution (ES module, Solana Name Service)
 js/openshit.js        OpenShit NFT mini-game (self-injecting)
+js/fightgame.js       Fight Club mini-game (TEST Play preview)
+js/bonusstage.js      Bonus Stage - Destroy the Fry Machine mini-game
+js/win95desktop.js    Windows 95 desktop UI for the $MIM/Bitcoin Wizard theme
+js/wizardpopup.js     Rotating AOL-style wizard IM popups (Wizard theme)
+js/onlinelobby.js     Online Fight Club matchmaking lobby (Supabase Realtime)
+js/btcwallet.js       Bitcoin wallet connect (Xverse/UniSat), TEST Play only
 js/main.js            Boot + 1-second game tick
 ```
 
 ---
 
 ## 🆕 Changelog
+
+### v2.0.0 — LET HIM COOK!
+- **New mini-game:** Fight Club — a full local fighting game (TEST Play preview). 4 characters, 4 arenas, CPU opponent, guard meter/chip damage, counter-hits, combo scaling, real recorded sound effects, and matching arena music
+- **New mini-game:** Bonus Stage — Destroy the Fry Machine, back and fully working after being accidentally overwritten in an earlier commit. Available to real Mid Evils/Conmen holders in LIVE, own dedicated theme music, real metal-impact sound effects
+- **New:** Cosmetic theme system expanded — Mid Evils and Conmen are now real, NFT-gated LIVE themes; Skull X, $MIM/Bitcoin Wizard, and Genuine Undead exist as TEST Play previews (Wizard theme includes a full Windows 95 desktop UI and rotating AOL-style "wizard says" popups)
+- **New:** Online Fight Club — Supabase Realtime matchmaking lobby, gated to real NFT holders or TEST Play
+- **New:** Bitcoin wallet support (Xverse, UniSat) for Bitcoin Wizards/$MIM rune checks — TEST Play only, read-only, address-only, same trust model as the Solana wallet connect
+- **Security:** Several TEST-only and NFT-gated actions (Fight Club, Bonus Stage, the Conmen easter egg, the debug menu) were only ever hidden in the UI, not actually blocked in code — meaning calling them directly from the browser console bypassed the gate entirely. All now hard-gated at the function level
+- **Security:** The Conmen easter egg was checking for the Conmen cosmetic theme being active, which TEST Play's Theme Preview also triggers — so it was firing in TEST preview, not just for real LIVE holders like intended. Now checks real ownership specifically
+- **Security:** A rare $10,000 jackpot event (Rug Creator) had no cooldown at all, so calling its function directly from the console repeatedly meant infinite money. Now cooldown-protected
+- **Security:** Several places were inserting text into the page without escaping it first (a debug panel, OpenShit's collection-name field, the victim leaderboard) — low-severity (self-only, no cross-player impact) but fixed regardless
+- **Security:** Added a database-level rule that clamps how much a leaderboard score can jump in a single save, so a locally-tampered number can't land on the shared leaderboard other players see
+- **Fixed:** A fighter who won mid-air would freeze frozen in their jump pose playing the victory animation instead of actually falling to the ground first
+- **Fixed:** Reiffer's kick animation had a stray "ghost fist" flickering in from the neighboring frame in the sprite sheet — the source art wasn't cut into even frames
+- **Fixed:** "Play Fight Game" appeared broken immediately after picking a cosmetic theme in TEST Play — the Theme Preview modal never closed itself after a selection, so it just sat on top of everything silently eating the next click
 
 ### v1.6.9 — Leaders of Rugging: Web3 Integrations Begin
 - **New:** Wallet Connect (Phantom) — read-only, address-only, never requests a transaction or a signature
