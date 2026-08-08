@@ -51,6 +51,28 @@ function toggleBgMusic() {
     }
 }
 
+// Called the moment a themed track actually becomes available (real Mid
+// Evils/Conmen theme applied, or TEST Play previewing one) - starts music
+// playing by default instead of requiring a manual click first. Only
+// fires once per "went from no track to having one"; switching between
+// Mid Evils and Conmen while already unmuted doesn't touch it.
+function autoStartThemeMusicIfMuted() {
+    if (!bgMusicMuted) return;
+    const src = _bgMusicSrcForCurrentTheme();
+    if (!src) return;
+    if (!bgMusicEl) bgMusicEl = document.getElementById('bgMusicEl');
+    if (!bgMusicEl) return;
+    if (!bgMusicEl.src.endsWith(src)) bgMusicEl.src = src;
+    bgMusicMuted = false;
+    const icon = document.getElementById('audioToggleIcon');
+    if (icon) {
+        icon.classList.add('fa-volume-high');
+        icon.classList.remove('fa-volume-xmark');
+    }
+    bgMusicEl.volume = 0.3;
+    bgMusicEl.play().catch((err) => console.warn('[audio] main theme autoplay blocked:', err.name));
+}
+
 // Called when the theme switches away from one with music (disconnect,
 // wallet swap, theme preview reset) so a track doesn't keep playing under
 // a theme it's not supposed to exist in.
@@ -89,21 +111,10 @@ function resumeMainThemeAfterBonusStage() {
     }
 }
 
-// ---- Fight Game's own battle music ----
-// Reuses the same two theme tracks the main site has (no dedicated battle
-// themes exist yet for the Wizard or Genuine Undead arenas - those
-// matches are silent for now until real tracks are added; tell Claude to
-// wire up FIGHT_ARENA_MUSIC the moment new tracks exist, same pattern as
-// THEME_MUSIC_TRACKS above).
-const FIGHT_ARENA_MUSIC = {
-    'assets/fight_game/bg_market.webp': 'assets/midevil-theme.mp3',
-    'assets/fight_game/bg_prison.webp': 'assets/conmen-theme.mp3',
-};
-// Every arena without its own dedicated track (Wizard, Genuine Undead,
-// and the plain random-background case) falls back to this instead of
-// staying silent. Reuses Bonus Stage's track - swap this out the moment
-// a real Fight Game track exists.
-const FIGHT_MUSIC_FALLBACK = 'assets/bonus_stage/bonus-stage-theme.mp3';
+// ---- Fight Club's own battle music ----
+// Fight Club uses this one track for every arena, on purpose - no more
+// per-arena splitting between the Mid Evils/Conmen site themes.
+const FIGHT_MUSIC_TRACK = 'assets/bonus_stage/bonus-stage-theme.mp3';
 
 // Called by Fight Game once it knows which arena background got picked
 // for this match. Respects the player's existing mute preference - if
@@ -113,7 +124,7 @@ function playFightMusicForBackground(bgSrc) {
     if (!bgMusicEl) bgMusicEl = document.getElementById('bgMusicEl');
     if (!bgMusicEl) return;
     setActiveMiniGameMusicEl(bgMusicEl);
-    const src = FIGHT_ARENA_MUSIC[bgSrc] || FIGHT_MUSIC_FALLBACK;
+    const src = FIGHT_MUSIC_TRACK;
     // Ignores the main site's bgMusicMuted on purpose - Fight Game music
     // starts every match regardless of whether the player has ever
     // touched the site's own music toggle. Only the mini-game music
