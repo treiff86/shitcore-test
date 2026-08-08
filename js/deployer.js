@@ -297,6 +297,14 @@ function triggerDeployDrainEvent() {
 }
 
 function triggerBinancePumpBonus() {
+    // Guard against being spammed directly from the console (this used to
+    // have zero protection - callable in a tight loop for infinite money).
+    // A deploy can't legitimately happen more than once every few seconds
+    // anyway, so this cooldown only ever blocks abuse, never real play.
+    const now = Date.now();
+    if (now - (state.lastBinancePumpAt || 0) < 5000) return;
+    state.lastBinancePumpAt = now;
+
     state.cash += BINANCE_PUMP_BONUS;
     state.lifetimeEarned += BINANCE_PUMP_BONUS;
     playSound('lambo');
