@@ -627,6 +627,25 @@ window.FightGame = (function () {
         jumpChance: 0.06,       // chance to hop per decision tick while approaching
     };
 
+    // Keeps the two fighters from walking through each other. Only
+    // applies while BOTH are grounded, so jumping over your opponent
+    // still works fine - this just stops the "standing on top of each
+    // other" overlap while both have feet on the floor.
+    function resolveFighterCollision(p1, p2) {
+        if (!p1.grounded || !p2.grounded) return;
+        const p1Right = p1.x + p1._fw, p2Right = p2.x + p2._fw;
+        const overlap = Math.min(p1Right, p2Right) - Math.max(p1.x, p2.x);
+        if (overlap <= 0) return;
+        const half = overlap / 2;
+        if (p1.x < p2.x) {
+            p1.x = Math.max(STAGE_MARGIN, p1.x - half);
+            p2.x = Math.min(SW - STAGE_MARGIN - p2._fw, p2.x + half);
+        } else {
+            p1.x = Math.min(SW - STAGE_MARGIN - p1._fw, p1.x + half);
+            p2.x = Math.max(STAGE_MARGIN, p2.x - half);
+        }
+    }
+
     function updateCPUInput(dt, cpu, target, bind) {
         const ai = cpu._ai || (cpu._ai = {
             timer: 0, moveDir: 0, wantAttack: null, attackCooldown: 0,
@@ -994,6 +1013,7 @@ window.FightGame = (function () {
     // MAIN LOOP
     // ---------------------------------------------------------------
     async function start(canvas) {
+        if (typeof _refreshMiniGameAudioButtons === 'function') _refreshMiniGameAudioButtons(); // reflect whatever music/SFX state carried over from a previous match this session
         stop();
         const ctx = canvas.getContext('2d');
         canvas.width = SW; canvas.height = SH;
@@ -1011,7 +1031,7 @@ window.FightGame = (function () {
         const anims = { reiffer: reifferAnims, conmen: conmenAnims, wizard: wizardAnims, undead: undeadAnims };
 
         let g = newGame(anims, bg);
-        if (typeof playSound === 'function') playSound('fight_start');
+        if (typeof playMiniGameSound === 'function') playMiniGameSound('fight_start');
         const shake = new Shake();
         const fx = [];
 
@@ -1049,6 +1069,7 @@ window.FightGame = (function () {
                 updateHumanFighter(dt, p2, P2_BIND);
                 updateFighterCommon(dt, p1);
                 updateFighterCommon(dt, p2);
+                resolveFighterCollision(p1, p2);
 
                 resolveHit(p1, p2, shake, fx);
                 resolveHit(p2, p1, shake, fx);
@@ -1063,14 +1084,14 @@ window.FightGame = (function () {
                     } else {
                         g.phase = 'draw';
                     }
-                    if (typeof playSound === 'function') playSound('fight_game_over');
+                    if (typeof playMiniGameSound === 'function') playMiniGameSound('fight_game_over');
                 } else if (g.timer <= 0) {
                     g.timer = 0;
                     if (p1.hp > p2.hp) { g.phase = 'p1win'; p1.state = p1.grounded ? 'victory' : 'jump'; p2.state = 'defeat'; }
                     else if (p2.hp > p1.hp) { g.phase = 'p2win'; p2.state = p2.grounded ? 'victory' : 'jump'; p1.state = 'defeat'; }
                     else { g.phase = 'draw'; }
                     p1.fr = 0; p2.fr = 0; p1.hurtT = 0; p2.hurtT = 0;
-                    if (typeof playSound === 'function') playSound('fight_game_over');
+                    if (typeof playMiniGameSound === 'function') playMiniGameSound('fight_game_over');
                 }
             } else {
                 const winner = g.phase === 'p1win' ? g.p1 : (g.phase === 'p2win' ? g.p2 : null);
