@@ -151,7 +151,7 @@ window.FightGame = (function () {
             punch_lo: ['assets/fight_game/wizard_punch_lo.webp', 1],
             kick_lo:  ['assets/fight_game/wizard_kick_lo.webp', 1],
             hurt:     ['assets/fight_game/wizard_hurt.webp', 1],
-            defeat:   ['assets/fight_game/wizard_defeat.webp', 3],
+            defeat:   ['assets/fight_game/wizard_defeat.webp?v=2', 3],
             block:    ['assets/fight_game/wizard_block.webp', 1],
             jump:         ['assets/fight_game/wizard_jump.webp', 1],
             crouch:       ['assets/fight_game/wizard_crouch.webp', 1],
@@ -1035,7 +1035,7 @@ window.FightGame = (function () {
         const anims = { reiffer: reifferAnims, conmen: conmenAnims, wizard: wizardAnims, undead: undeadAnims };
 
         let g = newGame(anims, bg);
-        if (typeof playMiniGameSound === 'function') playMiniGameSound('fight_start');
+        if (typeof playSfxFile === 'function') playSfxFile('assets/sfx/fight/fight.mp3', 0.7);
         const shake = new Shake();
         const fx = [];
 
@@ -1088,14 +1088,22 @@ window.FightGame = (function () {
                     } else {
                         g.phase = 'draw';
                     }
-                    if (typeof playMiniGameSound === 'function') playMiniGameSound('fight_game_over');
+                    if (g.phase === 'p2win') {
+                        if (typeof playSfxFile === 'function') playSfxFile('assets/sfx/fight/game_over.mp3', 0.7); // you lost
+                    } else if (typeof playMiniGameSound === 'function') {
+                        playMiniGameSound('fight_game_over'); // win/draw - synthesized stinger until Tim sends real win SFX
+                    }
                 } else if (g.timer <= 0) {
                     g.timer = 0;
                     if (p1.hp > p2.hp) { g.phase = 'p1win'; p1.state = p1.grounded ? 'victory' : 'jump'; p2.state = 'defeat'; }
                     else if (p2.hp > p1.hp) { g.phase = 'p2win'; p2.state = p2.grounded ? 'victory' : 'jump'; p1.state = 'defeat'; }
                     else { g.phase = 'draw'; }
                     p1.fr = 0; p2.fr = 0; p1.hurtT = 0; p2.hurtT = 0;
-                    if (typeof playMiniGameSound === 'function') playMiniGameSound('fight_game_over');
+                    if (g.phase === 'p2win') {
+                        if (typeof playSfxFile === 'function') playSfxFile('assets/sfx/fight/game_over.mp3', 0.7); // you lost
+                    } else if (typeof playMiniGameSound === 'function') {
+                        playMiniGameSound('fight_game_over'); // win/draw - synthesized stinger until Tim sends real win SFX
+                    }
                 }
             } else {
                 const winner = g.phase === 'p1win' ? g.p1 : (g.phase === 'p2win' ? g.p2 : null);
