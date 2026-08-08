@@ -533,6 +533,7 @@ function pushTuskPost(collectionName, imageUrl) {
     const feed = document.getElementById('yFeed');
     if (!feed) return;
 
+    collectionName = escapeHtml(collectionName); // user-typed collection name goes straight into innerHTML below - escape once, up front
     const texts = [
         `just changed my pfp to a ${collectionName} NFT. incredible art. the future of digital ownership.`,
         `${collectionName} is the most culturally significant NFT project I've seen. changing my pfp immediately.`,
@@ -724,9 +725,15 @@ function pushYPost(displayName, handle, verified, emoji, text) {
     const feed = document.getElementById('yFeed');
     if (!feed) return;
 
-    /* no-repeat: skip if identical text already visible */
+    /* no-repeat: skip if identical text already visible - compared
+       against the original text, before escaping, since textContent
+       reads back the decoded string not the escaped HTML */
     const existing = feed.querySelectorAll('.y-post-text');
     for (const el of existing) { if (el.textContent === text) return; }
+
+    displayName = escapeHtml(displayName);
+    handle = escapeHtml(handle);
+    text = escapeHtml(text); // several call sites splice a user-typed collection/token name into this - escape once here rather than at every call site
 
     const mins   = ['just now','1m','2m','3m','5m','8m','12m','16m'][Math.floor(Math.random()*8)];
     const likes  = Math.floor(Math.random()*9800+20);
