@@ -36,6 +36,16 @@ window.FightGame = (function () {
     // CONSTANTS
     // ---------------------------------------------------------------
     const SW = 960, SH = 540;
+
+    // Same real-file SFX pools as Fight Game (js/fightgame.js) - see that
+    // file for why these replaced the old fryer_hit/player_hurt synth
+    // reuse. Bonus Stage currently mirrors Fight Game's two-character
+    // combat (not the original "smash the fry machine" concept), so the
+    // metal_punch SFX aren't wired in here - see conversation with Tim
+    // about whether that concept still needs to be rebuilt.
+    const SFX_HITS = ['assets/sfx/fight/hit_body_small.mp3', 'assets/sfx/fight/hit_body_large.mp3', 'assets/sfx/fight/hit_face_large.mp3'];
+    const SFX_FINISHERS = ['assets/sfx/fight/hit_finisher_body.mp3', 'assets/sfx/fight/hit_finisher_face.mp3'];
+    const SFX_BLOCKS = ['assets/sfx/fight/block_small.mp3', 'assets/sfx/fight/block_medium.mp3', 'assets/sfx/fight/block_large.mp3'];
     const GROUND = 430;
     const P_H = 220;
 
@@ -492,8 +502,10 @@ window.FightGame = (function () {
             attacker.stop = heavy ? HS_HV : HS_LT;
             shake.hit(heavy ? 7.0 : 3.2);
             fx.push({ x: hb.x + hb.w / 2, y: hb.y + hb.h / 2, l: heavy ? 9 : 6, ml: heavy ? 9 : 6, heavy });
-            if (typeof window.playSound === 'function') {
-                window.playSound(defender.blocking ? 'fryer_hit' : 'player_hurt');
+            if (typeof playSfxRandom === 'function') {
+                if (defender.blocking) playSfxRandom(SFX_BLOCKS, 0.5);
+                else if (defender.ko) playSfxRandom(SFX_FINISHERS, 0.7);
+                else playSfxRandom(SFX_HITS, 0.55);
             }
         }
     }
