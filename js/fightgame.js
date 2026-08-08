@@ -167,7 +167,7 @@ window.FightGame = (function () {
         undead: {
             idle:     ['assets/fight_game/undead_idle.webp', 1],
             walk:     ['assets/fight_game/undead_walk.webp', 2],
-            victory:  ['assets/fight_game/undead_victory.webp', 5],
+            victory:  ['assets/fight_game/undead_victory.webp?v=2', 5],
             punch_lo: ['assets/fight_game/undead_punch_lo.webp', 2],
             kick_lo:  ['assets/fight_game/undead_kick_lo.webp?v=2', 1],
             hurt:     ['assets/fight_game/undead_hurt.webp', 1],
