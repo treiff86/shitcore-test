@@ -11,9 +11,9 @@
    ============================================================ */
 
 const PERK_CATALOG = [
-    { id: 'tg_bot', name: "Telegram Bot Automator", cost: 600, desc: "Your Hype Meter drains 40% slower AND generates +1% Hype per second on its own — campaigns last much longer with way less manual upkeep." },
-    { id: 'shill_army', name: "DeFi Twitter Coordination Network", cost: 2500, desc: "+40% capital inflow, every Marketing Campaign costs 25% less to run, and your tracked victim count climbs an extra 50% faster for bigger leaderboard numbers." },
-    { id: 'cayman_vault', name: "Offshore Cayman Layering Loop", cost: 12000, desc: "Contract seizures and rug pulls generate about 50% less Regulatory Heat from here on out." }
+    { id: 'tg_bot', name: "Telegram Bot Automator", cost: 600, requiredLevel: 1, desc: "Your Hype Meter drains 40% slower AND generates +1% Hype per second on its own — campaigns last much longer with way less manual upkeep." },
+    { id: 'shill_army', name: "DeFi Twitter Coordination Network", cost: 2500, requiredLevel: 2, desc: "+40% capital inflow, every Marketing Campaign costs 25% less to run, and your tracked victim count climbs an extra 50% faster for bigger leaderboard numbers." },
+    { id: 'cayman_vault', name: "Offshore Cayman Layering Loop", cost: 12000, requiredLevel: 3, desc: "Contract seizures and rug pulls generate about 50% less Regulatory Heat from here on out." }
 ];
 
 function renderPerkShop() {
@@ -22,14 +22,30 @@ function renderPerkShop() {
 
     container.innerHTML = PERK_CATALOG.map(p => {
         const owned = state.ownedPerks.includes(p.id);
+        const locked = state.degenLevel < p.requiredLevel;
+        let btnLabel, btnClass, btnDisabled;
+        if (locked) {
+            btnLabel = `🔒 Lvl ${p.requiredLevel}`;
+            btnClass = 'bg-gray-800 text-gray-500';
+            btnDisabled = 'disabled';
+        } else if (owned) {
+            btnLabel = 'OWNED';
+            btnClass = 'bg-gray-800 text-gray-500';
+            btnDisabled = 'disabled';
+        } else {
+            btnLabel = `$${p.cost.toLocaleString()}`;
+            btnClass = 'bg-emerald-600 hover:bg-emerald-500 text-black';
+            btnDisabled = '';
+        }
         return `
-            <div class="perk-row ${owned ? 'owned' : ''}">
+            <div class="perk-row ${owned ? 'owned' : ''} ${locked ? 'opacity-50' : ''}">
                 <div class="max-w-[70%]">
                     <strong class="text-white text-xs block">${p.name}</strong>
                     <span class="text-[10px] text-gray-400 font-light leading-tight block mt-0.5">${p.desc}</span>
+                    ${locked ? `<span class="text-[10px] text-amber-400 font-semibold block mt-1">Unlocks at Degen Level ${p.requiredLevel} (${DEGEN_LEVELS[p.requiredLevel]?.name || ''})</span>` : ''}
                 </div>
-                <button onclick="buyPerk('${p.id}')" ${owned ? 'disabled' : ''} class="px-3 py-1.5 ${owned ? 'bg-gray-800 text-gray-500' : 'bg-emerald-600 hover:bg-emerald-500 text-black'} font-extrabold text-xs rounded transition whitespace-nowrap">
-                    ${owned ? 'OWNED' : `$${p.cost.toLocaleString()}`}
+                <button onclick="buyPerk('${p.id}')" ${btnDisabled} class="px-3 py-1.5 ${btnClass} font-extrabold text-xs rounded transition whitespace-nowrap">
+                    ${btnLabel}
                 </button>
             </div>
         `;
@@ -39,7 +55,9 @@ function renderPerkShop() {
 function buyPerk(id) {
     if (state.ownedPerks.includes(id)) return;
     const perk = PERK_CATALOG.find(p => p.id === id);
-    if (!perk || state.cash < perk.cost) { showToast("Insufficient asset clearings!"); return; }
+    if (!perk) return;
+    if (state.degenLevel < perk.requiredLevel) { showToast(`Reach Degen Level ${perk.requiredLevel} first!`); return; }
+    if (state.cash < perk.cost) { showToast("Insufficient asset clearings!"); return; }
 
     state.cash -= perk.cost;
     state.ownedPerks.push(id);
