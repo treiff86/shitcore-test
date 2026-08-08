@@ -203,7 +203,7 @@ window.FightGame = (function () {
         },
         'assets/fight_game/bg_undead.webp': {
             ground: 515,          // nudged down a bit more per feedback
-            platform: { x1: 120, x2: 465, topY: 365 }, // whole desk top now, not just the corner - covers the near-left section too
+            platform: { x1: 120, x2: 465, topY: 376 }, // whole desk top now, not just the corner - covers the near-left section too
         },
     };
     let currentArena = null; // set fresh each time loadArenaBackground() runs
