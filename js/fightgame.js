@@ -188,7 +188,7 @@ window.FightGame = (function () {
         },
     };
 
-    const BACKGROUNDS = ['assets/fight_game/bg_prison.webp', 'assets/fight_game/bg_market.webp', 'assets/fight_game/bg_wizard.webp'];
+    const BACKGROUNDS = ['assets/fight_game/bg_prison.webp', 'assets/fight_game/bg_market.webp', 'assets/fight_game/bg_wizard.webp', 'assets/fight_game/bg_undead.webp'];
 
     // Per-background overrides for floor height, P1's starting spot, and an
     // optional jumpable platform (x-range + top surface y). Any background
@@ -528,12 +528,13 @@ window.FightGame = (function () {
 
     function newGame(anims, bg) {
         // P1 matches the active theme where one exists (Wizard for $MIM/
-        // Bitcoin Wizard, Reiffer otherwise). P2 is random from the
-        // remaining two characters each match, rather than always Conmen.
+        // Bitcoin Wizard, Undead for the Genuine Undead preview, Reiffer
+        // otherwise). P2 is random from the other three each match,
+        // Undead included now that it's fully built out.
         const p1Key = document.body.classList.contains('win95-mode') ? 'wizard'
             : (window.activePreviewThemeId === 'genuineundead') ? 'undead'
             : 'reiffer';
-        const p2Pool = ['reiffer', 'conmen', 'wizard'].filter(k => k !== p1Key); // undead stays P1-only for now, deliberately not in P2's random pool
+        const p2Pool = ['reiffer', 'conmen', 'wizard', 'undead'].filter(k => k !== p1Key);
         const p2Key = p2Pool[Math.floor(Math.random() * p2Pool.length)];
         const p1 = new Fighter(anims[p1Key], (currentArena && currentArena.p1X) || 180, 1);
         const p2 = new Fighter(anims[p2Key], SW - 180 - 90, -1);
@@ -559,6 +560,37 @@ window.FightGame = (function () {
     // Handles movement, jump physics, crouch, and attack input for one
     // fighter given its own key bindings. Shared by both players so P1
     // and P2 behave identically, just reading different keys.
+    // Shared fall/landing physics - used during normal play (mid-jump,
+    // mid-air-block) and also to bring a winner back down to earth before
+    // their victory dance starts, if the KO or timer ran out while they
+    // were still in the air (see the post-'playing' phase handling below).
+    function applyGravity(f, dt, heliEligible) {
+        const heliActive = heliEligible && f.heliT > 0 && f.state === 'jump_kick';
+        const g = heliActive ? GRAVITY * HELI_GRAVITY_MULT : GRAVITY;
+        f.vy += g * dt;
+        f.y += f.vy * dt;
+        if (heliActive) {
+            f.heliT = Math.max(0, f.heliT - dt);
+            if (f.heliT <= 0) { f.state = 'jump'; f.fr = 0; f.atkT = 0; f.canW = false; }
+        }
+        // Which surface is below: the table platform (only while
+        // falling and horizontally over it) or the regular floor.
+        const plat = currentArena && currentArena.platform;
+        const cx = f.x + f._fw / 2;
+        let landY = arenaGroundY() - P_H;
+        let landOnPlatform = false;
+        if (plat && f.vy >= 0 && cx > plat.x1 && cx < plat.x2) {
+            const platY = plat.topY - P_H;
+            if (platY <= landY) { landY = platY; landOnPlatform = true; }
+        }
+        if (f.y >= landY) {
+            f.y = landY; f.vy = 0; f.grounded = true; f.heliT = 0; f.onPlatform = landOnPlatform;
+            if (f.state === 'jump_kick') { f.state = 'idle'; f.fr = 0; }
+            return true; // landed this frame
+        }
+        return false;
+    }
+
     function updateHumanFighter(dt, f, bind) {
         if (f.guardBroken) return; // fully vulnerable, no input accepted - see updateFighterCommon for the countdown
 
@@ -584,28 +616,7 @@ window.FightGame = (function () {
         // Helicopter kick drastically slows the fall while it's active,
         // then hands back to normal gravity. ---
         if (!f.grounded) {
-            const heliActive = f.heliT > 0 && f.state === 'jump_kick';
-            const g = heliActive ? GRAVITY * HELI_GRAVITY_MULT : GRAVITY;
-            f.vy += g * dt;
-            f.y += f.vy * dt;
-            if (heliActive) {
-                f.heliT = Math.max(0, f.heliT - dt);
-                if (f.heliT <= 0) { f.state = 'jump'; f.fr = 0; f.atkT = 0; f.canW = false; }
-            }
-            // Which surface is below: the table platform (only while
-            // falling and horizontally over it) or the regular floor.
-            const plat = currentArena && currentArena.platform;
-            const cx = f.x + f._fw / 2;
-            let landY = arenaGroundY() - P_H;
-            let landOnPlatform = false;
-            if (plat && f.vy >= 0 && cx > plat.x1 && cx < plat.x2) {
-                const platY = plat.topY - P_H;
-                if (platY <= landY) { landY = platY; landOnPlatform = true; }
-            }
-            if (f.y >= landY) {
-                f.y = landY; f.vy = 0; f.grounded = true; f.heliT = 0; f.onPlatform = landOnPlatform;
-                if (f.state === 'jump_kick') { f.state = 'idle'; f.fr = 0; }
-            }
+            applyGravity(f, dt, true);
         } else if (justPressed[bind.jump]) {
             f.vy = JUMP_VELOCITY; f.grounded = false;
         }
@@ -947,18 +958,18 @@ window.FightGame = (function () {
 
                 if (p1.ko || p2.ko) {
                     if (p2.ko && !p1.ko) {
-                        g.phase = 'p1win'; p1.state = 'victory'; p1.fr = 0; p1.hurtT = 0;
+                        g.phase = 'p1win'; p1.state = p1.grounded ? 'victory' : 'jump'; p1.fr = 0; p1.hurtT = 0;
                         p2.state = 'defeat'; p2.fr = 0; p2.hurtT = 0;
                     } else if (p1.ko && !p2.ko) {
-                        g.phase = 'p2win'; p2.state = 'victory'; p2.fr = 0; p2.hurtT = 0;
+                        g.phase = 'p2win'; p2.state = p2.grounded ? 'victory' : 'jump'; p2.fr = 0; p2.hurtT = 0;
                         p1.state = 'defeat'; p1.fr = 0; p1.hurtT = 0;
                     } else {
                         g.phase = 'draw';
                     }
                 } else if (g.timer <= 0) {
                     g.timer = 0;
-                    if (p1.hp > p2.hp) { g.phase = 'p1win'; p1.state = 'victory'; p2.state = 'defeat'; }
-                    else if (p2.hp > p1.hp) { g.phase = 'p2win'; p2.state = 'victory'; p1.state = 'defeat'; }
+                    if (p1.hp > p2.hp) { g.phase = 'p1win'; p1.state = p1.grounded ? 'victory' : 'jump'; p2.state = 'defeat'; }
+                    else if (p2.hp > p1.hp) { g.phase = 'p2win'; p2.state = p2.grounded ? 'victory' : 'jump'; p1.state = 'defeat'; }
                     else { g.phase = 'draw'; }
                     p1.fr = 0; p2.fr = 0; p1.hurtT = 0; p2.hurtT = 0;
                 }
@@ -966,8 +977,17 @@ window.FightGame = (function () {
                 const winner = g.phase === 'p1win' ? g.p1 : (g.phase === 'p2win' ? g.p2 : null);
                 const loser = g.phase === 'p1win' ? g.p2 : (g.phase === 'p2win' ? g.p1 : null);
                 if (winner) {
-                    winner.frT += dt;
-                    if (winner.frT >= 1 / VICTORY_FPS) { winner.frT = 0; const n = (winner.anims.victory || [null]).length; winner.fr = (winner.fr + 1) % Math.max(1, n); }
+                    if (!winner.grounded) {
+                        // Was mid-air when they won - fall to the floor for
+                        // real instead of freezing the victory pose in
+                        // mid-jump. Victory animation only starts once
+                        // they've actually landed.
+                        applyGravity(winner, dt, false);
+                        if (winner.grounded) { winner.state = 'victory'; winner.fr = 0; winner.frT = 0; }
+                    } else {
+                        winner.frT += dt;
+                        if (winner.frT >= 1 / VICTORY_FPS) { winner.frT = 0; const n = (winner.anims.victory || [null]).length; winner.fr = (winner.fr + 1) % Math.max(1, n); }
+                    }
                 }
                 if (loser) {
                     const n = (loser.anims.defeat && loser.anims.defeat.length) || 1;
