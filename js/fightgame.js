@@ -157,6 +157,26 @@ window.FightGame = (function () {
             crouch_kick:  ['assets/fight_game/wizard_crouch_kick.webp', 1],
             crouch_punch: ['assets/fight_game/wizard_crouch_punch.webp', 1],
         },
+        // Genuine Undead - TEST Play preview theme only (see COSMETIC_THEMES
+        // in web3.js). Full move set including a dedicated idle pose -
+        // see the `anims.idle` override below loadFighterAnims that lets
+        // a character supply its own idle instead of borrowing walk[0].
+        undead: {
+            idle:     ['assets/fight_game/undead_idle.webp', 1],
+            walk:     ['assets/fight_game/undead_walk.webp', 2],
+            victory:  ['assets/fight_game/undead_victory.webp', 5],
+            punch_lo: ['assets/fight_game/undead_punch_lo.webp', 2],
+            kick_lo:  ['assets/fight_game/undead_kick_lo.webp', 1],
+            hurt:     ['assets/fight_game/undead_hurt.webp', 1],
+            defeat:   ['assets/fight_game/undead_defeat.webp', 4],
+            block:    ['assets/fight_game/undead_block.webp', 1],
+            jump:         ['assets/fight_game/undead_jump.webp', 1],
+            crouch:       ['assets/fight_game/undead_crouch.webp', 1],
+            jump_punch:   ['assets/fight_game/undead_jump_punch.webp', 2],
+            jump_kick:    ['assets/fight_game/undead_jump_kick.webp', 2],
+            crouch_kick:  ['assets/fight_game/undead_crouch_kick.webp', 1],
+            crouch_punch: ['assets/fight_game/undead_crouch_punch.webp', 2],
+        },
     };
 
     const BACKGROUNDS = ['assets/fight_game/bg_prison.webp', 'assets/fight_game/bg_market.webp', 'assets/fight_game/bg_wizard.webp'];
@@ -257,7 +277,7 @@ window.FightGame = (function () {
             else if (key === 'wizard' && WIZARD_BOOST_STATES.has(state)) outH = P_H * WIZARD_BOOST_CORRECTION;
             anims[state] = await loadStrip(path, count, outH);
         }
-        anims.idle = anims.walk.length ? [anims.walk[0]] : [];
+        anims.idle = (anims.idle && anims.idle.length) ? anims.idle : (anims.walk.length ? [anims.walk[0]] : []);
         // PLACEHOLDERS for anything not defined above in FIGHTER_ANIM_FILES -
         // replace the corresponding FIGHTER_ANIM_FILES entry with a real
         // loadStrip() source once that art exists, and these no-ops itself.
@@ -280,6 +300,7 @@ window.FightGame = (function () {
         if (document.body.classList.contains('medieval-mode')) src = 'assets/fight_game/bg_market.webp';
         else if (document.body.classList.contains('conmen-mode')) src = 'assets/fight_game/bg_prison.webp';
         else if (document.body.classList.contains('win95-mode')) src = 'assets/fight_game/bg_wizard.webp';
+        else if (window.activePreviewThemeId === 'genuineundead') src = 'assets/fight_game/bg_undead.webp';
         else src = BACKGROUNDS[Math.floor(Math.random() * BACKGROUNDS.length)];
         currentArena = ARENA_CONFIG[src] || null;
         try {
@@ -484,8 +505,10 @@ window.FightGame = (function () {
         // P1 matches the active theme where one exists (Wizard for $MIM/
         // Bitcoin Wizard, Reiffer otherwise). P2 is random from the
         // remaining two characters each match, rather than always Conmen.
-        const p1Key = document.body.classList.contains('win95-mode') ? 'wizard' : 'reiffer';
-        const p2Pool = ['reiffer', 'conmen', 'wizard'].filter(k => k !== p1Key);
+        const p1Key = document.body.classList.contains('win95-mode') ? 'wizard'
+            : (window.activePreviewThemeId === 'genuineundead') ? 'undead'
+            : 'reiffer';
+        const p2Pool = ['reiffer', 'conmen', 'wizard'].filter(k => k !== p1Key); // undead stays P1-only for now, deliberately not in P2's random pool
         const p2Key = p2Pool[Math.floor(Math.random() * p2Pool.length)];
         const p1 = new Fighter(anims[p1Key], (currentArena && currentArena.p1X) || 180, 1);
         const p2 = new Fighter(anims[p2Key], SW - 180 - 90, -1);
@@ -841,11 +864,12 @@ window.FightGame = (function () {
                 loadFighterAnims('reiffer'),
                 loadFighterAnims('conmen'),
                 loadFighterAnims('wizard'),
+                loadFighterAnims('undead'),
             ]);
         }
-        const [reifferAnims, conmenAnims, wizardAnims] = await assetsPromise;
+        const [reifferAnims, conmenAnims, wizardAnims, undeadAnims] = await assetsPromise;
         const bg = await loadArenaBackground(); // always fresh - depends on whichever theme is active right now, not cached
-        const anims = { reiffer: reifferAnims, conmen: conmenAnims, wizard: wizardAnims };
+        const anims = { reiffer: reifferAnims, conmen: conmenAnims, wizard: wizardAnims, undead: undeadAnims };
 
         let g = newGame(anims, bg);
         const shake = new Shake();
