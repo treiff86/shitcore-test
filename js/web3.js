@@ -321,29 +321,30 @@ function refreshDebugInfo() {
     const stateBox = document.getElementById('debugStateBox');
     if (stateBox) {
         stateBox.innerHTML = [
-            `Wallet: ${walletAddress || '(not connected)'}`,
+            `Wallet: ${escapeHtml(walletAddress || '(not connected)')}`,
             `Play mode: ${isTestPlayMode ? 'TEST PLAY' : 'LIVE PLAY'}`,
-            `Active theme: ${_activeThemeLabel()}`,
-            `Owned themes (real): ${ownedThemesList.length ? ownedThemesList.map(t => t.label).join(', ') : 'none'}`,
-            `Page URL: ${window.location.href}`,
+            `Active theme: ${escapeHtml(_activeThemeLabel())}`,
+            `Owned themes (real): ${ownedThemesList.length ? escapeHtml(ownedThemesList.map(t => t.label).join(', ')) : 'none'}`,
+            `Page URL: ${escapeHtml(window.location.href)}`,
         ].map(line => `<div>${line}</div>`).join('');
     }
 
     const versionsBox = document.getElementById('debugVersionsBox');
     if (versionsBox) {
-        versionsBox.innerHTML = _scriptVersionList().map(line => `<div>${line}</div>`).join('');
+        versionsBox.innerHTML = _scriptVersionList().map(line => `<div>${escapeHtml(line)}</div>`).join('');
     }
 
     const errorsBox = document.getElementById('debugErrorsBox');
     if (errorsBox) {
         const log = window._debugErrorLog || [];
         errorsBox.innerHTML = log.length
-            ? log.slice().reverse().map(e => `<div>[${e.time}] ${e.type}${e.source ? ' @ ' + e.source : ''}: ${e.message}</div>`).join('')
+            ? log.slice().reverse().map(e => `<div>[${escapeHtml(e.time)}] ${escapeHtml(e.type)}${e.source ? ' @ ' + escapeHtml(e.source) : ''}: ${escapeHtml(e.message)}</div>`).join('')
             : '<div class="text-gray-500">No errors caught since page load. 🎉</div>';
     }
 }
 
 function openDebugMenu() {
+    if (typeof isTestPlayMode === 'undefined' || !isTestPlayMode) return; // TEST Play only, full stop - matches addTestCash()/connectUnisat() pattern, not just UI-hidden
     refreshDebugInfo();
     document.getElementById("debugMenuModal")?.classList.remove("hidden");
 }
@@ -805,6 +806,14 @@ function _bonusStageEscHandler(ev) {
 }
 
 function openBonusStage() {
+    // Real access rule, not just "is the button visible": a genuine Mid
+    // Evils/Conmen holder gets this in LIVE too, same as the McDonald's
+    // popup checks (see _mcdEggBonusStageAvailable() in mcdonalds-egg.js)
+    // - TEST Play users get it via the Theme Preview override applying
+    // the same body classes. Hard-gating here (not just hiding the
+    // button) closes off calling this directly from the console.
+    const themeUnlocked = document.body.classList.contains('medieval-mode') || document.body.classList.contains('conmen-mode');
+    if (!themeUnlocked) return;
     const overlay = document.getElementById("bonusStageOverlay");
     const canvas = document.getElementById("bonusStageCanvas");
     if (!overlay || !canvas) return;
@@ -835,6 +844,7 @@ function closeBonusStage() {
 // fightgame.js itself (its own keydown listener, torn down in stop()), so
 // unlike Bonus Stage there's no separate handler to wire up here.
 function openFightGame() {
+    if (typeof isTestPlayMode === 'undefined' || !isTestPlayMode) return; // TEST Play only, full stop - no real-holder path exists for this one yet, unlike Bonus Stage
     const overlay = document.getElementById("fightGameOverlay");
     const canvas = document.getElementById("fightGameCanvas");
     if (!overlay || !canvas) return;
