@@ -230,6 +230,7 @@ function applyTheme(theme) {
         // player (and LIVE Play) only reaches the mini-game through the
         // McDonald's popup easter egg (see js/mcdonalds-egg.js).
         document.getElementById("audioToggleBtn")?.classList.remove("hidden");
+        if (typeof autoStartThemeMusicIfMuted === 'function') autoStartThemeMusicIfMuted();
     }
 }
 
