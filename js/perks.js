@@ -59,7 +59,7 @@ function renderLeaderboard() {
 
     container.innerHTML = state.victimLeaderboard.map((l, idx) => `
         <div class="flex justify-between items-center text-[11px] border-b border-[#1A2232] py-1 text-gray-400">
-            <span>#${idx + 1} <strong class="text-white">${l.name} (${l.ticker})</strong></span>
+            <span>#${idx + 1} <strong class="text-white">${escapeHtml(l.name)} (${escapeHtml(l.ticker)})</strong></span>
             <span class="text-rose-400 font-mono">+$${l.cash.toLocaleString('en-US', { maximumFractionDigits: 0 })} (<span class="text-gray-500">${l.suckers} victims</span>)</span>
         </div>
     `).join('');
