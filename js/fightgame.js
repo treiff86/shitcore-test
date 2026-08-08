@@ -633,10 +633,14 @@ window.FightGame = (function () {
     // other" overlap while both have feet on the floor.
     function resolveFighterCollision(p1, p2) {
         if (!p1.grounded || !p2.grounded) return;
+        // Lets them stand close/overlapping a bit (like sprites clinching
+        // in most 2D fighters) instead of a hard wall the instant they
+        // touch - only pushes apart once they'd overlap by more than this.
+        const ALLOWED_OVERLAP = 45;
         const p1Right = p1.x + p1._fw, p2Right = p2.x + p2._fw;
         const overlap = Math.min(p1Right, p2Right) - Math.max(p1.x, p2.x);
-        if (overlap <= 0) return;
-        const half = overlap / 2;
+        if (overlap <= ALLOWED_OVERLAP) return;
+        const half = (overlap - ALLOWED_OVERLAP) / 2;
         if (p1.x < p2.x) {
             p1.x = Math.max(STAGE_MARGIN, p1.x - half);
             p2.x = Math.min(SW - STAGE_MARGIN - p2._fw, p2.x + half);
