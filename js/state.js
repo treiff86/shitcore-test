@@ -114,7 +114,10 @@ function resetGameStateInMemory() {
 // Resets spendable cash back to the $1,000 starting amount. Rugged
 // Savings resets to $0 too, and Degen Level follows it right back down
 // since it's a live reflection of Rugged Savings, not a separate stored
-// achievement. Perks stay exactly as they are. No page reload.
+// achievement. Perk Shop upgrades follow the same rule - checkProgressions()
+// strips any perk that requires a higher Degen Level than you're back
+// down to, so perks bought this run don't carry over past a reset. No
+// page reload.
 async function refreshFundsToStart() {
     state.cash = 1000;
     state.ruggedSavings = 0;
@@ -205,6 +208,16 @@ function checkProgressions() {
         playSound('buy');
     } else if (newLevel !== state.degenLevel) {
         state.degenLevel = newLevel; // dropped - no toast/sound, just reflect it
+        // Perks only last as long as the Degen Level that unlocked them -
+        // dropping back down (Refresh Funds, Game Over) strips anything
+        // that now requires a higher level than you're currently at, same
+        // way the level itself isn't a permanent achievement.
+        if (typeof PERK_CATALOG !== 'undefined' && state.ownedPerks && state.ownedPerks.length) {
+            state.ownedPerks = state.ownedPerks.filter((id) => {
+                const perk = PERK_CATALOG.find((p) => p.id === id);
+                return !perk || perk.requiredLevel <= newLevel;
+            });
+        }
     }
     
     // Win Condition Check - matches Level 4's target and the Lambo
