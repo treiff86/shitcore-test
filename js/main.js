@@ -30,7 +30,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Conmen NFT holders: rare (0.01% per second - roughly once every
         // few hours of active play) chance to wipe Regulatory Heat entirely.
-        if (typeof isConmenHolder !== 'undefined' && isConmenHolder && Math.random() < 0.0001) {
+        // Requires BOTH genuine ownership (isConmenHolder) AND the Conmen
+        // theme/background actually being the one active right now - a
+        // dual-NFT holder currently viewing a different theme shouldn't
+        // get this firing in the background.
+        if (typeof isConmenHolder !== 'undefined' && isConmenHolder
+            && document.body.classList.contains('conmen-mode')
+            && Math.random() < 0.0001) {
             state.globalHeat = 0;
             document.getElementById('heatPct').innerText = `0%`;
             document.getElementById('heatBarFill').style.width = `0%`;
