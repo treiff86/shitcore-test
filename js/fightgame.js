@@ -161,6 +161,22 @@ window.FightGame = (function () {
 
     const BACKGROUNDS = ['assets/fight_game/bg_prison.webp', 'assets/fight_game/bg_market.webp', 'assets/fight_game/bg_wizard.webp'];
 
+    // Per-background overrides for floor height, P1's starting spot, and an
+    // optional jumpable platform (x-range + top surface y). Any background
+    // not listed here just uses the plain GROUND constant, no platform -
+    // add an entry here the same way to give another scene its own floor
+    // level or a jump-up ledge.
+    const ARENA_CONFIG = {
+        'assets/fight_game/bg_wizard.webp': {
+            ground: 500,          // floor is lower in this art than the default 430
+            p1X: 205,             // stands just in front of the cauldron instead of on top of it
+            platform: { x1: 585, x2: 890, topY: 405 }, // the table on the right - jump up to stand on it
+        },
+    };
+    let currentArena = null; // set fresh each time loadArenaBackground() runs
+
+    function arenaGroundY() { return (currentArena && currentArena.ground) || GROUND; }
+
     // ---------------------------------------------------------------
     // ASSET LOADING
     // ---------------------------------------------------------------
@@ -265,6 +281,7 @@ window.FightGame = (function () {
         else if (document.body.classList.contains('conmen-mode')) src = 'assets/fight_game/bg_prison.webp';
         else if (document.body.classList.contains('win95-mode')) src = 'assets/fight_game/bg_wizard.webp';
         else src = BACKGROUNDS[Math.floor(Math.random() * BACKGROUNDS.length)];
+        currentArena = ARENA_CONFIG[src] || null;
         try {
             const img = await loadImage(src);
             const c = document.createElement('canvas');
@@ -282,9 +299,10 @@ window.FightGame = (function () {
     class Fighter {
         constructor(anims, x, facing) {
             this.anims = anims;
-            this.x = x; this.y = GROUND - P_H;
+            this.x = x; this.y = arenaGroundY() - P_H;
             this.vx = 0; this.vy = 0; this.facing = facing;
             this.grounded = true;
+            this.onPlatform = false;
             this.crouching = false;
             this.hp = MAX_HP;
             this.state = 'idle'; this.fr = 0; this.frT = 0;
@@ -469,7 +487,7 @@ window.FightGame = (function () {
         const p1Key = document.body.classList.contains('win95-mode') ? 'wizard' : 'reiffer';
         const p2Pool = ['reiffer', 'conmen', 'wizard'].filter(k => k !== p1Key);
         const p2Key = p2Pool[Math.floor(Math.random() * p2Pool.length)];
-        const p1 = new Fighter(anims[p1Key], 180, 1);
+        const p1 = new Fighter(anims[p1Key], (currentArena && currentArena.p1X) || 180, 1);
         const p2 = new Fighter(anims[p2Key], SW - 180 - 90, -1);
         return {
             p1, p2, bg,
@@ -520,8 +538,18 @@ window.FightGame = (function () {
                 f.heliT = Math.max(0, f.heliT - dt);
                 if (f.heliT <= 0) { f.state = 'jump'; f.fr = 0; f.atkT = 0; f.canW = false; }
             }
-            if (f.y >= GROUND - P_H) {
-                f.y = GROUND - P_H; f.vy = 0; f.grounded = true; f.heliT = 0;
+            // Which surface is below: the table platform (only while
+            // falling and horizontally over it) or the regular floor.
+            const plat = currentArena && currentArena.platform;
+            const cx = f.x + f._fw / 2;
+            let landY = arenaGroundY() - P_H;
+            let landOnPlatform = false;
+            if (plat && f.vy >= 0 && cx > plat.x1 && cx < plat.x2) {
+                const platY = plat.topY - P_H;
+                if (platY <= landY) { landY = platY; landOnPlatform = true; }
+            }
+            if (f.y >= landY) {
+                f.y = landY; f.vy = 0; f.grounded = true; f.heliT = 0; f.onPlatform = landOnPlatform;
                 if (f.state === 'jump_kick') { f.state = 'idle'; f.fr = 0; }
             }
         } else if (justPressed[bind.jump]) {
@@ -538,6 +566,16 @@ window.FightGame = (function () {
                 else if (keys[bind.right]) { f.vx = P_SPD; f.facing = 1; }
             }
             f.x = Math.max(STAGE_MARGIN, Math.min(SW - STAGE_MARGIN - f._fw, f.x + f.vx));
+
+            // Walked off the edge of the table - start falling to the
+            // real floor instead of staying suspended at platform height.
+            if (f.grounded && f.onPlatform) {
+                const plat = currentArena && currentArena.platform;
+                const cx = f.x + f._fw / 2;
+                if (!plat || cx <= plat.x1 || cx >= plat.x2) {
+                    f.grounded = false; f.onPlatform = false; f.vy = 0;
+                }
+            }
 
             if (f.grounded) {
                 f.state = f.crouching ? 'crouch' : (f.vx !== 0 ? 'walk' : 'idle');
