@@ -202,8 +202,8 @@ window.FightGame = (function () {
             platform: { x1: 585, x2: 890, topY: 405 }, // the table on the right - jump up to stand on it
         },
         'assets/fight_game/bg_undead.webp': {
-            ground: 460,          // both fighters were floating above the office floor - lowered to match
-            platform: { x1: 429, x2: 477, topY: 354 }, // just the near end-corner of the reception desk, not the whole thing
+            ground: 500,          // pushed further down than the first pass - 460 was still right at the desk's base edge, not clearly past it
+            platform: { x1: 400, x2: 465, topY: 370 }, // just the near end-corner of the reception desk, not the whole thing
         },
     };
     let currentArena = null; // set fresh each time loadArenaBackground() runs
