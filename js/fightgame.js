@@ -8,8 +8,8 @@
    reuses updateHumanFighter()'s physics/attack/block logic
    instead of duplicating any of it).
 
-   Player 1 - WASD
-     A/D move, W jump, S crouch, Z punch, X kick, Space block
+   Player 1 - Arrow Keys + Z/X
+     Left/Right move, Up jump, Down crouch, Z punch, X kick, Space block
 
    Block: hold the block key. While blocking:
      - you cannot attack (inputs are ignored, same as a real fighting
@@ -1039,8 +1039,14 @@ window.FightGame = (function () {
         const shake = new Shake();
         const fx = [];
 
-        const P1_BIND = { left: 'a', right: 'd', jump: 'w', crouch: 's', punch: 'z', kick: 'x', block: ' ' };
-        const P2_BIND = { left: 'ArrowLeft', right: 'ArrowRight', jump: 'ArrowUp', crouch: 'ArrowDown', punch: 'Enter', kick: '/', block: 'Shift' };
+        const P1_BIND = { left: 'ArrowLeft', right: 'ArrowRight', jump: 'ArrowUp', crouch: 'ArrowDown', punch: 'z', kick: 'x', block: ' ' };
+        // P2 is CPU-only now (see updateCPUInput) - these are just internal
+        // dictionary keys the AI sets programmatically, not real keyboard
+        // keys, so they're deliberately NOT actual key names anymore. That
+        // matters: if these matched P1_BIND's real key strings, a P1 key
+        // press would leak into the CPU's virtual input for that frame
+        // (they share the same `keys`/`justPressed` objects).
+        const P2_BIND = { left: 'cpu_left', right: 'cpu_right', jump: 'cpu_jump', crouch: 'cpu_crouch', punch: 'cpu_punch', kick: 'cpu_kick', block: 'cpu_block' };
 
         keys = {}; justPressed = {};
         onKeyDown = (ev) => {
@@ -1156,7 +1162,7 @@ window.FightGame = (function () {
             if (g.phase === 'intro') drawIntro(ctx, g);
             else if (g.phase !== 'playing') drawEnd(ctx, g);
 
-            const leg = 'P1: AD Move  W Jump  S Crouch  Z Punch  X Kick  Space Block   |   P2: CPU';
+            const leg = 'P1: \u2190\u2192 Move  \u2191 Jump  \u2193 Crouch  Z Punch  X Kick  Space Block   |   P2: CPU';
             ctx.font = "9px 'BonusStagePixel', monospace";
             ctx.fillStyle = '#aaaaaa';
             ctx.textAlign = 'center';
