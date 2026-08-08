@@ -114,7 +114,12 @@ function resumeMainThemeAfterBonusStage() {
 // ---- Fight Club's own battle music ----
 // Fight Club uses this one track for every arena, on purpose - no more
 // per-arena splitting between the Mid Evils/Conmen site themes.
+// Every arena uses this by default; the Genuine Undead office gets its
+// own dedicated track below since Tim sent one specifically for it.
 const FIGHT_MUSIC_TRACK = 'assets/bonus_stage/bonus-stage-theme.mp3';
+const FIGHT_ARENA_MUSIC_OVERRIDES = {
+    'assets/fight_game/bg_undead.webp': 'assets/fight_game/undead_theme.mp3',
+};
 
 // Called by Fight Game once it knows which arena background got picked
 // for this match. Respects the player's existing mute preference - if
@@ -124,7 +129,7 @@ function playFightMusicForBackground(bgSrc) {
     if (!bgMusicEl) bgMusicEl = document.getElementById('bgMusicEl');
     if (!bgMusicEl) return;
     setActiveMiniGameMusicEl(bgMusicEl);
-    const src = FIGHT_MUSIC_TRACK;
+    const src = FIGHT_ARENA_MUSIC_OVERRIDES[bgSrc] || FIGHT_MUSIC_TRACK;
     // Ignores the main site's bgMusicMuted on purpose - Fight Game music
     // starts every match regardless of whether the player has ever
     // touched the site's own music toggle. Only the mini-game music
