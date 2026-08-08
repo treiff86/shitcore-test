@@ -77,9 +77,47 @@ function pauseMainThemeForBonusStage() {
 function resumeMainThemeAfterBonusStage() {
     if (!bgMusicEl) bgMusicEl = document.getElementById('bgMusicEl');
     if (bgMusicWasPlayingBeforeBonusStage && bgMusicEl) {
+        // Fight Game may have swapped bgMusicEl's src to a battle track
+        // for a different arena than the site's actual active theme (see
+        // playFightMusicForBackground() below) - reset it back to
+        // whatever the site theme actually calls for before resuming,
+        // otherwise leaving Fight Club could keep playing fight music.
+        const correctSrc = _bgMusicSrcForCurrentTheme();
+        if (correctSrc && !bgMusicEl.src.endsWith(correctSrc)) bgMusicEl.src = correctSrc;
         bgMusicEl.volume = 0.3;
         bgMusicEl.play().catch(() => {});
     }
+}
+
+// ---- Fight Game's own battle music ----
+// Reuses the same two theme tracks the main site has (no dedicated battle
+// themes exist yet for the Wizard or Genuine Undead arenas - those
+// matches are silent for now until real tracks are added; tell Claude to
+// wire up FIGHT_ARENA_MUSIC the moment new tracks exist, same pattern as
+// THEME_MUSIC_TRACKS above).
+const FIGHT_ARENA_MUSIC = {
+    'assets/fight_game/bg_market.webp': 'assets/midevil-theme.mp3',
+    'assets/fight_game/bg_prison.webp': 'assets/conmen-theme.mp3',
+};
+
+// Called by Fight Game once it knows which arena background got picked
+// for this match. Respects the player's existing mute preference - if
+// they've got music toggled off for the main site, a match starting
+// doesn't force it back on.
+function playFightMusicForBackground(bgSrc) {
+    if (!bgMusicEl) bgMusicEl = document.getElementById('bgMusicEl');
+    if (!bgMusicEl) return;
+    const src = FIGHT_ARENA_MUSIC[bgSrc];
+    if (!src || bgMusicMuted) { bgMusicEl.pause(); return; }
+    if (!bgMusicEl.src.endsWith(src)) bgMusicEl.src = src;
+    bgMusicEl.volume = 0.3;
+    bgMusicEl.currentTime = 0;
+    bgMusicEl.play().catch((err) => console.warn('[audio] fight music blocked:', err.name));
+}
+
+function stopFightMusic() {
+    if (!bgMusicEl) bgMusicEl = document.getElementById('bgMusicEl');
+    if (bgMusicEl) bgMusicEl.pause();
 }
 
 function getAudioCtx() {
@@ -232,10 +270,54 @@ function _playSoundNow(type) {
             gain.gain.setValueAtTime(0.14, now);
             gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
             osc.start(now); osc.stop(now + 0.2);
+        } else if (type === 'fight_start') {
+            // Two-note rising "FIGHT!" stinger - no announcer voice clip on
+            // hand, so this is a synthesized brass-ish hit instead.
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(220, now);
+            osc.frequency.setValueAtTime(440, now + 0.12);
+            gain.gain.setValueAtTime(0.001, now);
+            gain.gain.linearRampToValueAtTime(0.16, now + 0.02);
+            gain.gain.setValueAtTime(0.16, now + 0.1);
+            gain.gain.linearRampToValueAtTime(0.001, now + 0.12);
+            gain.gain.linearRampToValueAtTime(0.18, now + 0.14);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+            osc.start(now); osc.stop(now + 0.5);
+        } else if (type === 'fight_game_over') {
+            // Descending three-note "that's a wrap" stinger for the win/
+            // lose/draw screen.
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(520, now);
+            osc.frequency.setValueAtTime(390, now + 0.15);
+            osc.frequency.setValueAtTime(260, now + 0.3);
+            gain.gain.setValueAtTime(0.15, now);
+            gain.gain.setValueAtTime(0.15, now + 0.42);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+            osc.start(now); osc.stop(now + 0.6);
         }
     } catch (e) {
         console.warn('[audio] playSound blocked or unsupported:', e);
     }
+}
+
+// ---- Real audio-file SFX, as opposed to the synthesized tones above ----
+// Used by Fight Game/Bonus Stage for actual recorded hit/block/whoosh
+// sounds. Each call makes a fresh Audio element so overlapping hits (e.g.
+// two fighters landing shots close together, or a fast combo) don't cut
+// each other off the way a single shared <audio> element would.
+function playSfxFile(path, volume) {
+    try {
+        const el = new Audio(path);
+        el.volume = volume == null ? 0.6 : volume;
+        el.play().catch(() => {}); // autoplay-policy rejections are fine to swallow, same as bg music
+    } catch (e) { /* ignore */ }
+}
+
+// Picks a random file from a pool - used for the "mix it up" hit/block
+// variety so the same exact sample doesn't play every single time.
+function playSfxRandom(paths, volume) {
+    if (!paths || !paths.length) return;
+    playSfxFile(paths[Math.floor(Math.random() * paths.length)], volume);
 }
 
 // Public entry point. The Web Audio API starts every AudioContext in a
