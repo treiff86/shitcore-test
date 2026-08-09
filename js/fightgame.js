@@ -189,6 +189,38 @@ window.FightGame = (function () {
             jump_block:   ['assets/fight_game/undead_jump_block.webp', 1],
             jump_hurt:    ['assets/fight_game/undead_jump_hurt.webp', 1],
         },
+        // Skull X - the on-chain-gated fighter (see COSMETIC_THEMES
+        // "skullx" in web3.js). Real ownership verification is still
+        // pending (Origins parent inscription ID unconfirmed - see
+        // btcwallet.js), so for now this is reachable the same way
+        // Genuine Undead is: via Theme Preview in TEST mode. Also added
+        // to the P2 random-opponent pool for everyone regardless of
+        // ownership, same as the other three.
+        // Full move set including jump/jump_block/jump_punch/jump_kick -
+        // this character's airborne pose is a deliberate tight tuck-into-
+        // a-ball (cape wraps into the silhouette), not a standard leap, so
+        // don't "fix" it to look like the other fighters' jump poses.
+        // No dedicated idle - falls back to walk[0] same as Reiffer/
+        // Conmen/Wizard.
+        skullx: {
+            walk:     ['assets/fight_game/skullx_walk.webp', 2],
+            victory:  ['assets/fight_game/skullx_victory.webp', 4],
+            punch_lo: ['assets/fight_game/skullx_punch_lo.webp', 2],
+            kick_lo:  ['assets/fight_game/skullx_kick_lo.webp', 2],
+            hurt:     ['assets/fight_game/skullx_hurt.webp', 1],
+            defeat:   ['assets/fight_game/skullx_defeat.webp', 5],
+            block:    ['assets/fight_game/skullx_block.webp', 1],
+            jump:         ['assets/fight_game/skullx_jump.webp', 1],
+            crouch:       ['assets/fight_game/skullx_crouch.webp', 1],
+            jump_punch:   ['assets/fight_game/skullx_jump_punch.webp', 1],
+            jump_kick:    ['assets/fight_game/skullx_jump_kick.webp', 1],
+            crouch_kick:  ['assets/fight_game/skullx_crouch_kick.webp', 1],
+            crouch_punch: ['assets/fight_game/skullx_crouch_punch.webp', 1],
+            crouch_block: ['assets/fight_game/skullx_crouch_block.webp', 1],
+            crouch_hurt:  ['assets/fight_game/skullx_crouch_hurt.webp', 1],
+            jump_block:   ['assets/fight_game/skullx_jump_block.webp', 1],
+            jump_hurt:    ['assets/fight_game/skullx_jump_hurt.webp', 1],
+        },
     };
 
     const BACKGROUNDS = ['assets/fight_game/bg_prison.webp', 'assets/fight_game/bg_market.webp', 'assets/fight_game/bg_wizard.webp', 'assets/fight_game/bg_undead.webp?v=2'];
@@ -292,6 +324,15 @@ window.FightGame = (function () {
     const WIZARD_BOOST_STATES = new Set(['hurt']);
     const WIZARD_BOOST_CORRECTION = 1.18;
 
+    // Skull X's coat/cape reaches near the ground in every pose too (same
+    // root cause as Conmen/Wizard above), so raw crouch frame height
+    // doesn't read as noticeably shorter than standing without this.
+    // Genuinely a first-pass estimate this time - unlike Conmen/Wizard,
+    // there was no live match to check fill ratios against yet, so
+    // starting halfway between their two values. Nudge once it's live.
+    const SKULLX_CROUCH_STATES = new Set(['crouch', 'crouch_kick', 'crouch_punch', 'crouch_block', 'crouch_hurt']);
+    const SKULLX_CROUCH_CORRECTION = 0.75;
+
     async function loadFighterAnims(key) {
         const files = FIGHTER_ANIM_FILES[key];
         const anims = {};
@@ -302,6 +343,7 @@ window.FightGame = (function () {
             else if (key === 'conmen' && CONMEN_CROUCH_STATES.has(state)) outH = P_H * CONMEN_CROUCH_CORRECTION;
             else if (key === 'wizard' && WIZARD_CROUCH_STATES.has(state)) outH = P_H * WIZARD_CROUCH_CORRECTION;
             else if (key === 'wizard' && WIZARD_BOOST_STATES.has(state)) outH = P_H * WIZARD_BOOST_CORRECTION;
+            else if (key === 'skullx' && SKULLX_CROUCH_STATES.has(state)) outH = P_H * SKULLX_CROUCH_CORRECTION;
             anims[state] = await loadStrip(path, count, outH);
         }
         anims.idle = (anims.idle && anims.idle.length) ? anims.idle : (anims.walk.length ? [anims.walk[0]] : []);
@@ -544,13 +586,14 @@ window.FightGame = (function () {
 
     function newGame(anims, bg) {
         // P1 matches the active theme where one exists (Wizard for $MIM/
-        // Bitcoin Wizard, Undead for the Genuine Undead preview, Reiffer
-        // otherwise). P2 is random from the other three each match,
-        // Undead included now that it's fully built out.
+        // Bitcoin Wizard, Undead for the Genuine Undead preview, Skull X
+        // for the Skull X preview, Reiffer otherwise). P2 is random from
+        // the other four each match.
         const p1Key = document.body.classList.contains('win95-mode') ? 'wizard'
             : (window.activePreviewThemeId === 'genuineundead') ? 'undead'
+            : (window.activePreviewThemeId === 'skullx') ? 'skullx'
             : 'reiffer';
-        const p2Pool = ['reiffer', 'conmen', 'wizard', 'undead'].filter(k => k !== p1Key);
+        const p2Pool = ['reiffer', 'conmen', 'wizard', 'undead', 'skullx'].filter(k => k !== p1Key);
         const p2Key = p2Pool[Math.floor(Math.random() * p2Pool.length)];
         const p1 = new Fighter(anims[p1Key], (currentArena && currentArena.p1X) || 180, 1);
         const p2 = new Fighter(anims[p2Key], SW - 180 - 90, -1);
@@ -1090,11 +1133,12 @@ window.FightGame = (function () {
                 loadFighterAnims('conmen'),
                 loadFighterAnims('wizard'),
                 loadFighterAnims('undead'),
+                loadFighterAnims('skullx'),
             ]);
         }
-        const [reifferAnims, conmenAnims, wizardAnims, undeadAnims] = await assetsPromise;
+        const [reifferAnims, conmenAnims, wizardAnims, undeadAnims, skullxAnims] = await assetsPromise;
         const bg = await loadArenaBackground(); // always fresh - depends on whichever theme is active right now, not cached
-        const anims = { reiffer: reifferAnims, conmen: conmenAnims, wizard: wizardAnims, undead: undeadAnims };
+        const anims = { reiffer: reifferAnims, conmen: conmenAnims, wizard: wizardAnims, undead: undeadAnims, skullx: skullxAnims };
 
         let g = newGame(anims, bg);
         if (typeof playSfxFile === 'function') playSfxFile('assets/sfx/fight/fight.mp3', 0.7);
