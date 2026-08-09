@@ -858,8 +858,30 @@ function closeBonusStage() {
 // TEST PLAY only - see choosePlayMode(). Escape-to-quit is handled inside
 // fightgame.js itself (its own keydown listener, torn down in stop()), so
 // unlike Bonus Stage there's no separate handler to wire up here.
+// Shared with fightgame.js (solo matches) and onlinelobby.js (online room
+// creation/join, so both sides know which fighter you'll appear as before
+// the match even starts). Single source of truth so a real Conmen holder
+// looks like Conmen everywhere, not just in some paths and not others -
+// this used to only special-case Wizard/Genuine Undead/Skull X and quietly
+// defaulted every Mid Evils AND Conmen holder to the plain Reiffer look.
+// Mid Evils has no separate character (Reiffer already IS the Mid Evils
+// look), so it doesn't need its own branch here - only Conmen did.
+function getActiveFighterKey() {
+    if (document.body.classList.contains('win95-mode')) return 'wizard';
+    if (document.body.classList.contains('conmen-mode')) return 'conmen';
+    if (window.activePreviewThemeId === 'genuineundead') return 'undead';
+    if (window.activePreviewThemeId === 'skullx') return 'skullx';
+    return 'reiffer';
+}
+
 function openFightGame() {
-    if (typeof isTestPlayMode === 'undefined' || !isTestPlayMode) return; // TEST Play only, full stop - no real-holder path exists for this one yet, unlike Bonus Stage
+    // TEST Play only, EXCEPT for a real online match that's already been
+    // through real ownership gating to get here (Mid Evils/Conmen holders,
+    // see updateOnlineLobbyAccess() and onlinelobby.js) - this used to
+    // block that path too with no exception, which would have silently
+    // done nothing for every real holder the instant they got matched.
+    const isRealOnlineMatch = !!window.fightClubOnlineActive;
+    if ((typeof isTestPlayMode === 'undefined' || !isTestPlayMode) && !isRealOnlineMatch) return;
     const overlay = document.getElementById("fightGameOverlay");
     const canvas = document.getElementById("fightGameCanvas");
     if (!overlay || !canvas) return;
@@ -882,6 +904,35 @@ function closeFightGame() {
     }
     if (typeof window.FightGame !== "undefined") window.FightGame.stop();
     if (typeof resumeMainThemeAfterBonusStage === "function") resumeMainThemeAfterBonusStage();
+    // Online match cleanup lives here rather than only in onlinelobby.js so
+    // ANY way of closing the fight game (Escape key, the in-game quit
+    // button, a peer disconnecting) reliably tears the sync channel down -
+    // a leftover open channel would otherwise bleed into the next match.
+    if (typeof stopFightSync === 'function') stopFightSync();
+    window.fightClubOnlineActive = false;
+    window.fightClubOnlineRoomId = null;
+    window.fightClubOnlineIsHost = false;
+    window.fightClubOnlineFighters = null;
+    window.fightClubOnlineArena = null;
+}
+
+/* ---------------- Debug menu: Fight Sync connectivity check ---------------- */
+// Same idea as checkConnectivity() above, but for the actual per-match
+// sync channel rather than general Supabase reachability - answers "is my
+// connection to my current opponent actually alive right now" with real
+// numbers instead of guesswork.
+function checkFightSyncStatus() {
+    const out = document.getElementById('fightSyncCheckResult');
+    if (!out) return;
+    if (typeof getFightSyncStatus !== 'function') { out.textContent = '❌ Sync module not loaded - check the <script> tag for js/onlinesync.js.'; return; }
+    const s = getFightSyncStatus();
+    if (!s.active) { out.textContent = 'Not in an online match right now - start or join a Fight Club room, then check.'; return; }
+    const lines = [];
+    lines.push(s.peerPresent ? '✅ Opponent present in the sync channel' : '⚠️ Channel open, but opponent not detected yet');
+    lines.push(s.lastPingMs !== null ? `Round-trip to opponent: ${s.lastPingMs}ms` : 'No ping response yet');
+    lines.push(s.msSinceLastRemoteInput !== null ? `Last input received from opponent: ${s.msSinceLastRemoteInput}ms ago` : 'No input received yet');
+    lines.push(`Connected for: ${Math.round((s.connectedForMs || 0) / 1000)}s`);
+    out.textContent = lines.join('\n');
 }
 
 /* ---------------- Init ---------------- */
