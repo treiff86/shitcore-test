@@ -223,7 +223,7 @@ window.FightGame = (function () {
         },
     };
 
-    const BACKGROUNDS = ['assets/fight_game/bg_prison.webp', 'assets/fight_game/bg_market.webp', 'assets/fight_game/bg_wizard.webp', 'assets/fight_game/bg_undead.webp?v=2'];
+    const BACKGROUNDS = ['assets/fight_game/bg_prison.webp', 'assets/fight_game/bg_market.webp', 'assets/fight_game/bg_wizard.webp', 'assets/fight_game/bg_skullx.webp'];
 
     // ---------------------------------------------------------------
     // SOUND EFFECTS (real recorded files, not the synthesized tones in
@@ -248,8 +248,8 @@ window.FightGame = (function () {
             p1X: 205,             // stands just in front of the cauldron instead of on top of it
             platform: { x1: 585, x2: 890, topY: 405 }, // the table on the right - jump up to stand on it
         },
-        'assets/fight_game/bg_undead.webp?v=2': {
-            ground: 480,           // new throne-room art (v2) - estimated from the rug/floor line, no platform this time (no obvious ledge like the old desk had) - flag to Tim: nudge this if feet look off once it's live
+        'assets/fight_game/bg_skullx.webp': {
+            ground: 480,           // throne-room art - estimated from the rug/floor line, no platform (no obvious ledge like some other arenas have) - nudge this if feet look off once it's live
         },
     };
     let currentArena = null; // set fresh each time loadArenaBackground() runs
