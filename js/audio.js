@@ -132,7 +132,7 @@ const FIGHT_ARENA_MUSIC_OVERRIDES = {
     'assets/fight_game/bg_market.webp': 'assets/fight_game/midevils_fight_theme.mp3',
     'assets/fight_game/bg_prison.webp': 'assets/conmen-theme.mp3?v=2',
     'assets/fight_game/bg_wizard.webp': 'assets/fight_game/wizard_fight_theme.mp3',
-    'assets/fight_game/bg_undead.webp?v=2': 'assets/fight_game/undead_theme.mp3?v=2',
+    'assets/fight_game/bg_skullx.webp': 'assets/fight_game/skullx_theme.mp3',
 };
 
 // Called by Fight Game once it knows which arena background got picked
