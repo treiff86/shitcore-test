@@ -703,7 +703,15 @@ window.BonusStage = (function () {
                 g.timer -= dt;
                 g.player.update(dt, keys, g.fm, g.fx, shakeObj, g.score, debrisImgs, sparkImgs);
                 g.fm.update(dt);
-                g.fx = g.fx.filter((e) => e.update(dt));
+                // Mutates g.fx in place instead of g.fx.filter(...) - the
+                // filter version allocated a brand new array every single
+                // frame during play, which fightgame.js's equivalent
+                // particle loop never did. Reverse iteration is required
+                // here so splicing an index doesn't shift the ones still
+                // left to check.
+                for (let i = g.fx.length - 1; i >= 0; i--) {
+                    if (!g.fx[i].update(dt)) g.fx.splice(i, 1);
+                }
                 g.score.value = Math.round(WIN_CASH_REWARD * (1.0 - g.fm.hp / FM_HP));
                 if (g.fm.dead) {
                     shakeObj.hit(22); g.phase = 'won';
