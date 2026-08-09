@@ -75,14 +75,9 @@ window.WizardPopups = (function () {
         el.id = 'wizardIMPopup';
         el.className = 'wizard-im-popup';
         el.innerHTML = `
-            <div class="wizard-im-titlebar">
-                <span class="wizard-im-title">Bitcoin Wizard says...</span>
-                <button class="wizard-im-close" type="button" aria-label="Close">&times;</button>
-            </div>
-            <div class="wizard-im-body">
-                <img class="wizard-im-avatar" alt="Bitcoin Wizard">
-                <p class="wizard-im-quote"></p>
-            </div>
+            <img class="wizard-im-avatar" alt="Bitcoin Wizard">
+            <p class="wizard-im-quote"></p>
+            <button class="wizard-im-close" type="button" aria-label="Close">&times;</button>
         `;
         el.querySelector('.wizard-im-close').addEventListener('click', dismiss);
         document.body.appendChild(el);
