@@ -1028,6 +1028,13 @@
                 </div>
                 <div id="connectivityCheckResult" class="bg-black/40 border border-[#1A2232] rounded p-3 text-[11px] font-mono text-gray-300">Not checked yet.</div>
             </div>
+            <div>
+                <div class="flex items-center justify-between mb-1">
+                    <div class="text-[10px] uppercase tracking-wide text-gray-500">Fight Sync (Online Fight Club)</div>
+                    <button onclick="checkFightSyncStatus()" class="text-[10px] text-amber-400 hover:text-amber-300 transition"><i class="fa-solid fa-satellite-dish mr-1"></i>Check</button>
+                </div>
+                <div id="fightSyncCheckResult" class="bg-black/40 border border-[#1A2232] rounded p-3 text-[11px] font-mono text-gray-300">Not in an online match right now - start or join a Fight Club room, then check.</div>
+            </div>
             <div class="flex gap-2">
                 <button onclick="refreshDebugInfo()" class="flex-1 py-2 border border-[#1A2232] hover:border-gray-500 text-gray-400 hover:text-white rounded text-xs transition">
                     <i class="fa-solid fa-rotate mr-1"></i>Refresh
@@ -1214,14 +1221,15 @@
 <script src="js/staking.js" defer></script>
 <script src="js/perks.js?v=3" defer></script>
 <script src="js/bonusstage.js?v=21" defer></script>
-<script src="js/fightgame.js?v=40" defer></script>
+<script src="js/fightgame.js?v=42" defer></script>
 <script src="js/conmen-egg.js?v=6" defer></script>
 <script src="js/mcdonalds-egg.js?v=4" defer></script>
-<script src="js/web3.js?v=44" defer></script>
+<script src="js/web3.js?v=45" defer></script>
 <script src="js/wizardpopup.js?v=2" defer></script>
 <script src="js/win95desktop.js?v=5" defer></script>
 <script src="js/btcwallet.js?v=4" defer></script>
-<script src="js/onlinelobby.js?v=5" defer></script>
+<script src="js/onlinesync.js?v=1" defer></script>
+<script src="js/onlinelobby.js?v=6" defer></script>
 <script type="module" src="js/sns.js?v=5"></script>
 <script type="module" src="js/nftgate.js?v=3"></script>
 <script src="js/gate.js?v=2" defer></script>
