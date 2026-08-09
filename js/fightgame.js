@@ -224,6 +224,10 @@ window.FightGame = (function () {
     };
 
     const BACKGROUNDS = ['assets/fight_game/bg_prison.webp', 'assets/fight_game/bg_market.webp', 'assets/fight_game/bg_wizard.webp', 'assets/fight_game/bg_skullx.webp'];
+    // Online matches decide the arena once, at room-creation time (see
+    // onlinelobby.js), so both players load the same image instead of each
+    // independently rolling their own - this is what that picks from.
+    window.pickRandomArenaSrc = () => BACKGROUNDS[Math.floor(Math.random() * BACKGROUNDS.length)];
 
     // ---------------------------------------------------------------
     // SOUND EFFECTS (real recorded files, not the synthesized tones in
@@ -361,14 +365,19 @@ window.FightGame = (function () {
 
     let lastArenaBg = null; // tracks the previous match's background so the next one never repeats it
 
-    async function loadArenaBackground() {
+    async function loadArenaBackground(forcedSrc) {
         // Fully random every match, regardless of which cosmetic theme is
         // active - the arena and its music are meant to vary match to
         // match. Never repeats the immediately-previous background.
-        let src;
-        do {
-            src = BACKGROUNDS[Math.floor(Math.random() * BACKGROUNDS.length)];
-        } while (src === lastArenaBg && BACKGROUNDS.length > 1);
+        // Online matches pass forcedSrc (decided once at room-creation
+        // time, see onlinelobby.js) so both players see the same arena
+        // instead of each independently rolling their own.
+        let src = forcedSrc;
+        if (!src) {
+            do {
+                src = BACKGROUNDS[Math.floor(Math.random() * BACKGROUNDS.length)];
+            } while (src === lastArenaBg && BACKGROUNDS.length > 1);
+        }
         lastArenaBg = src;
         currentArena = ARENA_CONFIG[src] || null;
         if (typeof playFightMusicForBackground === 'function') playFightMusicForBackground(src);
@@ -585,16 +594,24 @@ window.FightGame = (function () {
     }
 
     function newGame(anims, bg) {
-        // P1 matches the active theme where one exists (Wizard for $MIM/
-        // Bitcoin Wizard, Undead for the Genuine Undead preview, Skull X
-        // for the Skull X preview, Reiffer otherwise). P2 is random from
-        // the other four each match.
-        const p1Key = document.body.classList.contains('win95-mode') ? 'wizard'
-            : (window.activePreviewThemeId === 'genuineundead') ? 'undead'
-            : (window.activePreviewThemeId === 'skullx') ? 'skullx'
-            : 'reiffer';
-        const p2Pool = ['reiffer', 'conmen', 'wizard', 'undead', 'skullx'].filter(k => k !== p1Key);
-        const p2Key = p2Pool[Math.floor(Math.random() * p2Pool.length)];
+        // Online matches already know both fighters - decided at
+        // room-creation/join time so both sides agree before the match
+        // even starts (see onlinelobby.js) - rather than P2 being a random
+        // CPU pick. Local/solo matches keep the old behavior: P1 matches
+        // your real active theme (getActiveFighterKey, shared with the
+        // online path so Conmen/Wizard/etc. show correctly everywhere),
+        // P2 random from the rest.
+        const online = window.fightClubOnlineActive && window.fightClubOnlineFighters;
+        const p1Key = online ? window.fightClubOnlineFighters.p1
+            : (typeof getActiveFighterKey === 'function' ? getActiveFighterKey() : 'reiffer');
+        let p2Key;
+        if (online) {
+            p2Key = window.fightClubOnlineFighters.p2;
+        } else {
+            const p2Pool = ['reiffer', 'conmen', 'wizard', 'undead', 'skullx'].filter(k => k !== p1Key);
+            p2Key = p2Pool[Math.floor(Math.random() * p2Pool.length)];
+        }
+        window.fightClubOnlineFighters = null; // read once, same pattern as onlineNames below
         const p1 = new Fighter(anims[p1Key], (currentArena && currentArena.p1X) || 180, 1);
         const p2 = new Fighter(anims[p2Key], SW - 180 - 90, -1);
         // Online Fight Club sets this right before calling openFightGame()
@@ -759,6 +776,29 @@ window.FightGame = (function () {
             const half = (overlap - ALLOWED_OVERLAP) / 2;
             leftF.x = Math.max(STAGE_MARGIN, leftF.x - half);
             rightF.x = Math.min(SW - STAGE_MARGIN - rightF._fw, rightF.x + half);
+        }
+    }
+
+    // Online-match equivalent of updateCPUInput below - same job (fill in
+    // P2's virtual keys before updateHumanFighter reads them), but sourced
+    // from the opponent's real, live key state instead of AI decisions.
+    // getFightSyncRemoteKeys() (js/onlinesync.js) already uses this exact
+    // cpu_left/cpu_right/... shape, so this is mostly a straight copy -
+    // EXCEPT justPressed has to be derived here too (rising edge: false
+    // last frame, true this frame), not just copied - updateHumanFighter
+    // gates punch/kick/jump on justPressed, not on keys being held, same
+    // as updateCPUInput already does manually for the bot.
+    function updateRemoteInput(dt, remote, bind) {
+        const rk = (typeof getFightSyncRemoteKeys === 'function') ? getFightSyncRemoteKeys() : null;
+        const next = {
+            [bind.left]: !!(rk && rk.cpu_left), [bind.right]: !!(rk && rk.cpu_right),
+            [bind.jump]: !!(rk && rk.cpu_jump), [bind.crouch]: !!(rk && rk.cpu_crouch),
+            [bind.punch]: !!(rk && rk.cpu_punch), [bind.kick]: !!(rk && rk.cpu_kick),
+            [bind.block]: !!(rk && rk.cpu_block),
+        };
+        for (const k in next) {
+            if (next[k] && !keys[k]) justPressed[k] = true; // rising edge only, same rule as a real keydown
+            keys[k] = next[k];
         }
     }
 
@@ -1152,7 +1192,7 @@ window.FightGame = (function () {
             ]);
         }
         const [reifferAnims, conmenAnims, wizardAnims, undeadAnims, skullxAnims] = await assetsPromise;
-        const bg = await loadArenaBackground(); // always fresh - depends on whichever theme is active right now, not cached
+        const bg = await loadArenaBackground(window.fightClubOnlineActive ? window.fightClubOnlineArena : null); // always fresh - depends on whichever theme is active right now, not cached
         const anims = { reiffer: reifferAnims, conmen: conmenAnims, wizard: wizardAnims, undead: undeadAnims, skullx: skullxAnims };
 
         let g = newGame(anims, bg);
@@ -1170,6 +1210,7 @@ window.FightGame = (function () {
         const P2_BIND = { left: 'cpu_left', right: 'cpu_right', jump: 'cpu_jump', crouch: 'cpu_crouch', punch: 'cpu_punch', kick: 'cpu_kick', block: 'cpu_block' };
 
         keys = {}; justPressed = {};
+        let lastSentInputSnapshot = null;
         onKeyDown = (ev) => {
             const k = normKey(ev.key);
             if (HANDLED_KEYS.has(ev.key) || HANDLED_KEYS.has(k)) ev.preventDefault();
@@ -1196,7 +1237,27 @@ window.FightGame = (function () {
                 const p1 = g.p1, p2 = g.p2;
 
                 updateHumanFighter(dt, p1, P1_BIND);
-                updateCPUInput(dt, p2, p1, P2_BIND);
+                if (window.fightClubOnlineActive) {
+                    // Real match: send what P1 (your real keys) just did to
+                    // your opponent, and drive P2 from whatever they most
+                    // recently sent back - only send when it actually
+                    // changed, not every frame, so a held key doesn't spam
+                    // the channel.
+                    const outKeys = {
+                        cpu_left: !!keys[P1_BIND.left], cpu_right: !!keys[P1_BIND.right],
+                        cpu_jump: !!keys[P1_BIND.jump], cpu_crouch: !!keys[P1_BIND.crouch],
+                        cpu_punch: !!keys[P1_BIND.punch], cpu_kick: !!keys[P1_BIND.kick],
+                        cpu_block: !!keys[P1_BIND.block],
+                    };
+                    const snap = JSON.stringify(outKeys);
+                    if (snap !== lastSentInputSnapshot) {
+                        lastSentInputSnapshot = snap;
+                        if (typeof sendFightSyncInput === 'function') sendFightSyncInput(outKeys);
+                    }
+                    updateRemoteInput(dt, p2, P2_BIND);
+                } else {
+                    updateCPUInput(dt, p2, p1, P2_BIND);
+                }
                 updateHumanFighter(dt, p2, P2_BIND);
                 updateFighterCommon(dt, p1);
                 updateFighterCommon(dt, p2);
@@ -1253,10 +1314,20 @@ window.FightGame = (function () {
                     }
                 }
                 if (loser) {
-                    const n = (loser.anims.defeat && loser.anims.defeat.length) || 1;
-                    if (loser.fr < n - 1) {
-                        loser.frT += dt;
-                        if (loser.frT >= 1 / DEFEAT_FPS) { loser.frT = 0; loser.fr = Math.min(n - 1, loser.fr + 1); }
+                    if (!loser.grounded) {
+                        // Was mid-air when they lost - fall to the floor
+                        // for real instead of freezing the defeat pose in
+                        // mid-jump, same treatment as the winner above.
+                        // Holds on the KO-reaction frame (fr stays 0) while
+                        // falling, then the collapse sequence plays once
+                        // they've actually landed.
+                        applyGravity(loser, dt, false);
+                    } else {
+                        const n = (loser.anims.defeat && loser.anims.defeat.length) || 1;
+                        if (loser.fr < n - 1) {
+                            loser.frT += dt;
+                            if (loser.frT >= 1 / DEFEAT_FPS) { loser.frT = 0; loser.fr = Math.min(n - 1, loser.fr + 1); }
+                        }
                     }
                 }
             }
