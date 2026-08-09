@@ -355,9 +355,9 @@
                         <div class="relative w-full h-[300px] bg-[#040609] rounded-lg border border-[#1A2232] overflow-hidden">
                             <canvas id="tradingCanvas" class="w-full h-full block"></canvas>
                             <div id="mcChartPainterWrap" class="hidden mc-chart-painter absolute bottom-0 right-1 w-28 h-28 md:w-36 md:h-36 pointer-events-none select-none">
-                                <img src="assets/Reiffer painting.png" alt="" class="mc-painter-body absolute inset-0 w-full h-full">
-                                <img id="mcChartPainterTorso" src="assets/Reiffer painting.png" alt="" class="mc-painter-torso absolute inset-0 w-full h-full">
-                                <img id="mcChartPainterArm" src="assets/Reiffer painting.png" alt="" class="mc-painter-arm absolute inset-0 w-full h-full">
+                                <img src="assets/Reiffer painting.webp" alt="" class="mc-painter-body absolute inset-0 w-full h-full">
+                                <img id="mcChartPainterTorso" src="assets/Reiffer painting.webp" alt="" class="mc-painter-torso absolute inset-0 w-full h-full">
+                                <img id="mcChartPainterArm" src="assets/Reiffer painting.webp" alt="" class="mc-painter-arm absolute inset-0 w-full h-full">
                             </div>
                         </div>
                     </div>
@@ -869,7 +869,7 @@
 
     <!-- Mid Evils toast - the character himself slides up bottom-left, speech bubble to his right -->
     <div id="toastMedieval" class="fixed bottom-0 left-6 z-50 hidden flex items-end gap-2 max-w-md">
-        <img src="assets/pfp.png" alt="" class="w-48 h-auto flex-shrink-0 drop-shadow-2xl">
+        <img src="assets/pfp.webp?v=2" alt="" class="w-48 h-auto flex-shrink-0 drop-shadow-2xl">
         <div id="toastBubble" class="bg-white text-black px-4 py-3 rounded-2xl shadow-2xl text-sm font-semibold mb-6 relative border-[3px] border-black">
             <span id="toastMessageMedieval">Default Alert State</span>
             <div class="absolute -bottom-[9px] left-6 w-4 h-4 bg-white border-l-[3px] border-b-[3px] border-black" style="transform: rotate(45deg);"></div>
@@ -878,7 +878,7 @@
 
     <!-- Conmen toast - same slide-up-from-bottom-left treatment as Mid Evils, own character art -->
     <div id="toastConmen" class="fixed bottom-0 left-6 z-50 hidden flex items-end gap-2 max-w-md">
-        <img src="assets/conmen-pfp.png" alt="" class="w-48 h-auto flex-shrink-0 drop-shadow-2xl">
+        <img src="assets/conmen-pfp.webp?v=2" alt="" class="w-48 h-auto flex-shrink-0 drop-shadow-2xl">
         <div id="toastBubbleConmen" class="bg-white text-black px-4 py-3 rounded-2xl shadow-2xl text-sm font-semibold mb-6 relative border-[3px] border-black">
             <span id="toastMessageConmen">Default Alert State</span>
             <div class="absolute -bottom-[9px] left-6 w-4 h-4 bg-white border-l-[3px] border-b-[3px] border-black" style="transform: rotate(45deg);"></div>
@@ -889,7 +889,7 @@
          Stage is actually available (see js/mcdonalds-egg.js). Clicking the
          bubble opens the mini-game. -->
     <div id="mcdEggPopup" class="fixed bottom-0 left-6 z-[60] hidden flex items-end gap-2 max-w-md" style="pointer-events: auto;">
-        <img src="assets/mcdonalds-pfp.png" alt="" class="w-40 h-auto flex-shrink-0 drop-shadow-2xl">
+        <img src="assets/mcdonalds-pfp.webp" alt="" class="w-40 h-auto flex-shrink-0 drop-shadow-2xl">
         <div id="mcdEggBubble" onclick="openBonusStage()" class="bg-white text-black px-4 py-3 rounded-2xl shadow-2xl text-sm font-semibold mb-6 relative border-[3px] border-black cursor-pointer">
             Would you like <span class="mcd-fries-link">fries</span> with that?
             <div class="absolute -bottom-[9px] left-6 w-4 h-4 bg-white border-l-[3px] border-b-[3px] border-black" style="transform: rotate(45deg);"></div>
@@ -1115,7 +1115,7 @@
     <!-- Conmen easter egg: roaming clickable popup (Conmen-mode only, see js/conmen-egg.js) -->
     <div id="conmenEggPopup" onclick="openConmenLauncher()">
         <span class="conmen-egg-tag">psst...</span>
-        <img src="assets/conmen-easteregg.png" alt="">
+        <img src="assets/conmen-easteregg.webp" alt="">
     </div>
 
     <!-- Conmen easter egg: full-screen Win95-style launcher for the marketplace link -->
@@ -1134,10 +1134,10 @@
             </div>
             <div class="win95-content-full">
                 <div class="conmen-launcher-inner">
-                    <img src="assets/conmen-easteregg.png" alt="">
+                    <img src="assets/conmen-easteregg.webp" alt="">
                     <h2>You Found the CON!</h2>
                     <p>Congrats ya filthy animal, you found the easter egg. The right man in the wrong place can make all the difference in the world. So, wake up, Mister Freeman. Wake up and... smell the ashes.</p>
-                    <a class="conmen-launcher-btn" href="https://hl2.slqnt.dev/" target="_blank" rel="noopener noreferrer">
+                    <a class="conmen-launcher-btn" href="https://www.tensor.trade/trade/theconmen" target="_blank" rel="noopener noreferrer">
                         <i class="fa-solid fa-arrow-up-right-from-square"></i> Welcome to City 17!
                     </a>
                 </div>
@@ -1204,7 +1204,7 @@
     <!-- SCRIPTS (ALL FIXED FOR ROOT DEPLOYMENT IN SHITCORE-TEST)     -->
     <!-- ============================================================ -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>
-<script src="js/audio.js?v=12" defer></script>
+<script src="js/audio.js?v=13" defer></script>
 <script src="js/state.js?v=15" defer></script>
 <script src="js/ui.js?v=5" defer></script>
 <script src="js/markets.js?v=17" defer></script>
@@ -1213,7 +1213,7 @@
 <script src="js/volatility.js" defer></script>
 <script src="js/staking.js" defer></script>
 <script src="js/perks.js?v=3" defer></script>
-<script src="js/bonusstage.js?v=20" defer></script>
+<script src="js/bonusstage.js?v=21" defer></script>
 <script src="js/fightgame.js?v=32" defer></script>
 <script src="js/conmen-egg.js?v=6" defer></script>
 <script src="js/mcdonalds-egg.js?v=4" defer></script>
