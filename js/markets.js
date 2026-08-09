@@ -298,7 +298,7 @@ function setupWagerControls() {
             <div class="flex items-center gap-2">
                 <button id="wager10Btn" onclick="setWagerPercent(10)" class="px-3 py-1.5 bg-[#1C212E] hover:bg-[#252E3E] text-gray-200 text-xs font-bold rounded transition">10%</button>
                 <button id="wager50Btn" onclick="setWagerPercent(50)" class="px-3 py-1.5 bg-[#1C212E] hover:bg-[#252E3E] text-gray-200 text-xs font-bold rounded transition">50%</button>
-                <input id="wagerCustomInput" type="number" min="0" step="1" placeholder="Custom $" oninput="setWagerCustom(this.value)" class="flex-1 bg-[#070A0F] text-white text-xs font-mono px-2 py-1.5 rounded border border-[#1A2232] focus:outline-none focus:border-amber-500">
+                <input id="wagerCustomInput" type="number" min="0" step="1" placeholder="Custom $" oninput="setWagerCustom(this.value)" class="w-24 bg-[#070A0F] text-white text-xs font-mono px-2 py-1.5 rounded border border-[#1A2232] focus:outline-none focus:border-amber-500">
             </div>
             <div class="flex items-center justify-between text-[11px] pt-1">
                 <span class="text-gray-400 uppercase font-semibold">Leverage</span>
