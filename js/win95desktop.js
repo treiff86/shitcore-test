@@ -134,7 +134,7 @@ function buildWin95Windows() {
         const title = win95Title(panel, i);
         const titlebar = document.createElement('div');
         titlebar.className = 'win95-titlebar';
-        titlebar.innerHTML = `<span>${title}</span><div class="win95-titlebar-buttons"><div class="win95-titlebar-btn">_</div><div class="win95-titlebar-btn">&#9633;</div><div class="win95-titlebar-btn">X</div></div>`;
+        titlebar.innerHTML = `<span>${title}</span><div class="win95-titlebar-buttons"><div class="win95-titlebar-btn">_</div><div class="win95-titlebar-btn"><i class="fa-regular fa-square"></i></div><div class="win95-titlebar-btn">X</div></div>`;
 
         const body = document.createElement('div');
         body.className = 'win95-window-body';
@@ -144,7 +144,7 @@ function buildWin95Windows() {
         desktop.appendChild(win);
         body.appendChild(panel); // moves the real panel (and all its live JS-bound content) into the window body
 
-        makeWin95Draggable(win, titlebar);
+        makeWin95Draggable(win, win);
         win.addEventListener('mousedown', () => bringWin95ToFront(win));
 
         const taskItem = document.createElement('div');
@@ -188,9 +188,14 @@ function bringWin95ToFront(win) {
 }
 
 function makeWin95Draggable(win, handle) {
+    // handle is the whole window now (not just the titlebar) so you can
+    // grab and drag from anywhere on the box - but real controls inside
+    // it (buttons, inputs, links, canvases like the fight game/charts)
+    // still need to work normally instead of starting a drag.
+    const INTERACTIVE = 'button, input, select, textarea, a, [onclick], .win95-titlebar-btn, canvas';
     let dragging = false, startX = 0, startY = 0, startLeft = 0, startTop = 0;
     handle.addEventListener('mousedown', (e) => {
-        if (e.target.classList.contains('win95-titlebar-btn')) return;
+        if (e.target.closest(INTERACTIVE)) return;
         dragging = true;
         startX = e.clientX; startY = e.clientY;
         startLeft = win.offsetLeft; startTop = win.offsetTop;
