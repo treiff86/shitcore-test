@@ -17,7 +17,7 @@ let bgMusicWasPlayingBeforeBonusStage = false;
 
 const THEME_MUSIC_TRACKS = {
     'medieval-mode': 'assets/midevil-theme.mp3',
-    'conmen-mode': 'assets/conmen-theme.mp3',
+    'conmen-mode': 'assets/conmen-theme.mp3?v=2',
 };
 
 // Returns the music file for whichever cosmetic theme is currently active
@@ -116,7 +116,7 @@ function resumeMainThemeAfterBonusStage() {
 // per-arena splitting between the Mid Evils/Conmen site themes.
 // Every arena uses this by default; the Genuine Undead office gets its
 // own dedicated track below since Tim sent one specifically for it.
-const FIGHT_MUSIC_TRACK = 'assets/bonus_stage/bonus-stage-theme.mp3';
+const FIGHT_MUSIC_TRACK = 'assets/bonus_stage/bonus-stage-theme.mp3?v=2';
 const FIGHT_ARENA_MUSIC_OVERRIDES = {
     'assets/fight_game/bg_undead.webp': 'assets/fight_game/undead_theme.mp3',
 };
