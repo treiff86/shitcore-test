@@ -1012,6 +1012,36 @@ body.win95-mode nav * {
     color: #000 !important;
     text-shadow: none !important;
 }
+/* Same problem as .win95-window below: the pixel font renders much
+   chunkier than the site's normal font at an identical declared size, so
+   even already-small header/nav text (which mostly uses Tailwind's text-xs/
+   text-sm or arbitrary text-[Npx] classes) reads oversized once this
+   swaps in. Scaling every size tier actually used up here down a notch. */
+body.win95-mode header .text-\[8px\],
+body.win95-mode nav .text-\[8px\] { font-size: 6px !important; }
+body.win95-mode header .text-\[9px\],
+body.win95-mode nav .text-\[9px\] { font-size: 7px !important; }
+body.win95-mode header .text-\[10px\],
+body.win95-mode nav .text-\[10px\] { font-size: 8px !important; }
+body.win95-mode header .text-\[11px\],
+body.win95-mode nav .text-\[11px\] { font-size: 8px !important; }
+body.win95-mode header .text-xs,
+body.win95-mode nav .text-xs   { font-size: 8px  !important; }
+body.win95-mode header .text-sm,
+body.win95-mode nav .text-sm   { font-size: 9px  !important; }
+body.win95-mode header .text-base,
+body.win95-mode nav .text-base { font-size: 9px  !important; }
+body.win95-mode header .text-lg,
+body.win95-mode nav .text-lg   { font-size: 10px !important; }
+body.win95-mode header .text-xl,
+body.win95-mode nav .text-xl   { font-size: 11px !important; }
+body.win95-mode header .text-2xl,
+body.win95-mode nav .text-2xl  { font-size: 12px !important; }
+/* Anything with no explicit Tailwind size class (like the USDSHT title
+   itself) falls back to a sane default instead of inheriting a large
+   browser/heading default at full pixel-font chunkiness. */
+body.win95-mode header,
+body.win95-mode nav { font-size: 9px; }
 /* Same FontAwesome-icon-font restoration as .win95-window below - the
    wildcard rule above breaks every icon in the header/nav (Deposit,
    wallet connect, BTC, etc.) the identical way. */
