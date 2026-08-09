@@ -658,8 +658,13 @@ window.FightGame = (function () {
         // in most 2D fighters) instead of a hard wall the instant they
         // touch - only pushes apart once they'd overlap by more than this.
         const ALLOWED_OVERLAP = 45;
-        const p1Right = p1.x + p1._fw, p2Right = p2.x + p2._fw;
-        const overlap = Math.min(p1Right, p2Right) - Math.max(p1.x, p2.x);
+
+        function currentOverlap() {
+            const p1Right = p1.x + p1._fw, p2Right = p2.x + p2._fw;
+            return Math.min(p1Right, p2Right) - Math.max(p1.x, p2.x);
+        }
+
+        let overlap = currentOverlap();
         if (overlap <= ALLOWED_OVERLAP) {
             // Not currently overlapping-beyond-threshold - reset both so the
             // next time they meet starts a fresh push instead of picking up
@@ -668,25 +673,36 @@ window.FightGame = (function () {
             return;
         }
 
-        function stepFor(f) {
+        const leftF = p1.x < p2.x ? p1 : p2;
+        const rightF = leftF === p1 ? p2 : p1;
+
+        // Step 1: soft push - each side gives ground slowly, capped, based
+        // on their own state (blocking barely budges, anything else creeps
+        // back up to its cap). This is the "feel" of getting pushed.
+        function give(f) {
             const cap = f.blocking ? PUSH_BLOCK_MAX : PUSH_IDLE_MAX;
             const speed = f.blocking ? PUSH_BLOCK_SPEED : PUSH_IDLE_SPEED;
             if (f.pushDist === undefined) f.pushDist = 0;
-            if (f.pushDist >= cap) return 0; // already at the cap - stops moving, "recognizes and stops"
-            const remaining = cap - f.pushDist;
+            const remaining = Math.max(0, cap - f.pushDist);
+            if (remaining <= 0) return 0; // already at the cap - "recognizes and stops" giving further ground
             const step = Math.min(speed * dt, remaining);
             f.pushDist += step;
             return step;
         }
+        leftF.x = Math.max(STAGE_MARGIN, leftF.x - give(leftF));
+        rightF.x = Math.min(SW - STAGE_MARGIN - rightF._fw, rightF.x + give(rightF));
 
-        const p1Step = stepFor(p1);
-        const p2Step = stepFor(p2);
-        if (p1.x < p2.x) {
-            p1.x = Math.max(STAGE_MARGIN, p1.x - p1Step);
-            p2.x = Math.min(SW - STAGE_MARGIN - p2._fw, p2.x + p2Step);
-        } else {
-            p1.x = Math.min(SW - STAGE_MARGIN - p1._fw, p1.x + p1Step);
-            p2.x = Math.max(STAGE_MARGIN, p2.x - p2Step);
+        // Step 2: hard wall - whatever overlap the soft push above didn't
+        // resolve (because one or both sides already hit their push cap)
+        // gets closed instantly. This is the actual "can't walk through"
+        // guarantee, always enforced regardless of push caps - once both
+        // are maxed out, this is the only thing left holding the line,
+        // which reads as "hit a wall and stopped" rather than a shove.
+        overlap = currentOverlap();
+        if (overlap > ALLOWED_OVERLAP) {
+            const half = (overlap - ALLOWED_OVERLAP) / 2;
+            leftF.x = Math.max(STAGE_MARGIN, leftF.x - half);
+            rightF.x = Math.min(SW - STAGE_MARGIN - rightF._fw, rightF.x + half);
         }
     }
 
