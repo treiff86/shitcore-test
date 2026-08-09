@@ -74,8 +74,8 @@ window.BonusStage = (function () {
     const ANIM_FILES = {
         walk: ['reiffer_walk.webp', 6],
         victory: ['reiffer_victory.webp', 6],
-        punch_lo: ['reiffer_punch_lo.webp', 6],
-        kick_lo: ['reiffer_kick_lo.webp', 4],
+        punch_lo: ['reiffer_punch_lo.webp', 3], // was 6 - sheet got re-cropped to 3 frames at some point, this just never got updated to match (fightgame.js already had it right)
+        kick_lo: ['reiffer_kick_lo.webp', 3],   // was 4 - same story
         hurt: ['hit.webp', 1],
         defeat: ['midevils_defeat.webp?v=3', 3],
     };
