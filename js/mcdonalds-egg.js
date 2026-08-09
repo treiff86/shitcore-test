@@ -45,8 +45,8 @@ function _mcdEggAnotherToastVisible() {
 // Conmen art if somehow neither theme class is present (shouldn't happen,
 // since this popup only ever fires while the Bonus Stage is available).
 function _mcdEggCharacterSrc() {
-    if (document.body.classList.contains('medieval-mode')) return 'assets/midevils-mcdonalds-pfp.png';
-    return 'assets/mcdonalds-pfp.png';
+    if (document.body.classList.contains('medieval-mode')) return 'assets/midevils-mcdonalds-pfp.webp';
+    return 'assets/mcdonalds-pfp.webp';
 }
 
 function _mcdEggShow() {
