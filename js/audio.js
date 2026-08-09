@@ -18,6 +18,7 @@ let bgMusicWasPlayingBeforeBonusStage = false;
 const THEME_MUSIC_TRACKS = {
     'medieval-mode': 'assets/midevil-theme.mp3',
     'conmen-mode': 'assets/conmen-theme.mp3?v=2',
+    'win95-mode': 'assets/wizard-theme.mp3',
 };
 
 // Returns the music file for whichever cosmetic theme is currently active
@@ -116,8 +117,18 @@ function resumeMainThemeAfterBonusStage() {
 // per-arena splitting between the Mid Evils/Conmen site themes.
 // Every arena uses this by default; the Genuine Undead office gets its
 // own dedicated track below since Tim sent one specifically for it.
-const FIGHT_MUSIC_TRACK = 'assets/bonus_stage/bonus-stage-theme.mp3?v=2';
+// Every Fight Club arena background gets its own matching music, on
+// purpose - if the Wizard's study gets randomly picked as the arena for
+// this match, Wizard music plays, even if the player themselves only
+// holds a Conmen NFT and has never touched the Wizard theme. The
+// background you're looking at picks the music, not whatever theme is
+// actually active. Anything not listed here (a background with no
+// dedicated fight track yet) falls back to the shared default below.
+const FIGHT_MUSIC_FALLBACK = 'assets/bonus_stage/bonus-stage-theme.mp3?v=2';
 const FIGHT_ARENA_MUSIC_OVERRIDES = {
+    'assets/fight_game/bg_market.webp': 'assets/midevil-theme.mp3',
+    'assets/fight_game/bg_prison.webp': 'assets/conmen-theme.mp3?v=2',
+    'assets/fight_game/bg_wizard.webp': 'assets/fight_game/wizard_fight_theme.mp3',
     'assets/fight_game/bg_undead.webp': 'assets/fight_game/undead_theme.mp3',
 };
 
@@ -129,7 +140,7 @@ function playFightMusicForBackground(bgSrc) {
     if (!bgMusicEl) bgMusicEl = document.getElementById('bgMusicEl');
     if (!bgMusicEl) return;
     setActiveMiniGameMusicEl(bgMusicEl);
-    const src = FIGHT_ARENA_MUSIC_OVERRIDES[bgSrc] || FIGHT_MUSIC_TRACK;
+    const src = FIGHT_ARENA_MUSIC_OVERRIDES[bgSrc] || FIGHT_MUSIC_FALLBACK;
     // Ignores the main site's bgMusicMuted on purpose - Fight Game music
     // starts every match regardless of whether the player has ever
     // touched the site's own music toggle. Only the mini-game music
