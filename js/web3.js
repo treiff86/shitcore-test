@@ -810,7 +810,6 @@ function _bonusStageEscHandler(ev) {
 }
 
 function openBonusStage() {
-    console.log('[bonusstage] openBonusStage() called - body classes:', document.body.className);
     // Real access rule, not just "is the button visible": a genuine Mid
     // Evils/Conmen holder gets this in LIVE too, same as the McDonald's
     // popup checks (see _mcdEggBonusStageAvailable() in mcdonalds-egg.js)
@@ -819,10 +818,6 @@ function openBonusStage() {
     // button) closes off calling this directly from the console.
     const themeUnlocked = document.body.classList.contains('medieval-mode') || document.body.classList.contains('conmen-mode');
     if (!themeUnlocked) {
-        // Was silent before - if the McDonald's popup click isn't opening
-        // the mini-game, this tells us definitively whether it's this gate
-        // blocking it (this toast fires) or something else entirely (click
-        // isn't even reaching this function - no toast at all).
         console.warn('[bonusstage] openBonusStage() blocked - neither medieval-mode nor conmen-mode is active on <body> right now.');
         if (typeof showToast === 'function') showToast("Mini-game needs Mid Evils or Conmen active first.", "error");
         return;
