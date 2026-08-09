@@ -677,6 +677,19 @@ window.FightGame = (function () {
         blockReactRange: 130,   // how close the opponent needs to be to bother blocking
         jumpChance: 0.06,       // chance to hop per decision tick while approaching
     };
+    // Requested for testing (harder to push around, harder CPU to test
+    // against) - noticeably more aggressive and defensive across the
+    // board. Switch the `const diff =` line in updateCPUInput() below
+    // back to CPU_MEDIUM whenever you want the normal opponent back.
+    const CPU_HARD = {
+        attackRange: 96,
+        decisionInterval: 0.2,
+        attackChance: 0.7,
+        attackCooldown: 0.35,
+        blockChance: 0.8,
+        blockReactRange: 150,
+        jumpChance: 0.08,
+    };
 
     // Keeps the two fighters from walking through each other. Only
     // applies while BOTH are grounded, so jumping over your opponent
@@ -688,10 +701,12 @@ window.FightGame = (function () {
     // distance before it just stops moving them entirely, like they've
     // planted their feet. Both numbers are in px/sec, tiny next to the
     // normal walk speed (P_SPD=4.6/frame ≈ 276px/sec) on purpose.
-    const PUSH_BLOCK_MAX = 6;
-    const PUSH_BLOCK_SPEED = 40;
-    const PUSH_IDLE_MAX = 26;
-    const PUSH_IDLE_SPEED = 14;
+    // Lowered from 6/40/26/14 - was giving up too much ground too fast
+    // per Tim's testing feedback, fighters should feel much more planted.
+    const PUSH_BLOCK_MAX = 4;
+    const PUSH_BLOCK_SPEED = 28;
+    const PUSH_IDLE_MAX = 14;
+    const PUSH_IDLE_SPEED = 9;
 
     function resolveFighterCollision(p1, p2, dt) {
         if (!p1.grounded || !p2.grounded) return;
@@ -752,7 +767,7 @@ window.FightGame = (function () {
             timer: 0, moveDir: 0, wantAttack: null, attackCooldown: 0,
             blockingReact: false, hasReactedToAttack: false,
         });
-        const diff = CPU_MEDIUM;
+        const diff = CPU_HARD; // swapped from CPU_MEDIUM for testing per Tim's request
 
         // Release every virtual key first, then set only what this frame's
         // decision calls for - same shape as a human's actual key state.
