@@ -225,7 +225,7 @@ function applyTheme(theme) {
     if (theme.id === "mimwizard" && typeof enterWin95Desktop === "function") {
         enterWin95Desktop();
     }
-    if (theme.id === "midevils" || theme.id === "conmen") {
+    if (theme.id === "midevils" || theme.id === "conmen" || theme.id === "mimwizard") {
         // Deliberately NOT unlocking bonusStageBtn here - the persistent
         // "Play mini game" header button is TEST Play only now. Every real
         // player (and LIVE Play) only reaches the mini-game through the
@@ -787,6 +787,13 @@ function previewTheme(themeId) {
     showToast(`Previewing: ${theme.label} (not a real ownership check)`, "info");
     if (theme.id === "mimwizard" && typeof enterWin95Desktop === "function") {
         enterWin95Desktop();
+    }
+    if (theme.id === "midevils" || theme.id === "conmen" || theme.id === "mimwizard") {
+        // Same auto-start as the real-ownership path in applyTheme() -
+        // TEST Play previewing a theme should get music starting too,
+        // not just genuine holders.
+        document.getElementById("audioToggleBtn")?.classList.remove("hidden");
+        if (typeof autoStartThemeMusicIfMuted === 'function') autoStartThemeMusicIfMuted();
     }
     // Theme Preview is a full-screen modal (inset-0) - without this it just
     // sits on top of everything after you pick a theme, silently eating
