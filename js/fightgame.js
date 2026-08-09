@@ -353,6 +353,7 @@ window.FightGame = (function () {
             this.vx = 0; this.vy = 0; this.facing = facing;
             this.grounded = true;
             this.onPlatform = false;
+            this.pushDist = 0; // how far the collision push has shoved this fighter since the last time they weren't overlapping - see resolveFighterCollision()
             this.crouching = false;
             this.hp = MAX_HP;
             this.state = 'idle'; this.fr = 0; this.frT = 0;
@@ -555,11 +556,20 @@ window.FightGame = (function () {
         const p2Key = p2Pool[Math.floor(Math.random() * p2Pool.length)];
         const p1 = new Fighter(anims[p1Key], (currentArena && currentArena.p1X) || 180, 1);
         const p2 = new Fighter(anims[p2Key], SW - 180 - 90, -1);
+        // Online Fight Club sets this right before calling openFightGame()
+        // so the HUD shows real wallet names instead of "P1"/"P2" - your
+        // own name on your side, the matched opponent's on the other.
+        // Cleared immediately after reading so a later normal TEST/local
+        // match doesn't accidentally inherit stale online-match names.
+        const onlineNames = window.fightClubOnlineNames;
+        window.fightClubOnlineNames = null;
         return {
             p1, p2, bg,
             timer: ROUND_T,
             phase: 'intro', // intro | playing | p1win | p2win | draw
             introT: 0,
+            p1Label: (onlineNames && onlineNames.p1) || 'P1',
+            p2Label: (onlineNames && onlineNames.p2) || 'P2',
         };
     }
 
@@ -631,7 +641,18 @@ window.FightGame = (function () {
     // applies while BOTH are grounded, so jumping over your opponent
     // still works fine - this just stops the "standing on top of each
     // other" overlap while both have feet on the floor.
-    function resolveFighterCollision(p1, p2) {
+    // Push resistance while grounded and overlapping. Blocking barely
+    // budges you (a small one-time nudge); anyone not blocking can still
+    // be shoved, but at a crawl - and only up to a hard cap of total
+    // distance before it just stops moving them entirely, like they've
+    // planted their feet. Both numbers are in px/sec, tiny next to the
+    // normal walk speed (P_SPD=4.6/frame ≈ 276px/sec) on purpose.
+    const PUSH_BLOCK_MAX = 6;
+    const PUSH_BLOCK_SPEED = 40;
+    const PUSH_IDLE_MAX = 26;
+    const PUSH_IDLE_SPEED = 14;
+
+    function resolveFighterCollision(p1, p2, dt) {
         if (!p1.grounded || !p2.grounded) return;
         // Lets them stand close/overlapping a bit (like sprites clinching
         // in most 2D fighters) instead of a hard wall the instant they
@@ -639,14 +660,33 @@ window.FightGame = (function () {
         const ALLOWED_OVERLAP = 45;
         const p1Right = p1.x + p1._fw, p2Right = p2.x + p2._fw;
         const overlap = Math.min(p1Right, p2Right) - Math.max(p1.x, p2.x);
-        if (overlap <= ALLOWED_OVERLAP) return;
-        const half = (overlap - ALLOWED_OVERLAP) / 2;
+        if (overlap <= ALLOWED_OVERLAP) {
+            // Not currently overlapping-beyond-threshold - reset both so the
+            // next time they meet starts a fresh push instead of picking up
+            // wherever a previous shove left off.
+            p1.pushDist = 0; p2.pushDist = 0;
+            return;
+        }
+
+        function stepFor(f) {
+            const cap = f.blocking ? PUSH_BLOCK_MAX : PUSH_IDLE_MAX;
+            const speed = f.blocking ? PUSH_BLOCK_SPEED : PUSH_IDLE_SPEED;
+            if (f.pushDist === undefined) f.pushDist = 0;
+            if (f.pushDist >= cap) return 0; // already at the cap - stops moving, "recognizes and stops"
+            const remaining = cap - f.pushDist;
+            const step = Math.min(speed * dt, remaining);
+            f.pushDist += step;
+            return step;
+        }
+
+        const p1Step = stepFor(p1);
+        const p2Step = stepFor(p2);
         if (p1.x < p2.x) {
-            p1.x = Math.max(STAGE_MARGIN, p1.x - half);
-            p2.x = Math.min(SW - STAGE_MARGIN - p2._fw, p2.x + half);
+            p1.x = Math.max(STAGE_MARGIN, p1.x - p1Step);
+            p2.x = Math.min(SW - STAGE_MARGIN - p2._fw, p2.x + p2Step);
         } else {
-            p1.x = Math.min(SW - STAGE_MARGIN - p1._fw, p1.x + half);
-            p2.x = Math.max(STAGE_MARGIN, p2.x - half);
+            p1.x = Math.min(SW - STAGE_MARGIN - p1._fw, p1.x + p1Step);
+            p2.x = Math.max(STAGE_MARGIN, p2.x - p2Step);
         }
     }
 
@@ -885,10 +925,18 @@ window.FightGame = (function () {
         }
     }
 
+    // Caps a HUD label's length so a long .sol domain from Online Fight
+    // Club can't run past the health bar's edge - normal 'P1'/'P2' text
+    // is always well under this, so it's a no-op for local/CPU matches.
+    function hudLabel(label) {
+        if (!label) return '';
+        return label.length > 14 ? label.slice(0, 13) + '\u2026' : label;
+    }
+
     function drawHUD(ctx, g) {
         const barW = 300, barH = 18;
-        drawBar(ctx, 24, 20, barW, barH, g.p1.hp / MAX_HP, COL.GN, 'P1', false);
-        drawBar(ctx, SW - 24 - barW, 20, barW, barH, g.p2.hp / MAX_HP, COL.BL, 'P2', true);
+        drawBar(ctx, 24, 20, barW, barH, g.p1.hp / MAX_HP, COL.GN, hudLabel(g.p1Label), false);
+        drawBar(ctx, SW - 24 - barW, 20, barW, barH, g.p2.hp / MAX_HP, COL.BL, hudLabel(g.p2Label), true);
 
         // Guard meter - thin bar under each health bar. Gold while it has
         // charge (blocking's still free), red once empty (chip damage zone)
@@ -1079,7 +1127,7 @@ window.FightGame = (function () {
                 updateHumanFighter(dt, p2, P2_BIND);
                 updateFighterCommon(dt, p1);
                 updateFighterCommon(dt, p2);
-                resolveFighterCollision(p1, p2);
+                resolveFighterCollision(p1, p2, dt);
 
                 resolveHit(p1, p2, shake, fx);
                 resolveHit(p2, p1, shake, fx);
