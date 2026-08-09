@@ -318,18 +318,17 @@ window.FightGame = (function () {
         return anims;
     }
 
+    let lastArenaBg = null; // tracks the previous match's background so the next one never repeats it
+
     async function loadArenaBackground() {
-        // Matches whichever theme is actually active - Mid Evils gets the
-        // market, Conmen gets the prison yard, $MIM/Bitcoin Wizard gets the
-        // wizard's study. Falls back to random only if somehow none of
-        // those theme classes are present (shouldn't normally happen, this
-        // game is gated to TEST Play).
+        // Fully random every match, regardless of which cosmetic theme is
+        // active - the arena and its music are meant to vary match to
+        // match. Never repeats the immediately-previous background.
         let src;
-        if (document.body.classList.contains('medieval-mode')) src = 'assets/fight_game/bg_market.webp';
-        else if (document.body.classList.contains('conmen-mode')) src = 'assets/fight_game/bg_prison.webp';
-        else if (document.body.classList.contains('win95-mode')) src = 'assets/fight_game/bg_wizard.webp';
-        else if (window.activePreviewThemeId === 'genuineundead') src = 'assets/fight_game/bg_undead.webp';
-        else src = BACKGROUNDS[Math.floor(Math.random() * BACKGROUNDS.length)];
+        do {
+            src = BACKGROUNDS[Math.floor(Math.random() * BACKGROUNDS.length)];
+        } while (src === lastArenaBg && BACKGROUNDS.length > 1);
+        lastArenaBg = src;
         currentArena = ARENA_CONFIG[src] || null;
         if (typeof playFightMusicForBackground === 'function') playFightMusicForBackground(src);
         try {
