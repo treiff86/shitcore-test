@@ -130,6 +130,12 @@ async function joinLobbyRoom(roomId) {
     if (typeof showToast === 'function') {
         showToast(`🔗 Connected to ${data.host_name || shortAddr(data.host_wallet)}! Starting your local Fight Game - real cross-device syncing isn't wired up yet.`, 'success');
     }
+    // I'm the guest here - P1 is always "your side" in the HUD, P2 the
+    // matched opponent, regardless of who technically hosted the room.
+    window.fightClubOnlineNames = {
+        p1: lobbyDisplayName(),
+        p2: data.host_name || shortAddr(data.host_wallet) || 'Opponent',
+    };
     if (typeof openFightGame === 'function') openFightGame();
     renderLobbyRooms();
 }
@@ -149,6 +155,11 @@ function subscribeLobbyRealtime() {
                 if (typeof showToast === 'function') {
                     showToast(`🔗 ${payload.new.guest_name || 'An opponent'} joined your room! Starting your local Fight Game.`, 'success');
                 }
+                // I'm the host here - same rule, P1 is always "your side".
+                window.fightClubOnlineNames = {
+                    p1: lobbyDisplayName(),
+                    p2: payload.new.guest_name || shortAddr(payload.new.guest_wallet) || 'Opponent',
+                };
                 if (typeof openFightGame === 'function') openFightGame();
                 myRoomId = null;
             }
