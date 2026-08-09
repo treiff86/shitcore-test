@@ -283,12 +283,7 @@ function choosePlayMode(mode) {
         document.getElementById("onlineLobbySoonOverlay")?.classList.add("hidden");
         document.getElementById("onlineLobbySoonBadge")?.classList.add("hidden");
         document.getElementById("btcWalletConnectBtn")?.classList.remove("hidden");
-        // Used to auto-open Theme Preview here - but it's a full-screen
-        // modal, and if you didn't immediately pick a theme or hit X, it
-        // just sat on top of everything silently eating every click on
-        // the page behind it, including Play Fight Game. The button
-        // above already gets you into Theme Preview whenever you
-        // actually want it - no reason to force it open unprompted.
+        openThemePreview();
         showToast("🧪 TEST PLAY active - all testing tools unlocked.", "info");
     } else {
         isTestPlayMode = false;
