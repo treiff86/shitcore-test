@@ -1,194 +1,133 @@
 /* ============================================================
-   ONLINE FIGHT CLUB — STAGE 1: LOBBY / MATCHMAKING
+   ONLINE FIGHT CLUB — STAGE 2: LIVE INPUT SYNC
    ============================================================
-   This is just the "find and connect to an opponent" layer,
-   relayed through Supabase Realtime (the same system already
-   running the leaderboard) rather than a direct connection
-   between the two players. Once matched, both sides open the
-   local Fight Game as a "you're in, go fight" moment - but each
-   side is still its own independent local game instance. Real
-   input syncing between the two actual devices (Stage 2) isn't
-   built yet.
+   Real-time relay of each player's actual key state to their
+   opponent, over a Supabase Realtime Broadcast channel scoped to
+   this one match (separate from the lobby-wide channel used for
+   matchmaking in onlinelobby.js). This is NOT peer-to-peer - every
+   input still bounces through Supabase's server - but it's a real
+   live connection now, not two disconnected local CPU fights.
 
-   Depends on sb / walletAddress / walletSolDomain / shortAddr /
-   showToast / openFightGame from web3.js, so this file must load
-   AFTER web3.js.
+   Each side runs its own full local simulation of BOTH fighters.
+   Your own real key presses drive your fighter directly; your
+   opponent's fighter is driven by whatever key state they most
+   recently broadcast (fed into fightgame.js the same way the old
+   CPU AI used to - see updateRemoteInput() there). Both sides
+   compute hits/damage locally off the same synced inputs, which
+   keeps this simple and low-latency but isn't a bulletproof anti-
+   desync system: with identical inputs both sides SHOULD land on
+   the same result, but small timing differences between two
+   different devices/connections could in rare cases make the two
+   screens disagree slightly (e.g. the exact frame a hit registers).
+   Known first-pass limitation, consistent with how this feature
+   has been scoped in stages the whole way - fine for a casual/
+   social feature, would need real state reconciliation to fully
+   close.
+
+   Which arena and which fighter each side plays as is NOT sent
+   over this channel - that's decided at room-creation/join time
+   and stored directly on the fight_rooms row (see onlinelobby.js),
+   so both sides read it from the same database record instead of
+   racing a broadcast message against channel subscription timing.
+
+   Depends on sb from web3.js, so this file must load after it.
    ============================================================ */
 
-let lobbyChannel = null;
-const ROOM_LIST_WINDOW_MINUTES = 10; // only show recently-created rooms; older ones are considered stale
+let fightSyncChannel = null;
+let fightSyncPeerPresent = false;
+let fightSyncLastPingMs = null;
+let fightSyncLastRemoteInputAt = 0;
+let fightSyncConnectedAt = 0;
+let fightSyncOnPeerLeft = null;
+let fightSyncPingTimer = null;
+const FIGHT_SYNC_EMPTY_KEYS = { cpu_left: false, cpu_right: false, cpu_jump: false, cpu_crouch: false, cpu_punch: false, cpu_kick: false, cpu_block: false };
+let fightSyncRemoteKeys = { ...FIGHT_SYNC_EMPTY_KEYS };
 
-// Identifies THIS BROWSER TAB, not the wallet - two tabs on the same
-// wallet (like when testing solo with the master wallet) would otherwise
-// look identical by wallet address alone, and neither would ever see a
-// Join button for the other's room. Fresh every tab/reload on purpose.
-const mySessionId = (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
-let myRoomId = null; // the room THIS tab created, if any - used to clean it up on the way out
-
-function lobbyDisplayName() {
-    if (typeof walletSolDomain !== 'undefined' && walletSolDomain) return walletSolDomain;
-    if (typeof shortAddr === 'function' && typeof walletAddress !== 'undefined' && walletAddress) return shortAddr(walletAddress);
-    return 'Anonymous Degen';
-}
-
-// Best-effort delete of the room this tab created, fired when the tab is
-// closed, refreshed, or navigated away from. fetch's keepalive flag is the
-// modern equivalent of sendBeacon but (unlike sendBeacon) lets us send the
-// apikey header Supabase requires, so it can actually survive the page
-// unloading rather than being silently dropped.
-function cleanupMyRoom() {
-    if (!myRoomId || typeof SUPABASE_URL === 'undefined' || typeof SUPABASE_ANON_KEY === 'undefined') return;
-    try {
-        fetch(`${SUPABASE_URL}/rest/v1/fight_rooms?id=eq.${myRoomId}`, {
-            method: 'DELETE',
-            headers: {
-                'apikey': SUPABASE_ANON_KEY,
-                'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-            },
-            keepalive: true,
-        });
-    } catch (e) { /* best effort - nothing more we can do on the way out */ }
-    myRoomId = null;
-}
-window.addEventListener('pagehide', cleanupMyRoom);
-window.addEventListener('beforeunload', cleanupMyRoom);
-
-async function renderLobbyRooms() {
-    const box = document.getElementById('lobbyRoomList');
-    if (!box) return;
-    if (!sb) { box.innerHTML = `<div class="text-gray-500 italic text-xs">Lobby not configured yet.</div>`; return; }
-
-    const cutoff = new Date(Date.now() - ROOM_LIST_WINDOW_MINUTES * 60 * 1000).toISOString();
-    const { data, error } = await sb
-        .from('fight_rooms')
-        .select('id, host_wallet, host_name, host_session, guest_wallet, status, created_at')
-        .eq('status', 'waiting')
-        .gte('created_at', cutoff)
-        .order('created_at', { ascending: false })
-        .limit(20);
-
-    if (error) {
-        box.innerHTML = `<div class="text-rose-400 text-xs">Couldn't load the lobby.</div>`;
-        console.error('[onlinelobby] list failed:', error);
-        return;
-    }
-    if (!data.length) {
-        box.innerHTML = `<div class="text-gray-500 italic text-xs">No open rooms right now. Create one below.</div>`;
-        return;
-    }
-
-    box.innerHTML = data.map(room => `
-        <div class="flex justify-between items-center text-xs border-b border-[#1A2232] py-2">
-            <span>${room.host_name ? escapeHtml(room.host_name) : shortAddr(room.host_wallet)}'s room</span>
-            ${room.host_session === mySessionId
-                ? `<span class="text-gray-500 italic">Waiting for an opponent…</span>`
-                : `<button onclick="joinLobbyRoom('${room.id}')" class="bg-emerald-600/20 hover:bg-emerald-600/40 border border-emerald-500/30 text-emerald-300 rounded px-3 py-1 font-bold transition">Join</button>`}
-        </div>
-    `).join('');
-}
-
-async function createLobbyRoom() {
-    if (!sb || !walletAddress) { if (typeof showToast === 'function') showToast('Connect a wallet first.', 'error'); return; }
-    const { data, error } = await sb.from('fight_rooms').insert({
-        host_wallet: walletAddress,
-        host_name: lobbyDisplayName(),
-        host_session: mySessionId,
-        status: 'waiting',
-    }).select().single();
-
-    if (error) {
-        if (typeof showToast === 'function') showToast("Couldn't create a room - try again.", 'error');
-        console.error('[onlinelobby] create failed:', error);
-        return;
-    }
-    myRoomId = data.id;
-    if (typeof showToast === 'function') showToast('🥊 Room created - waiting for an opponent…', 'info');
-    renderLobbyRooms();
-}
-
-async function joinLobbyRoom(roomId) {
-    if (!sb || !walletAddress) { if (typeof showToast === 'function') showToast('Connect a wallet first.', 'error'); return; }
-    const { data, error } = await sb
-        .from('fight_rooms')
-        .update({ guest_wallet: walletAddress, guest_name: lobbyDisplayName(), status: 'matched' })
-        .eq('id', roomId)
-        .eq('status', 'waiting') // someone else could've joined a split second earlier - don't double-join a taken room
-        .select()
-        .maybeSingle();
-
-    if (error) {
-        if (typeof showToast === 'function') showToast("Couldn't join that room - try again.", 'error');
-        console.error('[onlinelobby] join failed:', error);
-        return;
-    }
-    if (!data) {
-        if (typeof showToast === 'function') showToast('That room just got taken - try another.', 'error');
-        renderLobbyRooms();
-        return;
-    }
-
-    if (typeof showToast === 'function') {
-        showToast(`🔗 Connected to ${data.host_name || shortAddr(data.host_wallet)}! Starting your local Fight Game - real cross-device syncing isn't wired up yet.`, 'success');
-    }
-    // I'm the guest here - P1 is always "your side" in the HUD, P2 the
-    // matched opponent, regardless of who technically hosted the room.
-    window.fightClubOnlineNames = {
-        p1: lobbyDisplayName(),
-        p2: data.host_name || shortAddr(data.host_wallet) || 'Opponent',
+// Snapshot for the TEST-mode debug button (see checkFightSyncStatus in
+// web3.js) - everything it needs to answer "is this actually connected
+// right now" in one place.
+function getFightSyncStatus() {
+    return {
+        active: !!fightSyncChannel,
+        peerPresent: fightSyncPeerPresent,
+        lastPingMs: fightSyncLastPingMs,
+        msSinceLastRemoteInput: fightSyncChannel ? (Date.now() - fightSyncLastRemoteInputAt) : null,
+        connectedForMs: fightSyncChannel ? (Date.now() - fightSyncConnectedAt) : null,
     };
-    if (typeof openFightGame === 'function') openFightGame();
-    renderLobbyRooms();
 }
 
-function subscribeLobbyRealtime() {
-    if (!sb || lobbyChannel) return;
-    lobbyChannel = sb
-        .channel('fight-rooms-lobby')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'fight_rooms' }, (payload) => {
-            renderLobbyRooms();
-            // My own room just got matched by someone else - jump into the
-            // Fight Game on this side too. myRoomId gets cleared right after
-            // so a stray duplicate event can't open it twice, and so leaving
-            // the page later doesn't try to delete an already-matched room.
-            if (payload.eventType === 'UPDATE' && payload.new?.status === 'matched'
-                && myRoomId && payload.new?.id === myRoomId) {
-                if (typeof showToast === 'function') {
-                    showToast(`🔗 ${payload.new.guest_name || 'An opponent'} joined your room! Starting your local Fight Game.`, 'success');
-                }
-                // I'm the host here - same rule, P1 is always "your side".
-                window.fightClubOnlineNames = {
-                    p1: lobbyDisplayName(),
-                    p2: payload.new.guest_name || shortAddr(payload.new.guest_wallet) || 'Opponent',
-                };
-                if (typeof openFightGame === 'function') openFightGame();
-                myRoomId = null;
-            }
-        })
-        .subscribe();
+// roomId ties this to one specific match. onPeerLeft fires if the other
+// tab's presence drops (closed the page, lost connection, etc.) so the
+// caller can end the match gracefully instead of leaving someone stuck
+// fighting a frozen opponent.
+function startFightSync(roomId, onPeerLeft) {
+    stopFightSync(); // clean up any leftover channel from a previous match first
+    if (!sb || !roomId) return null;
+    fightSyncOnPeerLeft = onPeerLeft || null;
+    fightSyncPeerPresent = false;
+    fightSyncLastPingMs = null;
+    fightSyncLastRemoteInputAt = 0;
+    fightSyncConnectedAt = Date.now();
+    fightSyncRemoteKeys = { ...FIGHT_SYNC_EMPTY_KEYS };
+
+    const mySyncId = (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
+    const channel = sb.channel(`fight-sync-${roomId}`, {
+        config: { broadcast: { self: false }, presence: { key: mySyncId } },
+    });
+
+    channel.on('broadcast', { event: 'input' }, ({ payload }) => {
+        if (payload && payload.keys) {
+            fightSyncRemoteKeys = payload.keys;
+            fightSyncLastRemoteInputAt = Date.now();
+        }
+    });
+    channel.on('broadcast', { event: 'ping' }, ({ payload }) => {
+        channel.send({ type: 'broadcast', event: 'pong', payload: { t: payload.t } });
+    });
+    channel.on('broadcast', { event: 'pong' }, ({ payload }) => {
+        fightSyncLastPingMs = Math.round(performance.now() - payload.t);
+    });
+    channel.on('presence', { event: 'sync' }, () => {
+        const state = channel.presenceState();
+        fightSyncPeerPresent = Object.keys(state).length > 1;
+    });
+    channel.on('presence', { event: 'leave' }, () => {
+        const wasPresent = fightSyncPeerPresent;
+        fightSyncPeerPresent = false;
+        if (wasPresent && fightSyncOnPeerLeft) fightSyncOnPeerLeft();
+    });
+
+    channel.subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+            await channel.track({ id: mySyncId, joinedAt: Date.now() });
+        }
+    });
+
+    fightSyncChannel = channel;
+
+    // Ongoing ping so latency is a live number (debug button) rather than
+    // a one-time reading, and so a silently-dead connection eventually
+    // shows itself (no pongs coming back).
+    fightSyncPingTimer = setInterval(() => {
+        if (fightSyncChannel) fightSyncChannel.send({ type: 'broadcast', event: 'ping', payload: { t: performance.now() } });
+    }, 2000);
+
+    return channel;
 }
 
-function openOnlineLobby() {
-    renderLobbyRooms();
-    subscribeLobbyRealtime();
+function sendFightSyncInput(keysSnapshot) {
+    if (!fightSyncChannel) return;
+    fightSyncChannel.send({ type: 'broadcast', event: 'input', payload: { keys: keysSnapshot } });
 }
 
-/* ---------------- Debug menu: connectivity check ---------------- */
-// Round-trips a real request to Supabase and reports how long it took, so
-// "is my internet actually reaching the backend right now" is a one-click
-// answer instead of guesswork through DevTools.
-async function checkConnectivity() {
-    const out = document.getElementById('connectivityCheckResult');
-    if (out) out.textContent = 'Checking…';
-    if (!sb) { if (out) out.textContent = '❌ Supabase not configured.'; return; }
-
-    const start = performance.now();
-    try {
-        const { error } = await sb.from('fight_rooms').select('id', { count: 'exact', head: true });
-        const ms = Math.round(performance.now() - start);
-        if (error) { if (out) out.textContent = `❌ Reached the server but got an error: ${error.message}`; return; }
-        if (out) out.textContent = `✅ Connected - round trip ${ms}ms.`;
-    } catch (e) {
-        const ms = Math.round(performance.now() - start);
-        if (out) out.textContent = `❌ No connection (failed after ${ms}ms). Check your internet.`;
-    }
+function getFightSyncRemoteKeys() {
+    return fightSyncRemoteKeys;
 }
+
+function stopFightSync() {
+    if (fightSyncPingTimer) { clearInterval(fightSyncPingTimer); fightSyncPingTimer = null; }
+    if (fightSyncChannel) { try { sb && sb.removeChannel(fightSyncChannel); } catch (e) {} fightSyncChannel = null; }
+    fightSyncPeerPresent = false;
+    fightSyncOnPeerLeft = null;
+}
+window.addEventListener('pagehide', stopFightSync);
