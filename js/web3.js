@@ -43,7 +43,7 @@ const COSMETIC_THEMES = [
         label: "Conmen - Cell Block",
         collectionAddress: "9DqJWp9jF2M7F5Be8Sxs1GSJz7HZYVcyFgyMU9CBLmUQ", // verified via Solscan
         cssClass: "conmen-mode",
-        toastMsg: "🔒 Conman detected! Welcome to the cell block.",
+        toastMsg: "🔒 Conmen detected! Welcome to the cell block.",
     },
     {
         id: "skullx",
@@ -221,7 +221,7 @@ function updateOnlineLobbyAccess() {
 function applyTheme(theme) {
     clearCosmeticThemes(); // also exits Win95 desktop if it was active, so switching straight between themes doesn't stack states
     if (theme.cssClass) document.body.classList.add(theme.cssClass);
-    showToast(theme.toastMsg, "success");
+    showToast(theme.toastMsg, "success", theme.id === "skullx" ? pickRandomSkullXOrdinal() : null);
     if (theme.id === "mimwizard" && typeof enterWin95Desktop === "function") {
         enterWin95Desktop();
     }
@@ -442,15 +442,11 @@ async function connectWallet() {
         return;
     }
     const wallets = getInstalledWallets();
-    if (wallets.length === 0) {
-        showToast("No Solana wallet found - install Phantom, Solflare, Backpack, or similar to connect.", "error");
-        window.open("https://solana.com/ecosystem/explore?categories=wallet", "_blank");
-        return;
-    }
-    if (wallets.length === 1) {
-        connectToProvider(wallets[0]);
-        return;
-    }
+    // Always show the picker now, even with zero or one Solana wallet
+    // detected - it's also how Bitcoin wallets (Xverse/UniSat) get
+    // reached, which used to be a completely separate, easy-to-miss
+    // button. Auto-connecting past this when exactly one Solana wallet
+    // existed would silently skip the Bitcoin option every time.
     openWalletPicker(wallets);
 }
 
@@ -515,11 +511,15 @@ function openWalletPicker(wallets) {
     const box = document.getElementById("walletPickerButtons");
     const modal = document.getElementById("walletPickerModal");
     if (!box || !modal) return;
-    box.innerHTML = wallets.map((w, i) => `
-        <button onclick="connectToProvider(_walletPickerList[${i}])"
-            class="w-full py-2.5 bg-[#1C212E] hover:bg-[#252E3E] text-white font-bold rounded-lg text-sm transition text-left px-4">
-            ${w.name}
-        </button>`).join("");
+    if (wallets.length === 0) {
+        box.innerHTML = `<p class="text-[10px] text-gray-500 italic">No Solana wallet detected - install Phantom, Solflare, Backpack, or similar, or use a Bitcoin wallet below instead.</p>`;
+    } else {
+        box.innerHTML = wallets.map((w, i) => `
+            <button onclick="connectToProvider(_walletPickerList[${i}])"
+                class="w-full py-2.5 bg-[#1C212E] hover:bg-[#252E3E] text-white font-bold rounded-lg text-sm transition text-left px-4">
+                ${w.name}
+            </button>`).join("");
+    }
     modal.classList.remove("hidden");
 }
 
@@ -784,7 +784,7 @@ function previewTheme(themeId) {
     const theme = COSMETIC_THEMES.find((t) => t.id === themeId);
     if (!theme) return;
     if (theme.cssClass) document.body.classList.add(theme.cssClass);
-    showToast(`Previewing: ${theme.label} (not a real ownership check)`, "info");
+    showToast(`Previewing: ${theme.label} (not a real ownership check)`, "info", theme.id === "skullx" ? pickRandomSkullXOrdinal() : null);
     if (theme.id === "mimwizard" && typeof enterWin95Desktop === "function") {
         enterWin95Desktop();
     }
@@ -866,6 +866,30 @@ function closeBonusStage() {
 // defaulted every Mid Evils AND Conmen holder to the plain Reiffer look.
 // Mid Evils has no separate character (Reiffer already IS the Mid Evils
 // look), so it doesn't need its own branch here - only Conmen did.
+// Skull X ordinal art for toasts - randomly picked so it's not the same
+// piece every time. Purely cosmetic flourish, not tied to real ownership
+// (Theme Preview already says as much in its own toast text).
+const SKULLX_ORDINAL_IMAGES = [
+    'assets/skullx_ordinals/skullx_aspectofthedeer.webp',
+    'assets/skullx_ordinals/skullx_avernus.webp',
+    'assets/skullx_ordinals/skullx_aviator.webp',
+    'assets/skullx_ordinals/skullx_devout.webp',
+    'assets/skullx_ordinals/skullx_fire.webp',
+    'assets/skullx_ordinals/skullx_guardiansofthegateclan.webp',
+    'assets/skullx_ordinals/skullx_hindudeities.webp',
+    'assets/skullx_ordinals/skullx_hoodiepunk.webp',
+    'assets/skullx_ordinals/skullx_kylanshellhound.webp',
+    'assets/skullx_ordinals/skullx_pirateclan.webp',
+    'assets/skullx_ordinals/skullx_plague_doctor.webp',
+    'assets/skullx_ordinals/skullx_vampiric.webp',
+    'assets/skullx_ordinals/skullx_wastelander.webp',
+    'assets/skullx_ordinals/skullx_wildwestclan.webp',
+    'assets/skullx_ordinals/skullx_zarathustracult.webp',
+];
+function pickRandomSkullXOrdinal() {
+    return SKULLX_ORDINAL_IMAGES[Math.floor(Math.random() * SKULLX_ORDINAL_IMAGES.length)];
+}
+
 function getActiveFighterKey() {
     if (document.body.classList.contains('win95-mode')) return 'wizard';
     if (document.body.classList.contains('conmen-mode')) return 'conmen';
