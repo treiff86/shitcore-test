@@ -428,15 +428,30 @@ function renderChart() {
     const minVal = displayMin * 0.95;
     const range = maxVal - minVal || 1;
 
-    ctx.strokeStyle = '#3B82F6';
-    ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    for (let i = 0; i < priceHistory.length; i++) {
-        let x = (lineRightEdge / (priceHistory.length - 1)) * i;
-        let y = canvas.height - ((priceHistory[i] - minVal) / range * canvas.height);
-        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    const skullxActive = document.body.classList.contains('skullx-mode');
+    if (skullxActive) {
+        // Skull X gets its own bar-style chart to match the reference
+        // mockup - solid teal bars instead of a line, no painter-tip
+        // consideration since that easter egg is Mid Evils-only.
+        const barGap = 2;
+        const barW = Math.max(1, (canvas.width / priceHistory.length) - barGap);
+        ctx.fillStyle = '#45746e';
+        for (let i = 0; i < priceHistory.length; i++) {
+            const x = (canvas.width / priceHistory.length) * i;
+            const barH = ((priceHistory[i] - minVal) / range) * canvas.height;
+            ctx.fillRect(x, canvas.height - barH, barW, barH);
+        }
+    } else {
+        ctx.strokeStyle = '#3B82F6';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        for (let i = 0; i < priceHistory.length; i++) {
+            let x = (lineRightEdge / (priceHistory.length - 1)) * i;
+            let y = canvas.height - ((priceHistory[i] - minVal) / range * canvas.height);
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
     }
-    ctx.stroke();
 
     // Dashed entry-price reference line for the active leveraged position
     if (activeTrade) {
