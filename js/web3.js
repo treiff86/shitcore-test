@@ -48,7 +48,7 @@ const COSMETIC_THEMES = [
     {
         id: "skullx",
         label: "Skull X",
-        cssClass: "", // no dedicated visual theme yet - detection/unlock only, standard look
+        cssClass: "skullx-mode", // dark teal/navy "shadow validator" theme, matched to the reference mockup
         toastMsg: "💀 Skull X detected!",
         // Bitcoin-based, not Solana - checked against whatever Bitcoin
         // wallet is connected via js/btcwallet.js, not the Solana wallet.
