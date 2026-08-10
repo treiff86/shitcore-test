@@ -39,7 +39,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Local styles (FIXED PATH) -->
     <link rel="stylesheet" href="style.css?v=51">
-    <link rel="stylesheet" href="bonusstage.css?v=8">
+    <link rel="stylesheet" href="bonusstage.css?v=9">
 </head>
 <body class="overflow-x-hidden min-h-screen flex flex-col justify-between">
     <!-- Hand-drawn wobble filter for the chart canvas in Mid Evils mode -
@@ -94,6 +94,9 @@
                         </div>
                         <button id="conmenEggTestBtn" onclick="testConmenEgg()" title="Master wallet only: force-trigger the Conmen easter egg popup for testing" class="hidden items-center gap-1 text-[10px] bg-gradient-to-b from-gray-400 to-gray-600 hover:from-gray-300 hover:to-gray-500 text-black px-2 py-0.5 rounded font-bold normal-case shadow">
                             <i class="fa-solid fa-egg"></i> Easter Egg
+                        </button>
+                        <button id="skullxEggTestBtn" onclick="testSkullXEgg()" title="Master wallet only: force-trigger the Skull X easter egg popup for testing" class="hidden items-center gap-1 text-[10px] bg-gradient-to-b from-teal-500 to-teal-700 hover:from-teal-400 hover:to-teal-600 text-black px-2 py-0.5 rounded font-bold normal-case shadow">
+                            <i class="fa-solid fa-skull"></i> Skull X Egg
                         </button>
                     </div>
                     <div id="levelBadge" class="text-[11px] text-amber-400 font-mono mt-0.5">LVL 1 — The Basement Dev</div>
@@ -1156,6 +1159,43 @@
         </div>
     </div>
 
+    <div id="skullxEggPopup" onclick="openSkullXLauncher()">
+        <span class="skullx-egg-tag">psst...</span>
+        <img src="assets/skullx-easteregg.webp" alt="">
+    </div>
+
+    <!-- Skull X easter egg: same full-screen launcher pattern as Conmen,
+         pointing at the Skull X Linktree instead of a marketplace listing. -->
+    <div id="skullxLauncherOverlay" class="fixed inset-0 bg-black hidden z-[110]">
+        <div class="win95-window-full">
+            <div class="win95-titlebar skullx-titlebar">
+                <span class="win95-title"><i class="fa-solid fa-skull"></i> SKULLX_EASTER.EGG</span>
+                <div class="win95-controls">
+                    <button class="win95-btn" disabled title="Minimize (not implemented)">_</button>
+                    <button class="win95-btn" disabled title="Maximize (not implemented)"><i class="fa-regular fa-square"></i></button>
+                    <button class="win95-btn win95-close" onclick="closeSkullXLauncher()" title="Close">&times;</button>
+                </div>
+            </div>
+            <div class="win95-menubar">
+                <span>File</span><span>Edit</span><span>View</span><span>Help</span>
+            </div>
+            <div class="win95-content-full skullx-launcher-bg">
+                <div class="conmen-launcher-inner">
+                    <img src="assets/skullx-easteregg.webp" alt="">
+                    <h2>You Found Skull X!</h2>
+                    <p>You dug deep enough to find this. Real ones get rewarded - here's where the rest of the collection lives.</p>
+                    <a class="conmen-launcher-btn skullx-launcher-btn" href="https://joeheyming.github.io/doom/" target="_blank" rel="noopener noreferrer">
+                        <i class="fa-solid fa-arrow-up-right-from-square"></i> Enter Skull X
+                    </a>
+                </div>
+            </div>
+            <div class="win95-statusbar">
+                <span class="win95-statusfield">Ready</span>
+                <span class="win95-statusfield">Skull X Exclusive</span>
+            </div>
+        </div>
+    </div>
+
     <!-- WIN modal -->
     <div id="winModal" class="fixed inset-0 bg-black/85 flex items-center justify-center z-50 hidden p-4">
         <div class="bg-[#0C0F16] border-2 border-emerald-500/60 neon-glow-green max-w-md w-full p-7 rounded-xl shadow-2xl text-center space-y-4">
@@ -1223,8 +1263,9 @@
 <script src="js/bonusstage.js?v=22" defer></script>
 <script src="js/fightgame.js?v=43" defer></script>
 <script src="js/conmen-egg.js?v=6" defer></script>
+<script src="js/skullx-egg.js?v=1" defer></script>
 <script src="js/mcdonalds-egg.js?v=4" defer></script>
-<script src="js/web3.js?v=47" defer></script>
+<script src="js/web3.js?v=48" defer></script>
 <script src="js/wizardpopup.js?v=2" defer></script>
 <script src="js/win95desktop.js?v=5" defer></script>
 <script src="js/btcwallet.js?v=4" defer></script>
