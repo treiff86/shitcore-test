@@ -175,26 +175,30 @@ const SKULLX_GALLERY_SLUGS = [
 ];
 
 window.checkSkullXOrigins = async function () {
-    // Primary check: real on-chain parent inscription, now that we have
-    // confirmed real parent numbers (see above) instead of a guess.
-    // Checks EVERY parent an inscription has, not just the first -
-    // Infinite pieces specifically have 2 parents, and the master parent
-    // isn't guaranteed to be first in the array, so only checking index
-    // [0] (the old bug) could silently miss real holders even with the
-    // right numbers.
+    // Primary check: real on-chain parent inscription. Checks EVERY
+    // parent an inscription has, not just the first - Infinite pieces
+    // specifically have 2 parents, and the master parent isn't
+    // guaranteed to be first in the array. IMPORTANT: per Xverse's own
+    // documented ord_getInscriptions schema, there is NO
+    // parentInscriptionNumber field at all - only parentInscriptionId
+    // (long-form). The earlier number-based check was silently
+    // comparing against a field that Xverse never sends, so it could
+    // never have matched anything through Xverse specifically, no
+    // matter how correct the number itself was.
     const inscriptions = await getMyInscriptions();
     console.log('[btcwallet] Inscriptions seen for Skull X check:', inscriptions);
+    console.log('[btcwallet] First inscription as text (bypasses any console object-preview weirdness):',
+        inscriptions[0] ? JSON.stringify(inscriptions[0], null, 2) : '(no inscriptions found)');
     const hasKnownParent = inscriptions.some(i => {
         const parentIds = [];
         if (i.parentInscriptionId) parentIds.push(i.parentInscriptionId);
         if (i.parent) parentIds.push(i.parent);
         if (Array.isArray(i.parents)) parentIds.push(...i.parents);
         if (parentIds.includes(SKULLX_ORIGINS_PARENT_ID_CANDIDATE)) return true;
-
-        const parentNumbers = [];
-        if (i.parentInscriptionNumber) parentNumbers.push(i.parentInscriptionNumber);
-        if (Array.isArray(i.parentInscriptionNumbers)) parentNumbers.push(...i.parentInscriptionNumbers);
-        return parentNumbers.some(n => SKULLX_KNOWN_PARENT_NUMBERS.includes(n));
+        // collectionName is a real field Xverse documents directly on
+        // each inscription - cheap extra check, no separate API call.
+        if (i.collectionName && /skull\s*x/i.test(i.collectionName)) return true;
+        return false;
     });
     if (hasKnownParent) return true;
 
