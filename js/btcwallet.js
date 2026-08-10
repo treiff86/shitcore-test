@@ -124,15 +124,25 @@ async function getMyInscriptions() {
     return [];
 }
 
-// Skull X: Origins uses a real on-chain parent inscription. Confirmed
-// directly from a real Skull X: Infinite piece's own "Parents" data
-// (Infinite pieces have 2 parents, one of which is explicitly labeled
-// "SKULLX ORIGINS" - inscription #60983386). This REPLACES the earlier
-// unverified guess (63994951 / a candidate ID pulled from a CoinMarketCap
-// listing), which turned out to be wrong - that's why real Origins
-// holders weren't being recognized before this fix.
-const SKULLX_ORIGINS_PARENT_NUMBER = 60983386;
-const SKULLX_ORIGINS_PARENT_ID_CANDIDATE = '666da210350e1d444a69bb9df97e9dc2338fbfb78534c6251f56f275e75b6666i0';
+// Skull X's real on-chain parent structure, confirmed directly (not
+// guessed) from browsing an actual marketplace's parent/child data:
+//
+// #22593457 is the MASTER parent for the entire Skull X universe - it's
+// listed as the parent of the Cursed Raiders, Cyber Raiders, and Hell
+// Raiders gallery groupings, several sub-parents, AND (confirmed
+// separately) as one of Infinite's own 2 direct parents. This one
+// parent number is likely enough to catch most/all Skull X holders on
+// its own, regardless of which specific gallery they hold.
+//
+// #60983386 is specifically the SKULLX ORIGINS parent (also one of
+// Infinite's 2 direct parents) - kept as a second check in case some
+// pieces list it without the master parent for whatever reason.
+//
+// This REPLACES the earlier unverified guess (63994951 / a candidate ID
+// pulled from a CoinMarketCap listing), which turned out to be wrong -
+// that's why real holders weren't being recognized before this fix.
+const SKULLX_KNOWN_PARENT_NUMBERS = [22593457, 60983386];
+const SKULLX_ORIGINS_PARENT_ID_CANDIDATE = '666da210350e1d444a69bb9df97e9dc2338fbfb78534c6251f56f275e75b6666i0'; // long-form ID confirmed for #60983386 specifically - no long-form ID confirmed yet for the master #22593457
 
 // All 5 Skull X galleries count toward the same "Skull X" status - one
 // unified check, holding any single one unlocks it, not tracked as
@@ -152,33 +162,25 @@ const SKULLX_ORIGINS_PARENT_ID_CANDIDATE = '666da210350e1d444a69bb9df97e9dc2338f
 // Status of each slug below: "infinite" and "cyber-raiders" are
 // reasonable candidates from web search (ord.net and Magic Eden
 // respectively) but NEITHER has been independently confirmed against
-// Ordiscan's own site yet. "cursed-raider", "origins", and "hell-raiders"
-// don't have a candidate slug at all yet - search kept surfacing an
-// unrelated Ordinals phenomenon called "Cursed Inscriptions" instead of
-// Tim's actual Cursed Raider collection, so this is a placeholder to
-// fill in once confirmed, not a guess. Note that Infinite's confirmed
-// Origins parentage (above) means the parent-ID check below already
-// covers BOTH Infinite and Origins holders on its own, regardless of
-// whether these collection-slug guesses are ever confirmed.
+// Ordiscan's own site yet - kept only as a belt-and-suspenders backup
+// now that the master parent number above should already cover every
+// gallery on its own.
 const SKULLX_GALLERY_SLUGS = [
     "skullx_infinite",       // candidate from ord.net - not yet confirmed against Ordiscan directly
     "skullx-cyber-raiders",  // candidate from Magic Eden - not yet confirmed against Ordiscan directly
-    // "skullx-cursed-raider",  // TODO: fill in once confirmed
-    // "skullx-origins",        // TODO: fill in once confirmed
-    // "skullx-hell-raiders",   // TODO: fill in once confirmed
 ];
 
 window.checkSkullXOrigins = async function () {
     // Primary check: real on-chain parent inscription, now that we have
-    // the confirmed Origins parent ID/number (see above) instead of a
-    // guess. Checks EVERY parent an inscription has, not just the first -
-    // Infinite pieces specifically have 2 parents, and Origins isn't
-    // guaranteed to be the first one in the array, so only checking
-    // index [0] (the old bug) could silently miss real Infinite holders
-    // even with the right ID.
+    // confirmed real parent numbers (see above) instead of a guess.
+    // Checks EVERY parent an inscription has, not just the first -
+    // Infinite pieces specifically have 2 parents, and the master parent
+    // isn't guaranteed to be first in the array, so only checking index
+    // [0] (the old bug) could silently miss real holders even with the
+    // right numbers.
     const inscriptions = await getMyInscriptions();
     console.log('[btcwallet] Inscriptions seen for Skull X check:', inscriptions);
-    const hasOriginsParent = inscriptions.some(i => {
+    const hasKnownParent = inscriptions.some(i => {
         const parentIds = [];
         if (i.parentInscriptionId) parentIds.push(i.parentInscriptionId);
         if (i.parent) parentIds.push(i.parent);
@@ -188,15 +190,14 @@ window.checkSkullXOrigins = async function () {
         const parentNumbers = [];
         if (i.parentInscriptionNumber) parentNumbers.push(i.parentInscriptionNumber);
         if (Array.isArray(i.parentInscriptionNumbers)) parentNumbers.push(...i.parentInscriptionNumbers);
-        return parentNumbers.includes(SKULLX_ORIGINS_PARENT_NUMBER);
+        return parentNumbers.some(n => SKULLX_KNOWN_PARENT_NUMBERS.includes(n));
     });
-    if (hasOriginsParent) return true;
+    if (hasKnownParent) return true;
 
     // Secondary check: Ordiscan's own collection tagging, same proven
     // method that confirmed Bitcoin Wizards (see checkOrdiscanCollection
-    // above). Covers galleries that AREN'T Origins-parented (Cyber
-    // Raider, and whichever of the other 3 turn out not to be either),
-    // for whichever slugs above are actually confirmed.
+    // above) - kept as a backup in case the master parent number above
+    // doesn't cover every single gallery for some reason.
     for (const slug of SKULLX_GALLERY_SLUGS) {
         if (await checkOrdiscanCollection(slug)) return true;
     }
