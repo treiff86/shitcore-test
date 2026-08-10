@@ -138,6 +138,21 @@ const SKULLX_ORIGINS_PARENT_NUMBER = 63994951;
 const SKULLX_ORIGINS_PARENT_ID_CANDIDATE = '666552489f01b1f478e28d7c34b601e50ac6ed2f9c2e75da1f6702016bf8e666i0'; // UNVERIFIED
 
 window.checkSkullXOrigins = async function () {
+    // Primary check: Ordiscan's own collection tagging, same proven
+    // method that confirmed Bitcoin Wizards (see checkOrdiscanCollection
+    // above) - this works regardless of on-chain parent-child provenance,
+    // which most of Skull X doesn't use anyway (see comment above this
+    // function). "skullx_infinite" matches the slug confirmed on
+    // ord.net/collection/skullx_infinite - NOT yet independently verified
+    // against Ordiscan's own site the way bitcoin-wizards was, so if this
+    // comes back false for a real holder, that slug string is the first
+    // thing to double check (Ordiscan's collection page for it, or one
+    // real holder's console output, same as how Bitcoin Wizards got
+    // confirmed).
+    if (await checkOrdiscanCollection("skullx_infinite")) return true;
+
+    // Fallback: the old parent-ID/number guess, kept in case some subset
+    // of the collection does use real on-chain provenance after all.
     const inscriptions = await getMyInscriptions();
     console.log('[btcwallet] Inscriptions seen for Skull X check:', inscriptions);
     return inscriptions.some(i => {
