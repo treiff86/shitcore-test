@@ -187,8 +187,19 @@ window.checkSkullXOrigins = async function () {
     // matter how correct the number itself was.
     const inscriptions = await getMyInscriptions();
     console.log('[btcwallet] Inscriptions seen for Skull X check:', inscriptions);
-    console.log('[btcwallet] First inscription as text (bypasses any console object-preview weirdness):',
-        inscriptions[0] ? JSON.stringify(inscriptions[0], null, 2) : '(no inscriptions found)');
+    console.log('[btcwallet] Compact summary of all inscriptions (number | contentType | collectionName | has parent field):');
+    inscriptions.forEach((i, idx) => {
+        const hasParent = !!(i.parentInscriptionId || i.parent || (Array.isArray(i.parents) && i.parents.length));
+        console.log(`  [${idx}] #${i.inscriptionNumber} | ${i.contentType || '?'} | collectionName="${i.collectionName || ''}" | hasParent=${hasParent}`);
+    });
+    // Full dump specifically of inscriptions that look like real image-
+    // based NFTs (not tiny text/plain inscriptions like BRC-20 transfers
+    // or rune etchings) - these are the ones actually worth inspecting
+    // for Skull X's real parent/collection data, since item [0] earlier
+    // turned out to be an unrelated 51-byte text inscription.
+    const likelyNFTs = inscriptions.filter(i => i.contentType && !i.contentType.startsWith('text/'));
+    console.log(`[btcwallet] ${likelyNFTs.length} inscriptions that look like image/NFT content (not plain text):`,
+        JSON.stringify(likelyNFTs, null, 2));
     const hasKnownParent = inscriptions.some(i => {
         const parentIds = [];
         if (i.parentInscriptionId) parentIds.push(i.parentInscriptionId);
