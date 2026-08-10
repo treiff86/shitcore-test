@@ -728,6 +728,112 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .conmen-mode .text-rose-500    { color: #f43f5e !important; }
 .conmen-mode .text-red-500     { color: #ef4444 !important; }
 .conmen-mode .text-amber-400   { color: #fbbf24 !important; }
+
+/* ==================================================================
+   SKULL X THEME - dark teal/navy "shadow validator" terminal look,
+   matched as closely as possible to the reference mockup (colors
+   sampled directly from it, not guessed): near-black navy base
+   (#0c1019), teal-green accents (#45746e), dusty rose/maroon for
+   danger elements (#6e444e), slate-blue for secondary panels
+   (#2c4156). Uses Tim's own diamond-pattern background texture.
+   Mirrors medieval-mode/conmen-mode's structure and selectors so it
+   plugs into the same theme-switching system - see COSMETIC_THEMES
+   in web3.js where this gets assigned as skullx's cssClass.
+   No blanket font-family override here (unlike Conmen/Mid Evils) -
+   the reference mockup doesn't show a distinct display font, it's
+   the color/texture doing the work, so the site's existing font
+   stays as-is and there's no Font Awesome icon-font collision to
+   work around this time.
+   ================================================================== */
+.skullx-mode {
+    background-color: #0c1019;
+    background-image:
+        radial-gradient(ellipse at 20% 15%, rgba(69,116,110,0.30), transparent 55%),
+        radial-gradient(ellipse at 80% 85%, rgba(44,65,86,0.30), transparent 55%),
+        url('assets/skullx-wall-fill.webp');
+    background-repeat: no-repeat, no-repeat, no-repeat;
+    background-position: center, center, center;
+    background-size: auto, auto, cover;
+    background-attachment: fixed, fixed, fixed;
+}
+.skullx-mode,
+.skullx-mode * {
+    color: #d7e6e2 !important;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+}
+.skullx-mode h1,
+.skullx-mode h2,
+.skullx-mode h3,
+.skullx-mode .font-black {
+    color: #6fc4b3 !important;
+    text-shadow: 0 0 8px rgba(111,196,179,0.45), 0 1px 3px rgba(0,0,0,0.7);
+    letter-spacing: 0.5px;
+}
+.skullx-mode .mc-title-accent {
+    font-size: 1.15em;
+}
+
+/* Panels - dark navy body, teal glow border. Same verified-safe
+   selector as the other themes (requires the exact panel bg AND
+   border color together, confirmed not to leak onto header/nav/
+   modals that happen to share the same dark background color). */
+.skullx-mode [class*="bg-[#0C0F16]"][class*="border-[#1A2232]"] {
+    background-color: #0d111a !important;
+    border: 1px solid #45746e !important;
+    box-shadow: 0 0 14px rgba(69,116,110,0.25), inset 0 0 20px rgba(69,116,110,0.08) !important;
+}
+.skullx-mode header {
+    background-color: #0a0e17 !important;
+    border-bottom: 1px solid #45746e !important;
+}
+.skullx-mode nav,
+.skullx-mode footer {
+    background-color: #0c1019 !important;
+    border-color: #2c4156 !important;
+}
+.skullx-mode footer * {
+    color: #9fb8b3 !important;
+}
+.skullx-mode footer .text-green-400 {
+    color: #6fc4b3 !important;
+}
+.skullx-mode footer .text-amber-500 {
+    color: #d9a85e !important;
+}
+
+/* Smaller inset boxes (Spread strip, Wager/Leverage controls, Rugged
+   Savings, Level progress, Victim Hall of Fame, Perk Shop rows) -
+   slightly lighter than the big panels so there's still visible
+   layering, same dusty-maroon accent as the reference's "danger"
+   elements (Rugged Savings, MEV Sandwich) for anything wager/risk
+   related, teal for everything else. */
+.skullx-mode .mc-inset-panel,
+.skullx-mode #wagerControlPanel {
+    background-color: #101623 !important;
+    border: 1px solid #2c4156 !important;
+}
+
+/* Skull X-styled scrollbar, same technique as the other themes
+   (Chrome/Edge/Safari only). */
+.skullx-mode ::-webkit-scrollbar {
+    width: 10px;
+}
+.skullx-mode ::-webkit-scrollbar-track {
+    background: #0c1019;
+}
+.skullx-mode ::-webkit-scrollbar-thumb {
+    background: #2c4156;
+    border: 2px solid #0a0e17;
+    border-radius: 4px;
+}
+.skullx-mode ::-webkit-scrollbar-thumb:hover {
+    background: #45746e;
+}
+
+/* No blanket color override on text this time (unlike Conmen/Mid
+   Evils), so the site's existing money/status color coding (green
+   cash, red/rose danger, amber warnings, blue info) already survives
+   untouched - nothing to restore here. */
 .conmen-mode .text-amber-500   { color: #f59e0b !important; }
 .conmen-mode .text-blue-400    { color: #60a5fa !important; }
 .conmen-mode .text-purple-400  { color: #c084fc !important; }
