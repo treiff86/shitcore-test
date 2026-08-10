@@ -273,8 +273,17 @@ async function ordiscanFetch(path) {
             return null;
         }
         const json = await res.json();
-        console.log(`[btcwallet] Ordiscan response body for ${path}:`, JSON.stringify(json).slice(0, 500));
-        return json;
+        // Ordiscan wraps every list response in a {data: [...]} envelope
+        // rather than returning the array directly - unwrap it here, once,
+        // so every caller can just treat the result as the array it
+        // actually wants. This was THE bug: every check below was doing
+        // Array.isArray() on the whole {data: [...]} object, which is
+        // always false, so every single check silently bailed out before
+        // ever looking at a single real item - regardless of whether the
+        // wallet actually held the thing being checked for.
+        const unwrapped = Array.isArray(json?.data) ? json.data : json;
+        console.log(`[btcwallet] Ordiscan response for ${path} - ${Array.isArray(unwrapped) ? unwrapped.length + ' items' : 'not an array'}:`, JSON.stringify(unwrapped).slice(0, 2000));
+        return unwrapped;
     } catch (e) {
         // If this fires with a generic "Failed to fetch" / TypeError and
         // no HTTP status ever logged above, that's the signature of a
