@@ -1,1280 +1,970 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Shitcore (USDSHT) — The Ultimate L1 for Absolute Rugs</title>
-    <meta name="description" content="A satirical idle-tycoon game about meme-coin rug pulls. 100% fake money, 100% fake blockchain, 100% real bad decisions.">
+/* ============================================================
+   WEB3: WALLET CONNECT + CLOUD SAVE + LIVE LEADERBOARD
+   ============================================================
+   - Wallet connect is read-only: it asks the browser wallet extension
+     for your public address, nothing else. It never requests a
+     transaction or a signature, and never touches funds.
+   - Your wallet address becomes your save-slot key in Supabase, so you
+     can pick up your run on a different device/browser.
+   - The leaderboard ranks lifetime_earned (same number your Degen Level
+     is based on) and updates live via Supabase Realtime - no polling.
 
-    <!-- Debug error catcher - deliberately the FIRST script on the page,
-         before anything else that could throw, so the TEST PLAY debug
-         menu (master wallet only) can show a real error log instead of
-         guessing. Always installed, harmless no-op if TEST PLAY is never
-         opened. -->
-    <script>
-        window._debugErrorLog = [];
-        window.addEventListener('error', function (e) {
-            window._debugErrorLog.push({
-                type: 'error',
-                message: e.message,
-                source: (e.filename || '').split('/').pop() + (e.lineno ? ':' + e.lineno : ''),
-                time: new Date().toLocaleTimeString(),
-            });
+   SETUP (two things to fill in before this does anything):
+     1. Run supabase_setup.sql once in your Supabase project's SQL Editor.
+     2. Fill in SUPABASE_URL and SUPABASE_ANON_KEY below (Project
+        Settings -> API in your Supabase dashboard). The anon key is
+        meant to be public/client-side - that's what it's for.
+   ============================================================ */
+
+const SUPABASE_URL = "https://dhoewjzwimvgogckprof.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_AECc75ywuwTSIeXmtCmqzg_FqsutxYE";
+
+// Master wallet: previewing a theme here never checks real ownership, and
+// never affects what anyone else sees - it's a local dev-only toggle.
+const MASTER_WALLET = "AUrTSsPC2hqZB71QDPn1iHCtTpdFqk4uzk1eRmJDnmGs";
+
+// Cosmetic collection themes. Each entry: a collection to check ownership
+// against, and the CSS class (see style.css) to apply if the connected
+// wallet holds one. Only the first match applies - these are full-page
+// reskins, not meant to stack. Add new ones here as new collections come
+// in; nothing else needs to change to support another.
+const MIM_SOL_MINT = "M1M6sdffCs3ozzhpRveweRCWdZhxth4mvVujPtYEC3h"; // $MIM SPL token on Solana
+
+const COSMETIC_THEMES = [
+    {
+        id: "midevils",
+        label: "Mid Evils - Medieval",
+        collectionAddress: "w44WvLKRdLGye2ghhDJBxcmnWpBo31A1tCBko2G6DgW", // verified via Solscan (MidEvil #3592's collection.key)
+        cssClass: "medieval-mode",
+        toastMsg: "🏰 Mid Evil detected! The realm grows old.",
+    },
+    {
+        id: "conmen",
+        label: "Conmen - Cell Block",
+        collectionAddress: "9DqJWp9jF2M7F5Be8Sxs1GSJz7HZYVcyFgyMU9CBLmUQ", // verified via Solscan
+        cssClass: "conmen-mode",
+        toastMsg: "🔒 Conman detected! Welcome to the cell block.",
+    },
+    {
+        id: "skullx",
+        label: "Skull X",
+        cssClass: "skullx-mode", // dark teal/navy "shadow validator" theme, matched to the reference mockup
+        toastMsg: "💀 Skull X detected!",
+        // Bitcoin-based, not Solana - checked against whatever Bitcoin
+        // wallet is connected via js/btcwallet.js, not the Solana wallet.
+        checkFn: async () => {
+            if (typeof btcWalletAddress === 'undefined' || !btcWalletAddress) return false;
+            if (typeof window.checkSkullXOrigins !== 'function') return false;
+            return await window.checkSkullXOrigins();
+        },
+    },
+    {
+        id: "mimwizard",
+        label: "$MIM / Bitcoin Wizard",
+        cssClass: "", // no dedicated visual theme yet - detection/unlock only, standard look
+        toastMsg: "🧙 MIM / Bitcoin Wizard detected!",
+        // Shared across both chains on purpose - holding $MIM on Solana OR
+        // a Bitcoin Wizard both qualify for the same theme slot.
+        checkFn: async () => {
+            let holds = false;
+            if (typeof walletAddress !== 'undefined' && walletAddress && typeof window.checkTokenHolding === 'function') {
+                holds = await window.checkTokenHolding(walletAddress, MIM_SOL_MINT);
+            }
+            if (!holds && typeof btcWalletAddress !== 'undefined' && btcWalletAddress) {
+                if (typeof window.checkMimRuneHolding === 'function') holds = await window.checkMimRuneHolding();
+                if (!holds && typeof window.checkBitcoinWizardsOwnership === 'function') holds = await window.checkBitcoinWizardsOwnership();
+            }
+            return holds;
+        },
+    },
+    {
+        id: "genuineundead",
+        label: "Genuine Undead",
+        cssClass: "", // uses the normal site background on purpose - only the Fight Game arena/fighter change for this one
+        toastMsg: "☠️ Genuine Undead detected!",
+        // TEST Play preview only, on purpose - no collectionAddress/checkFn
+        // means real ownership detection (applyCosmeticThemes) can never
+        // match this for an actual player; it only ever shows up via the
+        // Theme Preview modal, which is itself TEST-Play-gated already.
+    },
+];
+
+// Trait-gated rewards - checked against the specific NFT's metadata
+// attributes, not just collection membership. Add more entries here as
+// new ones get designed; nothing else needs to change to support them.
+//   - startingCashBonus: one-time, only applied the very first time a
+//     wallet is seen (see offerCloudLoadIfExists) - REPLACES the default
+//     starting cash, doesn't stack with it.
+//   - marketsLuckMultiplier: permanent once earned (persisted in the
+//     save via claimedTraitRewards), divides all Markets catastrophe
+//     odds (DRAINED/RUGGED/BUST) by this amount. Sticks even if the NFT
+//     is later sold, by design - once earned, it's earned.
+const TRAIT_REWARDS = [
+    {
+        id: "caravaggio_clothing",
+        collectionAddress: "w44WvLKRdLGye2ghhDJBxcmnWpBo31A1tCBko2G6DgW", // Mid Evils
+        traitType: "Clothing",
+        traitValue: "Caravaggio",
+        startingCashBonus: 4200,
+        marketsLuckMultiplier: 10,
+        requiresThemeClass: "medieval-mode", // only recognized/granted once the Mid Evils theme has actually connected - not just on raw wallet connect
+    },
+];
+
+let sb = null;
+let walletAddress = null;
+let walletSolDomain = null; // e.g. "degen.sol" - null until/unless resolved
+let leaderboardChannel = null;
+
+function web3Ready() {
+    return !!(SUPABASE_URL && SUPABASE_ANON_KEY);
+}
+
+function initSupabase() {
+    if (!web3Ready()) {
+        console.warn("[web3] SUPABASE_URL/SUPABASE_ANON_KEY not set in js/web3.js - wallet/leaderboard features disabled.");
+        return;
+    }
+    if (typeof window.supabase === "undefined") {
+        console.warn("[web3] Supabase JS client script not loaded - check the <script> tag in index.html.");
+        return;
+    }
+    sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+}
+
+/* ---------------- Cosmetic theme detection ---------------- */
+
+function clearCosmeticThemes() {
+    COSMETIC_THEMES.forEach((t) => { if (t.cssClass) document.body.classList.remove(t.cssClass); });
+    document.getElementById("audioToggleBtn")?.classList.add("hidden");
+    if (typeof stopMainThemeIfPlaying === "function") stopMainThemeIfPlaying();
+    if (typeof exitWin95Desktop === "function") exitWin95Desktop();
+}
+
+// Themes the currently-connected wallet actually owns (real ownership,
+// not a preview) - populated by applyCosmeticThemes(), read by the
+// "switch theme" button so a dual (or more) holder can change their mind
+// later without having to reconnect.
+let ownedThemesList = [];
+let isConmenHolder = false; // real Conmen NFT ownership - separate from cosmetic theme choice, used to gate the Online Fight Club tab and the Conmen heat perks below
+let isSkullXHolder = false; // real Skull X ownership - same idea, gates the Skull X easter egg below
+
+// showChoiceIfMultiple=false is used specifically for the master wallet's
+// TEST Play path, where Theme Preview is about to open right after and
+// would just fight with this modal for attention. Every other caller -
+// including LIVE Play, which is deliberately meant to be indistinguishable
+// from a real connection - leaves it true.
+async function applyCosmeticThemes(addr, showChoiceIfMultiple = true) {
+    const owned = [];
+    for (const theme of COSMETIC_THEMES) {
+        let owns = false;
+        try {
+            if (theme.checkFn) {
+                owns = await theme.checkFn();
+            } else if (theme.collectionAddress && typeof window.checkCollectionOwnership === 'function') {
+                owns = await window.checkCollectionOwnership(addr, theme.collectionAddress);
+            }
+        } catch (e) {
+            console.warn(`[web3] ownership check failed for theme "${theme.id}":`, e);
+        }
+        if (owns) owned.push(theme);
+    }
+    ownedThemesList = owned;
+    isConmenHolder = owned.some((t) => t.id === "conmen");
+    isSkullXHolder = owned.some((t) => t.id === "skullx");
+    updateOnlineLobbyAccess();
+
+    const switchBtn = document.getElementById("themeSwitchBtn");
+    if (owned.length > 1) {
+        switchBtn?.classList.remove("hidden");
+    } else {
+        switchBtn?.classList.add("hidden");
+    }
+
+    if (owned.length === 0) {
+        return; // no gated collection owned, normal look
+    }
+    if (owned.length === 1) {
+        applyTheme(owned[0]);
+        return;
+    }
+    // Owns more than one gated collection - let them pick rather than
+    // silently defaulting to whichever happens to be checked first.
+    if (!showChoiceIfMultiple) {
+        applyTheme(owned[0]); // baseline pick; caller has its own way to let them override (Theme Preview)
+        return;
+    }
+    renderThemeChoiceButtons();
+    document.getElementById("themeChoiceModal")?.classList.remove("hidden");
+}
+
+// Actually applies a theme's visuals/features - shared by the single-owner
+// auto-apply path above and the manual picker below, so they can never
+// drift out of sync with each other.
+// Online Fight Club: locked to "Soon"/"Holders Only" for everyone except
+// TEST Play (for testing) or a wallet that genuinely holds a Conmen or Mid
+// Evils NFT (checked above via COSMETIC_THEMES, same real ownership check
+// cosmetic theming uses - nothing separate to maintain).
+function updateOnlineLobbyAccess() {
+    const unlocked = isTestPlayMode || ownedThemesList.length > 0;
+    document.getElementById("onlineLobbySoonOverlay")?.classList.toggle("hidden", unlocked);
+    document.getElementById("onlineLobbySoonBadge")?.classList.toggle("hidden", unlocked);
+
+    // Test-cash button (click the wallet balance for +$4,200) is TEST Play
+    // only - addTestCash() itself refuses outside TEST Play too (see
+    // state.js), this just stops it from looking clickable for real players.
+    const cashWrapper = document.getElementById("cashDisplayWrapper");
+    if (cashWrapper) {
+        cashWrapper.classList.toggle("cursor-pointer", isTestPlayMode);
+        cashWrapper.title = isTestPlayMode ? "Testing only: click to add $4,200" : "";
+    }
+}
+
+function applyTheme(theme) {
+    clearCosmeticThemes(); // also exits Win95 desktop if it was active, so switching straight between themes doesn't stack states
+    if (theme.cssClass) document.body.classList.add(theme.cssClass);
+    showToast(theme.toastMsg, "success", theme.id === "skullx" ? pickRandomSkullXOrdinal() : null);
+    if (theme.id === "mimwizard" && typeof enterWin95Desktop === "function") {
+        enterWin95Desktop();
+    }
+    if (theme.id === "midevils" || theme.id === "conmen" || theme.id === "mimwizard") {
+        // Deliberately NOT unlocking bonusStageBtn here - the persistent
+        // "Play mini game" header button is TEST Play only now. Every real
+        // player (and LIVE Play) only reaches the mini-game through the
+        // McDonald's popup easter egg (see js/mcdonalds-egg.js).
+        document.getElementById("audioToggleBtn")?.classList.remove("hidden");
+        if (typeof autoStartThemeMusicIfMuted === 'function') autoStartThemeMusicIfMuted();
+    }
+}
+
+function renderThemeChoiceButtons() {
+    const box = document.getElementById("themeChoiceButtons");
+    if (!box) return;
+    box.innerHTML = ownedThemesList.map((t) => `
+        <button onclick="selectOwnedTheme('${t.id}')"
+            class="w-full py-2 bg-emerald-600/20 hover:bg-emerald-600/40 border border-emerald-500/30 text-emerald-300 rounded text-xs font-bold transition">
+            ${t.label}
+        </button>
+    `).join("");
+}
+
+function selectOwnedTheme(themeId) {
+    const theme = ownedThemesList.find((t) => t.id === themeId);
+    if (!theme) return;
+    applyTheme(theme);
+    closeThemeChoice();
+}
+
+function openThemeChoice() {
+    if (!ownedThemesList.length) return;
+    renderThemeChoiceButtons();
+    document.getElementById("themeChoiceModal")?.classList.remove("hidden");
+}
+
+function closeThemeChoice() {
+    document.getElementById("themeChoiceModal")?.classList.add("hidden");
+}
+
+/* ---------------- Master wallet: LIVE Play vs TEST Play ---------------- */
+
+// True only after the master wallet explicitly picks TEST Play this
+// session - never true for a real player, never true by default.
+let isTestPlayMode = false;
+
+function choosePlayMode(mode) {
+    document.getElementById("playModeModal")?.classList.add("hidden");
+    if (mode === "test") {
+        isTestPlayMode = true;
+        applyCosmeticThemes(walletAddress, false); // real theme still applies as a baseline; Theme Preview (below) is what actually lets you override it, so skip the separate dual-choice popup here
+        document.getElementById("themePreviewBtn")?.classList.remove("hidden");
+        document.getElementById("bonusStageBtn")?.classList.remove("hidden");
+        document.getElementById("audioToggleBtn")?.classList.remove("hidden");
+        document.getElementById("conmenEggTestBtn")?.classList.remove("hidden");
+        document.getElementById("debugMenuBtn")?.classList.remove("hidden");
+        document.getElementById("fightGameBtn")?.classList.remove("hidden");
+        document.getElementById("onlineLobbySoonOverlay")?.classList.add("hidden");
+        document.getElementById("onlineLobbySoonBadge")?.classList.add("hidden");
+        document.getElementById("btcWalletConnectBtn")?.classList.remove("hidden");
+        openThemePreview();
+        showToast("🧪 TEST PLAY active - all testing tools unlocked.", "info");
+    } else {
+        isTestPlayMode = false;
+        // Genuinely re-runs the exact same real-connection flow any other
+        // wallet gets - including the dual-theme picker if this wallet
+        // holds more than one gated collection. Nothing about this call
+        // is different for the master wallet.
+        applyCosmeticThemes(walletAddress, true);
+        document.getElementById("btcWalletConnectBtn")?.classList.add("hidden");
+        if (typeof disconnectBitcoinWallet === "function" && typeof btcWalletAddress !== "undefined" && btcWalletAddress) {
+            disconnectBitcoinWallet(); // BTC connectivity is TEST-only - don't let it carry over into a LIVE Play session
+        }
+        showToast("▶️ LIVE PLAY active - this is exactly what a real player sees.", "info");
+    }
+    if (typeof updateUI === "function") updateUI(); // re-checks things like the zero-balance modal now that the picker is out of the way
+}
+
+/* ---------------- Debug menu (TEST Play only) ---------------- */
+
+function _scriptVersionList() {
+    return Array.from(document.querySelectorAll('script[src]'))
+        .map((s) => s.getAttribute('src'))
+        .filter((src) => src && !src.startsWith('http'))
+        .map((src) => {
+            const [path, ver] = src.split('?v=');
+            return `${path.split('/').pop()}  →  ${ver ? 'v' + ver : '(no version tag)'}`;
         });
-        window.addEventListener('unhandledrejection', function (e) {
-            window._debugErrorLog.push({
-                type: 'promise rejection',
-                message: String(e.reason && e.reason.message ? e.reason.message : e.reason),
-                source: '',
-                time: new Date().toLocaleTimeString(),
+}
+
+function _activeThemeLabel() {
+    if (document.body.classList.contains('medieval-mode')) return 'medieval-mode (Mid Evils)';
+    if (document.body.classList.contains('conmen-mode')) return 'conmen-mode (Conmen)';
+    return 'none (default look)';
+}
+
+function refreshDebugInfo() {
+    const stateBox = document.getElementById('debugStateBox');
+    if (stateBox) {
+        stateBox.innerHTML = [
+            `Wallet: ${escapeHtml(walletAddress || '(not connected)')}`,
+            `Play mode: ${isTestPlayMode ? 'TEST PLAY' : 'LIVE PLAY'}`,
+            `Active theme: ${escapeHtml(_activeThemeLabel())}`,
+            `Owned themes (real): ${ownedThemesList.length ? escapeHtml(ownedThemesList.map(t => t.label).join(', ')) : 'none'}`,
+            `Page URL: ${escapeHtml(window.location.href)}`,
+        ].map(line => `<div>${line}</div>`).join('');
+    }
+
+    const versionsBox = document.getElementById('debugVersionsBox');
+    if (versionsBox) {
+        versionsBox.innerHTML = _scriptVersionList().map(line => `<div>${escapeHtml(line)}</div>`).join('');
+    }
+
+    const errorsBox = document.getElementById('debugErrorsBox');
+    if (errorsBox) {
+        const log = window._debugErrorLog || [];
+        errorsBox.innerHTML = log.length
+            ? log.slice().reverse().map(e => `<div>[${escapeHtml(e.time)}] ${escapeHtml(e.type)}${e.source ? ' @ ' + escapeHtml(e.source) : ''}: ${escapeHtml(e.message)}</div>`).join('')
+            : '<div class="text-gray-500">No errors caught since page load. 🎉</div>';
+    }
+}
+
+function openDebugMenu() {
+    if (typeof isTestPlayMode === 'undefined' || !isTestPlayMode) return; // TEST Play only, full stop - matches addTestCash()/connectUnisat() pattern, not just UI-hidden
+    refreshDebugInfo();
+    document.getElementById("debugMenuModal")?.classList.remove("hidden");
+}
+
+function closeDebugMenu() {
+    document.getElementById("debugMenuModal")?.classList.add("hidden");
+}
+
+function copyDebugReport() {
+    const log = window._debugErrorLog || [];
+    const report = [
+        '=== SHITCORE DEBUG REPORT ===',
+        new Date().toString(),
+        '',
+        `Wallet: ${walletAddress || '(not connected)'}`,
+        `Play mode: ${isTestPlayMode ? 'TEST PLAY' : 'LIVE PLAY'}`,
+        `Active theme: ${_activeThemeLabel()}`,
+        `Owned themes (real): ${ownedThemesList.length ? ownedThemesList.map(t => t.label).join(', ') : 'none'}`,
+        `Page URL: ${window.location.href}`,
+        `User agent: ${navigator.userAgent}`,
+        '',
+        '--- Loaded Script Versions ---',
+        ..._scriptVersionList(),
+        '',
+        '--- Caught Errors ---',
+        log.length ? log.map(e => `[${e.time}] ${e.type}${e.source ? ' @ ' + e.source : ''}: ${e.message}`).join('\n') : '(none)',
+    ].join('\n');
+
+    navigator.clipboard.writeText(report)
+        .then(() => showToast('📋 Debug report copied - paste it in chat.', 'success'))
+        .catch(() => showToast('Could not copy automatically - select the text manually.', 'error'));
+}
+
+/* ---------------- Wallet connect (any Solana wallet) ---------------- */
+
+// Older/simpler wallets each inject themselves onto `window` under their
+// own key - this covers those directly.
+const KNOWN_WALLET_CHECKS = [
+    { name: "Phantom",         test: () => (window.phantom?.solana?.isPhantom && window.phantom.solana) || (window.solana?.isPhantom && window.solana) },
+    { name: "Solflare",        test: () => window.solflare?.isSolflare && window.solflare },
+    { name: "Backpack",        test: () => window.backpack?.isBackpack && window.backpack },
+    { name: "Glow",            test: () => window.glow?.isGlow && window.glow },
+    { name: "Coin98",          test: () => window.coin98?.sol && window.coin98.sol },
+    { name: "Trust Wallet",    test: () => window.trustwallet?.solana && window.trustwallet.solana },
+    { name: "Coinbase Wallet", test: () => window.coinbaseSolana && window.coinbaseSolana },
+    { name: "Exodus",          test: () => window.exodus?.solana && window.exodus.solana },
+    { name: "Clover",          test: () => window.clover_solana && window.clover_solana },
+];
+
+// Newer wallets (including MetaMask's Solana support, and anything we
+// didn't think to name above) announce themselves through the "Wallet
+// Standard" instead - a small two-event handshake, no library needed:
+// a wallet dispatches "register-wallet" with itself, and/or listens for
+// us announcing "app-ready" so wallets that loaded before this script
+// did still get a chance to register. This is the mechanism MetaMask's
+// Solana integration specifically relies on (confirmed via MetaMask's
+// own developer docs - it does not inject a plain window.metamask.solana
+// the way Phantom/Solflare/Backpack do).
+const standardWallets = []; // { name, wallet } - deduped, Solana-only
+function registerStandardWallet(wallet) {
+    if (!wallet?.chains?.some(c => c.startsWith("solana:"))) return; // not a Solana wallet
+    if (standardWallets.some(w => w.name === wallet.name)) return;   // already have it
+    standardWallets.push({ name: wallet.name, wallet });
+}
+window.addEventListener("wallet-standard:register-wallet", (event) => {
+    event.detail({ register: registerStandardWallet });
+});
+window.dispatchEvent(new CustomEvent("wallet-standard:app-ready", {
+    detail: { register: registerStandardWallet },
+}));
+
+function getInstalledWallets() {
+    const found = [];
+    for (const w of KNOWN_WALLET_CHECKS) {
+        try {
+            const provider = w.test();
+            if (provider) found.push({ name: w.name, kind: "legacy", provider });
+        } catch (_) { /* a wallet's injected object being weirdly shaped shouldn't break the rest */ }
+    }
+    for (const { name, wallet } of standardWallets) {
+        if (found.some(w => w.name === name)) continue; // already found via the legacy check above
+        found.push({ name, kind: "standard", provider: wallet });
+    }
+    return found;
+}
+
+let activeProvider = null; // whichever wallet's provider/wallet object we actually connected with
+let activeProviderKind = null; // "legacy" or "standard" - connect/disconnect differ slightly
+
+async function connectWallet() {
+    if (typeof btcWalletAddress !== 'undefined' && btcWalletAddress) {
+        showToast("Only one wallet at a time - disconnect the Bitcoin wallet first.", "error");
+        return;
+    }
+    const wallets = getInstalledWallets();
+    // Always show the picker now, even with zero or one Solana wallet
+    // detected - it's also how Bitcoin wallets (Xverse/UniSat) get
+    // reached, which used to be a completely separate, easy-to-miss
+    // button. Auto-connecting past this when exactly one Solana wallet
+    // existed would silently skip the Bitcoin option every time.
+    openWalletPicker(wallets);
+}
+
+async function connectToProvider({ name, kind, provider }) {
+    closeWalletPicker();
+    try {
+        let address;
+        if (kind === "standard") {
+            // Wallet Standard's connect API is shaped differently from the
+            // older per-wallet providers: it hands back an accounts array
+            // instead of a single publicKey.
+            const connectFeature = provider.features?.["standard:connect"];
+            if (!connectFeature) throw new Error("wallet doesn't support standard:connect");
+            const { accounts } = await connectFeature.connect();
+            if (!accounts?.length) throw { code: 4001 };
+            address = accounts[0].address;
+        } else {
+            const resp = await provider.connect(); // read-only: just asks for the public address
+            address = resp.publicKey.toString();
+        }
+
+        activeProvider = provider;
+        activeProviderKind = kind;
+        walletAddress = address;
+        updateWalletUI();
+        showToast(`🔗 ${name} connected: ${shortAddr(walletAddress)}`, "success");
+
+        // Best-effort .sol domain resolution - purely cosmetic, never blocks anything
+        if (typeof window.lookupSolDomain === "function") {
+            window.lookupSolDomain(walletAddress).then((domain) => {
+                if (domain) {
+                    walletSolDomain = domain;
+                    updateWalletUI();
+                    showToast(`✨ Resolved ${domain}`, "success");
+                }
             });
-        });
-    </script>
+        }
 
-    <!-- Tailwind CSS (CDN, no build step needed) -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&family=MedievalSharp&family=UnifrakturMaguntia&family=Special+Elite&family=Rye&display=swap" rel="stylesheet">
-    <!-- FontAwesome icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Local styles (FIXED PATH) -->
-    <link rel="stylesheet" href="style.css?v=51">
-    <link rel="stylesheet" href="bonusstage.css?v=9">
-</head>
-<body class="overflow-x-hidden min-h-screen flex flex-col justify-between">
-    <!-- Hand-drawn wobble filter for the chart canvas in Mid Evils mode -
-         not visible itself, just defines a filter effect referenced from CSS -->
-    <svg width="0" height="0" style="position:absolute">
-        <filter id="mc-hand-drawn">
-            <feTurbulence type="fractalNoise" baseFrequency="0.02 0.06" numOctaves="2" seed="7" result="noise"></feTurbulence>
-            <feDisplacementMap in="SourceGraphic" in2="noise" scale="4" xChannelSelector="R" yChannelSelector="G"></feDisplacementMap>
-        </filter>
-    </svg>
+        // Real holder detection - checks every theme in COSMETIC_THEMES.
+        // For every normal wallet this runs immediately, same as always.
+        // For the master wallet it's deliberately deferred until LIVE/TEST
+        // is picked below, so choosing LIVE genuinely re-runs this exact
+        // same real-connection sequence rather than something already
+        // having happened moments earlier.
+        if (walletAddress === MASTER_WALLET) {
+            document.getElementById("playModeModal")?.classList.remove("hidden");
+        } else {
+            await applyCosmeticThemes(walletAddress); // must finish (and apply the theme class) before the trait check below runs, not just fire-and-forget
+        }
 
-    <!-- ============================================================ -->
-    <!-- CONMEN NFT GATE - hidden unless enabled in js/gate.js -->
-    <!-- ============================================================ -->
-    <div id="gateOverlay" class="hidden fixed inset-0 bg-black z-[100] flex items-center justify-center p-4">
-        <div class="max-w-md w-full bg-[#0C0F16] border border-amber-500/40 rounded-xl p-8 text-center space-y-4 shadow-2xl">
-            <div class="text-4xl">🔒</div>
-            <h2 class="text-xl font-black text-white">Conmen Holders Only</h2>
-            <p class="text-sm text-gray-400">Connect a wallet holding a Conmen NFT to play Shitcore.</p>
-            <button id="gateVerifyBtn" class="w-full py-3 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-lg transition">
-                Connect Wallet to Verify
-            </button>
-            <p id="gateStatus" class="text-xs text-gray-500 min-h-[1em]"></p>
+        await offerCloudLoadIfExists();
+    } catch (e) {
+        if (e?.code === 4001) return; // user closed the connect popup - not an error
+        console.error(`[web3] ${name} connect failed:`, e);
+        showToast(`${name} connection failed or was rejected.`, "error");
+    }
+}
+
+let _walletPickerList = [];
+function openWalletPicker(wallets) {
+    _walletPickerList = wallets;
+    const box = document.getElementById("walletPickerButtons");
+    const modal = document.getElementById("walletPickerModal");
+    if (!box || !modal) return;
+    if (wallets.length === 0) {
+        box.innerHTML = `<p class="text-[10px] text-gray-500 italic">No Solana wallet detected - install Phantom, Solflare, Backpack, or similar, or use a Bitcoin wallet below instead.</p>`;
+    } else {
+        box.innerHTML = wallets.map((w, i) => `
+            <button onclick="connectToProvider(_walletPickerList[${i}])"
+                class="w-full py-2.5 bg-[#1C212E] hover:bg-[#252E3E] text-white font-bold rounded-lg text-sm transition text-left px-4">
+                ${w.name}
+            </button>`).join("");
+    }
+    modal.classList.remove("hidden");
+}
+
+function closeWalletPicker() {
+    document.getElementById("walletPickerModal")?.classList.add("hidden");
+}
+
+/* ---------------- Deposit to Rugged Savings ---------------- */
+
+function openDepositModal() {
+    const avail = document.getElementById("depositAvailableCash");
+    if (avail) avail.innerText = (state.cash || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const input = document.getElementById("depositCustomInput");
+    if (input) input.value = "";
+    document.getElementById("depositModal")?.classList.remove("hidden");
+}
+
+function closeDepositModal() {
+    document.getElementById("depositModal")?.classList.add("hidden");
+}
+
+function depositPercent(pct) {
+    const amount = (state.cash || 0) * (pct / 100);
+    if (typeof depositToSavings === "function" && depositToSavings(amount)) {
+        playSound("click");
+        closeDepositModal();
+    }
+}
+
+function depositCustom() {
+    const input = document.getElementById("depositCustomInput");
+    const amount = parseFloat(input?.value);
+    if (isNaN(amount) || amount <= 0) {
+        showToast("Enter a real amount first.", "error");
+        return;
+    }
+    if (typeof depositToSavings === "function" && depositToSavings(amount)) {
+        playSound("click");
+        closeDepositModal();
+    }
+}
+
+function disconnectWallet() {
+    if (activeProviderKind === "standard") {
+        activeProvider?.features?.["standard:disconnect"]?.disconnect?.();
+    } else if (activeProvider?.disconnect) {
+        activeProvider.disconnect();
+    }
+    activeProvider = null;
+    activeProviderKind = null;
+    walletAddress = null;
+    walletSolDomain = null;
+    clearCosmeticThemes();
+    ownedThemesList = [];
+    isConmenHolder = false;
+    isSkullXHolder = false;
+    isTestPlayMode = false;
+    updateOnlineLobbyAccess();
+    document.getElementById("themePreviewBtn")?.classList.add("hidden");
+    document.getElementById("themeSwitchBtn")?.classList.add("hidden");
+    document.getElementById("bonusStageBtn")?.classList.add("hidden");
+    document.getElementById("conmenEggTestBtn")?.classList.add("hidden");
+    document.getElementById("debugMenuBtn")?.classList.add("hidden");
+    document.getElementById("fightGameBtn")?.classList.add("hidden");
+    document.getElementById("btcWalletConnectBtn")?.classList.add("hidden");
+    if (typeof disconnectBitcoinWallet === "function" && typeof btcWalletAddress !== "undefined" && btcWalletAddress) {
+        disconnectBitcoinWallet();
+    }
+    if (typeof resetGameStateInMemory === "function") resetGameStateInMemory();
+    updateWalletUI();
+    showToast("Wallet disconnected. Still playing locally.", "info");
+}
+
+function shortAddr(addr) {
+    return addr ? `${addr.slice(0, 4)}...${addr.slice(-4)}` : "";
+}
+
+// .sol domain names are registered by whoever owns them - nothing stops a
+// malicious one containing HTML. Anywhere a resolved domain name (or any
+// other externally-sourced string) gets inserted via innerHTML instead of
+// innerText, it needs to go through this first.
+function escapeHtml(str) {
+    if (str == null) return "";
+    return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+
+function displayName() {
+    return walletSolDomain || shortAddr(walletAddress);
+}
+
+function updateWalletUI() {
+    const btn = document.getElementById("walletConnectBtn");
+    if (!btn) return;
+    btn.innerText = walletAddress ? `🔗 ${displayName()}` : "Connect Wallet";
+    btn.onclick = walletAddress ? disconnectWallet : connectWallet;
+}
+
+/* ---------------- Trait-gated rewards ---------------- */
+
+// Checks every entry in TRAIT_REWARDS and grants whichever the wallet
+// qualifies for and hasn't already claimed. `isNewSave` gates the
+// one-time cash bonus - only a brand-new wallet gets it; the luck
+// multiplier is granted regardless (and permanently, once granted).
+async function applyTraitRewards(addr, isNewSave) {
+    for (const reward of TRAIT_REWARDS) {
+        if (reward.requiresThemeClass && !document.body.classList.contains(reward.requiresThemeClass)) continue; // theme hasn't actually connected yet - don't even check, let alone recognize
+
+        const has = await window.checkTraitOwnership(addr, reward.collectionAddress, reward.traitType, reward.traitValue);
+        if (!has) continue;
+
+        // Always confirm the on-chain check itself succeeded, every time -
+        // this is separate from whether the reward below actually gets
+        // (re-)granted, so it's a reliable way to verify detection is
+        // working even on a wallet that already claimed it before.
+        showToast(`🎨 Trait Recognized: ${reward.traitValue}`, "success");
+
+        const alreadyClaimed = (state.claimedTraitRewards || []).includes(reward.id);
+        if (alreadyClaimed) continue; // detection confirmed above, but don't re-grant
+
+        state.claimedTraitRewards = [...(state.claimedTraitRewards || []), reward.id];
+        if (reward.marketsLuckMultiplier) {
+            state.marketsLuckMultiplier = Math.max(state.marketsLuckMultiplier || 1, reward.marketsLuckMultiplier);
+        }
+        if (isNewSave && reward.startingCashBonus) {
+            state.cash = reward.startingCashBonus; // replaces the default starting cash, doesn't stack with it
+        }
+
+        showToast(`✨ Reward unlocked permanently from ${reward.traitValue}.`, "success");
+        saveGame(); // no-op now, but harmless to leave - actual cloud save happens right after this in offerCloudLoadIfExists
+        updateUI();
+    }
+}
+
+// One-time $4,200 bonus for genuinely holding a Conmen NFT. Independent
+// ownership check rather than reusing isConmenHolder - applyCosmeticThemes
+// runs concurrently with this (not awaited before it), so that flag isn't
+// guaranteed to have resolved yet by the time this runs.
+async function grantConmenHolderBonus(addr) {
+    if (typeof window.checkCollectionOwnership !== "function") return;
+    const conmenTheme = COSMETIC_THEMES.find((t) => t.id === "conmen");
+    if (!conmenTheme) return;
+    const owns = await window.checkCollectionOwnership(addr, conmenTheme.collectionAddress);
+    if (!owns) return;
+    if ((state.claimedTraitRewards || []).includes("conmen_holder_bonus")) return;
+
+    state.claimedTraitRewards = [...(state.claimedTraitRewards || []), "conmen_holder_bonus"];
+    state.cash = (state.cash || 0) + 4200;
+    showToast("🔒 Conman detected - $4,200 welcome bonus added.", "success");
+    updateUI();
+}
+
+/* ---------------- Cloud save / load ---------------- */
+
+async function offerCloudLoadIfExists() {
+    if (!sb || !walletAddress) return;
+    const { data, error } = await sb
+        .from("players")
+        .select("game_state, updated_at")
+        .eq("wallet_address", walletAddress)
+        .maybeSingle();
+
+    if (error) { console.error("[web3] load check failed:", error); return; }
+    if (!data) {
+        await applyTraitRewards(walletAddress, true); // brand-new wallet - eligible for one-time starting bonuses too
+        await grantConmenHolderBonus(walletAddress);
+        await saveToCloud();
+        return;
+    }
+
+    // Always resume the cloud save automatically - no prompt. This wallet's
+    // last session is the source of truth the moment it connects.
+    state = { ...defaultState, ...data.game_state };
+    saveGame();     // no-op now, harmless leftover call
+    updateUI();
+    showToast("☁️ Welcome back - resumed where you left off.", "success");
+    await applyTraitRewards(walletAddress, false); // existing save - can still earn permanent perks (e.g. luck), no cash bonus though
+    await grantConmenHolderBonus(walletAddress);
+}
+
+async function saveToCloud() {
+    if (!sb || !walletAddress) return;
+    const { error } = await sb.from("players").upsert({
+        wallet_address: walletAddress,
+        display_name: walletSolDomain || null,
+        game_state: state,
+        lifetime_earned: state.lifetimeEarned || 0,
+        degen_level: state.degenLevel || 1,
+        updated_at: new Date().toISOString(),
+    });
+    if (error) console.error("[web3] cloud save failed:", error);
+}
+
+/* ---------------- Live leaderboard ---------------- */
+
+async function renderLeaderboard() {
+    const box = document.getElementById("leaderboardBody");
+    if (!box) return;
+    if (!sb) {
+        box.innerHTML = `<div class="text-gray-500 italic text-xs">Leaderboard not configured yet.</div>`;
+        return;
+    }
+    const { data, error } = await sb
+        .from("players")
+        .select("wallet_address, display_name, lifetime_earned, degen_level")
+        .neq("wallet_address", MASTER_WALLET) // the dev/testing wallet should never show up on a real players' leaderboard
+        .order("lifetime_earned", { ascending: false })
+        .limit(25);
+
+    if (error) { box.innerHTML = `<div class="text-rose-400 text-xs">Couldn't load leaderboard.</div>`; return; }
+    if (!data.length) { box.innerHTML = `<div class="text-gray-500 italic text-xs">Nobody's on the board yet. Be the first degen.</div>`; return; }
+
+    box.innerHTML = data.map((row, i) => `
+        <div class="flex justify-between items-center text-[11px] border-b border-[#1A2232] py-1.5 ${row.wallet_address === walletAddress ? "text-amber-400" : "text-gray-300"}">
+            <span>#${i + 1} <strong>${row.display_name ? escapeHtml(row.display_name) : shortAddr(row.wallet_address)}</strong> ${row.wallet_address === walletAddress ? "(you)" : ""}</span>
+            <span class="font-mono">$${Math.round(row.lifetime_earned).toLocaleString()}</span>
         </div>
-    </div>
-
-    <!-- ============================================================ -->
-    <!-- HEADER -->
-    <!-- ============================================================ -->
-    <header class="bg-[#090C12] border-b border-[#1A2232] px-4 py-3 sticky top-0 z-50 shadow-md">
-        <audio id="bgMusicEl" src="assets/midevil-theme.mp3" loop preload="none" volume="0.3"></audio>
-        <div class="max-w-7xl mx-auto flex items-center justify-between gap-3 flex-wrap">
-            <div class="flex items-center space-x-3">
-                <button id="audioToggleBtn" onclick="toggleBgMusic()" title="Toggle background music" class="hidden bg-gradient-to-tr from-amber-600 to-amber-950 p-2 rounded-lg shadow-lg sm:flex">
-                    <i id="audioToggleIcon" class="fa-solid fa-volume-xmark text-white text-lg"></i>
-                </button>
-                <div class="bg-gradient-to-tr from-amber-600 to-amber-950 p-2 rounded-lg shadow-lg hidden sm:flex">
-                    <i class="fa-solid fa-toilet-paper text-white text-lg"></i>
-                </div>
-                <div>
-                    <div class="flex items-center space-x-2">
-                        <span class="text-white font-extrabold text-base md:text-lg uppercase flex items-center gap-1.5">
-                            <span class="mc-title-accent">USDSHT</span> <span class="text-[10px] bg-[#1B2130] text-amber-500 px-1.5 py-0.5 rounded font-bold normal-case">Layer 1 Shitcoin Tycoon</span>
-                        </span>
-                        <div class="flex flex-col gap-0.5">
-                            <button id="bonusStageBtn" onclick="openBonusStage()" title="Mid Evils holders: play the Bonus Stage mini-game" class="hidden items-center gap-1 text-[10px] bg-gradient-to-b from-amber-500 to-amber-700 hover:from-amber-400 hover:to-amber-600 text-black px-2 py-0.5 rounded font-bold normal-case shadow">
-                                <i class="fa-solid fa-gamepad"></i> Play mini game
-                            </button>
-                            <button id="fightGameBtn" onclick="openFightGame()" title="TEST PLAY only: 1v1 fight game, Conmen vs Mid Evils" class="hidden items-center gap-1 text-[10px] bg-gradient-to-b from-rose-500 to-rose-700 hover:from-rose-400 hover:to-rose-600 text-black px-2 py-0.5 rounded font-bold normal-case shadow">
-                                <i class="fa-solid fa-hand-fist"></i> Play fight game
-                            </button>
-                        </div>
-                        <button id="conmenEggTestBtn" onclick="testConmenEgg()" title="Master wallet only: force-trigger the Conmen easter egg popup for testing" class="hidden items-center gap-1 text-[10px] bg-gradient-to-b from-gray-400 to-gray-600 hover:from-gray-300 hover:to-gray-500 text-black px-2 py-0.5 rounded font-bold normal-case shadow">
-                            <i class="fa-solid fa-egg"></i> Easter Egg
-                        </button>
-                        <button id="skullxEggTestBtn" onclick="testSkullXEgg()" title="Master wallet only: force-trigger the Skull X easter egg popup for testing" class="hidden items-center gap-1 text-[10px] bg-gradient-to-b from-teal-500 to-teal-700 hover:from-teal-400 hover:to-teal-600 text-black px-2 py-0.5 rounded font-bold normal-case shadow">
-                            <i class="fa-solid fa-skull"></i> Skull X Egg
-                        </button>
-                    </div>
-                    <div id="levelBadge" class="text-[11px] text-amber-400 font-mono mt-0.5">LVL 1 — The Basement Dev</div>
-                </div>
-            </div>
-
-            <!-- Core stats -->
-            <div class="flex items-center gap-3 flex-wrap text-xs md:text-sm">
-                <button onclick="openDepositModal()" class="bg-[#121926] border border-[#1E293B] text-amber-400 font-mono px-2.5 py-1.5 rounded flex items-center gap-1.5 font-bold" title="Move cash into your Rugged Savings / Lambo goal">
-                    <i class="fa-solid fa-piggy-bank text-[10px]"></i> Deposit
-                </button>
-                <span id="cashDisplayWrapper" onclick="addTestCash()" class="cursor-pointer bg-[#121926] border border-[#1E293B] text-green-400 font-mono px-2.5 py-1.5 rounded flex items-center gap-1.5" title="Testing only: click to add $4,200">
-                    <i class="fa-solid fa-wallet text-[10px]"></i> $<span id="cashDisplay">1,000.00</span>
-                </span>
-                <div class="hidden md:flex flex-col w-32">
-                    <div class="flex justify-between text-[9px] text-gray-400 font-mono">
-                        <span>HEAT</span><span id="heatPct">0%</span>
-                    </div>
-                    <div class="w-full bg-[#10141D] h-1.5 rounded-full overflow-hidden border border-[#1A2232]">
-                        <div id="heatBarFill" class="bg-gradient-to-r from-amber-500 to-rose-600 h-full w-0 transition-all duration-500"></div>
-                    </div>
-                </div>
-                <button onclick="openLeaderboard()" title="Live leaderboard" class="text-gray-500 hover:text-amber-400 transition text-xs border border-[#1A2232] rounded px-2 py-1.5">
-                    <i class="fa-solid fa-ranking-star"></i>
-                </button>
-                <button id="themePreviewBtn" onclick="openThemePreview()" title="Preview cosmetic themes (master wallet only)" class="hidden text-gray-500 hover:text-purple-400 transition text-xs border border-[#1A2232] rounded px-2 py-1.5">
-                    <i class="fa-solid fa-palette"></i>
-                </button>
-                <button id="themeSwitchBtn" onclick="openThemeChoice()" title="Switch cosmetic theme (this wallet holds more than one)" class="hidden text-gray-500 hover:text-emerald-400 transition text-xs border border-[#1A2232] rounded px-2 py-1.5">
-                    <i class="fa-solid fa-shuffle"></i>
-                </button>
-                <button id="debugMenuBtn" onclick="openDebugMenu()" title="Debug menu (TEST Play only)" class="hidden text-gray-500 hover:text-amber-400 transition text-xs border border-[#1A2232] rounded px-2 py-1.5">
-                    <i class="fa-solid fa-bug"></i>
-                </button>
-                <button id="walletConnectBtn" title="Connect a wallet to save your progress and appear on the leaderboard - read-only, never asks you to sign a transaction" class="text-gray-400 hover:text-emerald-400 transition text-[10px] font-bold border border-[#1A2232] rounded px-2 py-1.5 whitespace-nowrap">
-                    Connect Wallet
-                </button>
-                <button id="btcWalletDisplay" onclick="disconnectBitcoinWallet()" title="Click to disconnect" class="hidden text-orange-400 hover:text-rose-400 transition text-[10px] font-bold border border-[#1A2232] rounded px-2 py-1.5 whitespace-nowrap">
-                    🟠 <span id="btcWalletAddressText"></span>
-                </button>
-                <button id="resetGameBtn" title="Refresh your funds to $1,000" class="text-gray-500 hover:text-rose-400 transition text-xs border border-[#1A2232] rounded px-2 py-1.5">
-                    <i class="fa-solid fa-arrows-rotate"></i>
-                </button>
-            </div>
-        </div>
-    </header>
-
-    <!-- ============================================================ -->
-    <!-- NAV -->
-    <!-- ============================================================ -->
-    <nav class="bg-[#070A0F] border-b border-[#121721] sticky top-[70px] z-40 shadow-sm">
-        <div class="max-w-7xl mx-auto px-4 flex space-x-5 overflow-x-auto">
-            <button onclick="switchTab('markets')" id="tab-markets" class="py-3 text-sm font-medium border-b-2 border-blue-500 text-white whitespace-nowrap transition-all">
-                Markets 📊
-            </button>
-            <button onclick="switchTab('ai')" id="tab-ai" class="py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-white whitespace-nowrap flex items-center gap-1.5 transition-all">
-                AI Solidity Auditor 🤖 <span class="bg-[#1C212E] text-[9px] text-blue-400 px-1.5 py-0.5 rounded font-bold">LOCAL</span>
-            </button>
-            <button onclick="switchTab('deployer')" id="tab-deployer" class="py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-white whitespace-nowrap flex items-center gap-1.5 transition-all">
-                Rug Creator <i class="fa-solid fa-rocket text-xs text-amber-500 animate-pulse"></i>
-            </button>
-            <button onclick="switchTab('staking')" id="tab-staking" class="py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-white whitespace-nowrap flex items-center gap-1.5 transition-all">
-                Ponzi Yield Pools <i id="stakingLockIcon" class="fa-solid fa-lock text-[10px] text-gray-500"></i>
-            </button>
-            <!-- NEW MEMPOOL TAB BUTTON -->
-            <button onclick="switchTab('mempool')" id="tab-mempool" class="py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-white whitespace-nowrap flex items-center gap-1.5 transition-all">
-                Mempool Roulette <i class="fa-solid fa-dice text-xs text-cyan-400 animate-pulse"></i>
-                <span class="bg-rose-500/20 text-rose-400 text-[8px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wide">Soon</span>
-            </button>
-            <button onclick="switchTab('onlinelobby')" id="tab-onlinelobby" class="py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-white whitespace-nowrap flex items-center gap-1.5 transition-all">
-                Online Fight Club <i class="fa-solid fa-globe text-xs text-purple-400 animate-pulse"></i>
-                <span id="onlineLobbySoonBadge" class="bg-rose-500/20 text-rose-400 text-[8px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wide">NFT</span>
-            </button>
-            <button onclick="switchTab('info')" id="tab-info" class="py-3 text-sm font-medium border-b-2 border-transparent text-gray-400 hover:text-white whitespace-nowrap transition-all">
-                How to Play 📖
-            </button>
-        </div>
-    </nav>
-
-    <main class="max-w-7xl mx-auto px-4 py-6 flex-grow w-full">
-
-        <!-- ================= LORE / INFO TAB ================= -->
-        <section id="content-info" class="hidden space-y-6">
-            <div class="bg-[#0C0F16] rounded-xl p-6 border border-[#1A2232] shadow-2xl relative overflow-hidden">
-                <div class="absolute right-6 bottom-6 text-[150px] font-black text-[#1C212E]/5 select-none pointer-events-none uppercase">RUG</div>
-                <div class="flex items-center space-x-3 mb-6">
-                    <div class="bg-gradient-to-tr from-amber-600 to-amber-950 p-2.5 rounded-lg flex items-center justify-center shadow-lg">
-                        <i class="fa-solid fa-toilet-paper text-white text-xl"></i>
-                    </div>
-                    <span class="text-white font-extrabold text-2xl tracking-tight">Shitcore</span>
-                </div>
-                <div class="space-y-4 text-gray-300 text-sm md:text-base leading-relaxed tracking-wide font-light max-w-5xl">
-                    <p class="font-bold text-white text-base md:text-lg mb-2">
-                        Shitcore is a satirical Layer 1 for Meme 3.0 — a fictional universe where every meme coin is a ticking time bomb and you, the player, are the one holding the detonator.
-                    </p>
-                    <p>
-                        This is a 100% fake, 100% client-side idle game. There is no real blockchain, no real wallet, and no real money anywhere in this code. Every number you see is generated by <code class="text-amber-400">Math.random()</code> running in your own browser. It exists to satirize rug-pull culture, not to teach or enable it.
-                    </p>
-                </div>
-            </div>
-
-            <!-- HOW TO PLAY -->
-            <div id="howToPlaySection" class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-6 shadow-lg">
-                <h3 class="text-white font-bold text-lg mb-4 flex items-center gap-2"><i class="fa-solid fa-gamepad text-blue-400"></i> How To Play</h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-300 font-light leading-relaxed">
-                    <div class="bg-[#070A0F] p-4 rounded-lg border border-[#131924]">
-                        <h4 class="text-amber-400 font-bold text-xs uppercase mb-1.5">1. Deploy a Token</h4>
-                        <p>Go to <strong class="text-white">Rug Creator</strong>, name your token, set an initial liquidity pool, and hit Launch. Watch fake investors pour money in while the Audit Threat meter slowly climbs.</p>
-                    </div>
-                    <div class="bg-[#070A0F] p-4 rounded-lg border border-[#131924]">
-                        <h4 class="text-amber-400 font-bold text-xs uppercase mb-1.5">2. Hype It</h4>
-                        <p>Higher Hype = faster capital inflow. Pay a Y Social Influencer (90% works, 10% they hack you), or buy the Telegram Bot perk to generate hype passively while you sleep.</p>
-                    </div>
-                    <div class="bg-[#070A0F] p-4 rounded-lg border border-[#131924]">
-                        <h4 class="text-amber-400 font-bold text-xs uppercase mb-1.5">3. Run A Campaign</h4>
-                        <p>2 Marketing Campaigns unlock at Level 2, 2 more at Level 4. Each one <strong class="text-white">permanently</strong> speeds up capital inflow AND Audit Threat for that deployment. They stack — more campaigns, more chaos.</p>
-                    </div>
-                    <div class="bg-[#070A0F] p-4 rounded-lg border border-[#131924]">
-                        <h4 class="text-amber-400 font-bold text-xs uppercase mb-1.5">4. Balance Greed vs. Heat</h4>
-                        <p>The Toxicity Tax extracts cash faster but accelerates Audit Threat. Let the meter hit 100% and the feds show up — seizing that token AND adding to your account-wide Regulatory Heat.</p>
-                    </div>
-                    <div class="bg-[#070A0F] p-4 rounded-lg border border-[#131924]">
-                        <h4 class="text-amber-400 font-bold text-xs uppercase mb-1.5">5. Pull The Rug</h4>
-                        <p>Cash out before the meter explodes. Stolen liquidity becomes real wallet cash and pushes you toward your fake Lambo and the next Degen Level.</p>
-                    </div>
-                    <div class="bg-[#070A0F] p-4 rounded-lg border border-[#131924]">
-                        <h4 class="text-amber-400 font-bold text-xs uppercase mb-1.5">6. Launch an NFT on OpenShit 🎨</h4>
-                        <p>Type a prompt, generate real AI art via Pollinations.ai, configure your collection, and launch. Watch 500 fake buyers mint over ~15 min. Exit via <strong class="text-white">Mint & Rug</strong> (ghost the community) or <strong class="text-white">Floor Pump & Dump</strong> (1.5x–4x multiplier).</p>
-                    </div>
-                    <div class="bg-[#070A0F] p-4 rounded-lg border border-[#131924] md:col-span-2">
-                        <h4 class="text-amber-400 font-bold text-xs uppercase mb-1.5">7. Trade on Markets & Reduce Your Heat</h4>
-                        <p>Markets lets you Pump or Dump with leverage (25x–100x) using a wager system. Higher leverage = bigger swings and higher bust chance. The AI Solidity Auditor is the <strong class="text-white">only</strong> way to reduce Regulatory Heat — compile unique code to chip 4–10% off each run, but every compile carries its own risk of backfiring.</p>
-                    </div>
-                </div>
-                <div class="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-                    <div class="bg-[#070A0F] p-3 rounded-lg border border-[#131924] text-center">
-                        <p class="text-gray-400 mb-1">LVL 1</p><p class="text-white font-bold">The Basement Dev</p>
-                    </div>
-                    <div class="bg-[#070A0F] p-3 rounded-lg border border-[#131924] text-center">
-                        <p class="text-gray-400 mb-1">LVL 2</p><p class="text-white font-bold">The Shiller</p>
-                    </div>
-                    <div class="bg-[#070A0F] p-3 rounded-lg border border-[#131924] text-center">
-                        <p class="text-gray-400 mb-1">LVL 3</p><p class="text-white font-bold">The Shadow Validator</p>
-                    </div>
-                    <div class="bg-[#070A0F] p-3 rounded-lg border border-[#131924] text-center">
-                        <p class="text-gray-400 mb-1">LVL 4</p><p class="text-white font-bold">The Institutional Rugger</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- WAYS TO EARN -->
-            <div id="waysToEarnSection" class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-6 shadow-lg">
-                <h3 class="text-white font-bold text-lg mb-4 flex items-center gap-2"><i class="fa-solid fa-sack-dollar text-emerald-400"></i> Ways To Earn Money</h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-300 font-light leading-relaxed">
-                    <div class="bg-[#070A0F] p-4 rounded-lg border border-[#131924]">
-                        <h4 class="text-emerald-400 font-bold text-xs uppercase mb-1.5">Pull The Rug</h4>
-                        <p>Rug Creator's main loop. Whatever's in the liquidity pool when you exit-scam goes straight to your wallet and counts toward your Lambo goal.</p>
-                    </div>
-                    <div class="bg-[#070A0F] p-4 rounded-lg border border-[#131924]">
-                        <h4 class="text-emerald-400 font-bold text-xs uppercase mb-1.5">Leveraged Wagers</h4>
-                        <p>Markets tab: pick a wager (10%/50%/custom) and a leverage tier (25x–100x), then Pump or Dump. Win big — or get liquidated, rugged, or drained on the spot.</p>
-                    </div>
-                    <div class="bg-[#070A0F] p-4 rounded-lg border border-[#131924]">
-                        <h4 class="text-emerald-400 font-bold text-xs uppercase mb-1.5">MEV Sandwich (Level 3)</h4>
-                        <p>Unlocked at Level 3. Click once every 12 seconds for guaranteed cash ($100–$1,000). Always costs Regulatory Heat. 10% chance you get counter-sandwiched and lose money instead.</p>
-                    </div>
-                    <div class="bg-[#070A0F] p-4 rounded-lg border border-[#131924]">
-                        <h4 class="text-emerald-400 font-bold text-xs uppercase mb-1.5">OpenShit NFT Collections 🎨</h4>
-                        <p>Generate real AI art, launch a fake NFT collection, hype it with Y Social influencers, and exit via Mint & Rug or Floor Pump & Dump (1.5x–4x multiplier). Neither counts toward your Lambo goal — pure wallet cash.</p>
-                    </div>
-                    <div class="bg-[#070A0F] p-4 rounded-lg border border-[#131924]">
-                        <h4 class="text-emerald-400 font-bold text-xs uppercase mb-1.5">Ponzi Yield Pools</h4>
-                        <p>Stake into one of three unhinged APY pools (420% / 6,900% / 42,069%), then Harvest or Withdraw. Both hit wallet cash only — neither counts toward your Lambo goal.</p>
-                    </div>
-                    <div class="bg-[#070A0F] p-4 rounded-lg border border-[#131924]">
-                        <h4 class="text-emerald-400 font-bold text-xs uppercase mb-1.5">AI Auditor Jackpot</h4>
-                        <p>1% chance per compile that liquidity shows "100% UNLOCKED" — hit DRAIN for $1,000–$10,000 free cash.</p>
-                    </div>
-                    <div class="bg-[#070A0F] p-4 rounded-lg border border-[#131924]">
-                        <h4 class="text-emerald-400 font-bold text-xs uppercase mb-1.5">🍀 Hidden: Binance Pump &amp; Dump</h4>
-                        <p>Deploy any token under a custom name — 1% chance a real exchange listing bot notices it. Instant $10,000 toward your Lambo goal.</p>
-                    </div>
-                    <div class="bg-[#070A0F] p-4 rounded-lg border border-[#131924]">
-                        <h4 class="text-emerald-400 font-bold text-xs uppercase mb-1.5">🍀 Hidden: Heman Tusk</h4>
-                        <p>Pay a Y Social Influencer on OpenShit — 1% chance Heman Tusk (CEO of Y) changes his pfp to your AI art using your actual generated image. Instant collection sellout.</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- REGULATORY HEAT -->
-            <div id="regulatoryHeatSection" class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-6 shadow-lg">
-                <h3 class="text-white font-bold text-lg mb-2 flex items-center gap-2"><i class="fa-solid fa-temperature-high text-amber-400"></i> Regulatory Heat</h3>
-                <p class="text-sm text-gray-300 font-light leading-relaxed mb-4">Heat is account-wide and separate from any single token's Audit Threat. Hit 100% and it's instant game over — every asset you have gets seized.</p>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-300 font-light leading-relaxed">
-                    <div class="bg-[#070A0F] p-4 rounded-lg border border-rose-900/40">
-                        <h4 class="text-rose-400 font-bold text-xs uppercase mb-1.5">What raises it</h4>
-                        <p>Token seized by Audit Threat (+25%), pulling the rug (scales with Toxicity Tax), MEV Sandwich (+5–9% every use), OpenShit events like IP Lawsuit or DMCA Strike (+7–20%).</p>
-                    </div>
-                    <div class="bg-[#070A0F] p-4 rounded-lg border border-emerald-900/40">
-                        <h4 class="text-emerald-400 font-bold text-xs uppercase mb-1.5">What lowers it</h4>
-                        <p>Only one thing: the AI Solidity Auditor. Every successful compile chips 4–10% off Heat. It's no longer free — every compile risks a wallet penalty. Use it carefully.</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- THE RISKS -->
-            <div class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-6 shadow-lg">
-                <h3 class="text-white font-bold text-lg mb-2 flex items-center gap-2"><i class="fa-solid fa-skull-crossbones text-rose-500"></i> The Risks</h3>
-                <p class="text-sm text-gray-300 font-light leading-relaxed mb-4">Almost every button in this game has a small chance of going badly — much like real degen life. Here's everywhere that can bite you:</p>
-                <ul class="space-y-2.5 text-sm text-gray-300 font-light leading-relaxed list-disc list-inside marker:text-rose-500">
-                    <li><strong class="text-white">Deploying a token:</strong> 0.01% chance the act of deploying drains your whole wallet.</li>
-                    <li><strong class="text-white">Paying a Y Social Influencer (Rug Creator):</strong> 10% chance they take your $50 and hack 10–50% of whatever's left.</li>
-                    <li><strong class="text-white">Quantum Audit:</strong> rare instant seizure of your active token deployment — can strike any second, regardless of Audit Threat level.</li>
-                    <li><strong class="text-white">Placing a Markets wager:</strong> 1% RUGGED (wager + 10% of wallet), 0.01% total DRAIN, plus a leverage-scaled bust chance (13%/25%/38%/50% for 25x/50x/75x/100x).</li>
-                    <li><strong class="text-white">Running an MEV Sandwich:</strong> 10% chance a bigger bot sandwiches you back and you lose money instead of gaining it.</li>
-                    <li><strong class="text-white">Compiling in the AI Auditor:</strong> 0.01% full wallet wipe, 10% costs 10% of wallet, 0.01% costs 35% — every single compile.</li>
-                    <li><strong class="text-white">Harvesting Ponzi Yield rewards:</strong> 15% "Protocol Exploit" wipes 100% of your staked principal.</li>
-                    <li><strong class="text-white">Withdrawing Ponzi Yield principal:</strong> 0.01% chance it gets rugged mid-withdrawal.</li>
-                    <li><strong class="text-white">OpenShit — general interaction:</strong> 0.01%/sec drain while a collection is live.</li>
-                    <li><strong class="text-white">OpenShit — IP Lawsuit:</strong> 0.03%/sec instant collection seizure, revenue forfeited.</li>
-                    <li><strong class="text-white">OpenShit — DMCA Strike:</strong> 0.07%/sec hype drops 28% instantly.</li>
-                    <li><strong class="text-white">Paying a Y Social Influencer (OpenShit):</strong> 0.01% DRAINED, 10% scam (fee + 10–50% of wallet).</li>
-                </ul>
-                <p class="text-xs text-gray-500 font-light mt-4">Every "DRAINED" outcome resets your wallet to $0. Your Degen Level and lifetime earnings stay — you just have to claw your way back.</p>
-            </div>
-            <div class="bg-[#1C0D0D] border border-[#441818] rounded-xl p-5 flex items-start space-x-3 shadow-md">
-                <i class="fa-solid fa-triangle-exclamation text-rose-500 text-lg mt-0.5"></i>
-                <div>
-                    <h4 class="text-rose-400 font-bold text-sm">Real-World Risk Warning</h4>
-                    <p class="text-gray-300 text-xs mt-1 leading-normal font-light">
-                        This is satire. In real life, rug pulls and honeypot tokens steal real money from real people and are illegal in most jurisdictions. Never invest in anything you don't understand, and never trust a token whose entire pitch is "trust me."
-                    </p>
-                </div>
-            </div>
-        </section>
-
-        <!-- ================= MARKETS TAB ================= -->
-        <section id="content-markets" class="space-y-6">
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div data-win95-window="SHITCORE_Chart.exe" class="lg:col-span-2 bg-[#0C0F16] border border-[#1A2232] rounded-xl p-5 flex flex-col justify-between shadow-lg">
-                    <div>
-                        <div class="flex items-center justify-between mb-4 gap-2">
-                            <div class="flex items-center space-x-3">
-                                <span class="font-extrabold text-lg text-white mc-title-accent">SHITCORE / USDSHT Ambient Chart</span>
-                                <span class="bg-red-500/10 text-rose-400 px-2 py-0.5 rounded text-xs animate-pulse font-semibold">LIVE DRAIN</span>
-                            </div>
-                        </div>
-                        <div class="flex items-center gap-3 mb-4">
-                            <button onclick="forcePump()" class="flex-1 py-3 bg-green-500 hover:bg-green-600 text-black font-bold rounded-lg text-sm shadow-lg flex items-center justify-center gap-2">
-                                <i class="fa-solid fa-arrow-trend-up"></i> PUMP IT
-                            </button>
-                            <button onclick="forceDump()" class="flex-1 py-3 bg-red-500 hover:bg-red-600 text-white font-bold rounded-lg text-sm shadow-lg flex items-center justify-center gap-2">
-                                <i class="fa-solid fa-arrow-trend-down"></i> DUMP IT
-                            </button>
-                        </div>
-                        <div class="relative w-full h-[300px] bg-[#040609] rounded-lg border border-[#1A2232] overflow-hidden">
-                            <canvas id="tradingCanvas" class="w-full h-full block"></canvas>
-                            <div id="mcChartPainterWrap" class="hidden mc-chart-painter absolute bottom-0 right-1 w-28 h-28 md:w-36 md:h-36 pointer-events-none select-none">
-                                <img src="assets/Reiffer painting.webp" alt="" class="mc-painter-body absolute inset-0 w-full h-full">
-                                <img id="mcChartPainterTorso" src="assets/Reiffer painting.webp" alt="" class="mc-painter-torso absolute inset-0 w-full h-full">
-                                <img id="mcChartPainterArm" src="assets/Reiffer painting.webp" alt="" class="mc-painter-arm absolute inset-0 w-full h-full">
-                            </div>
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-3 gap-2 mt-4 pt-3 border-t border-[#1A2232] text-center">
-                        <div><span class="text-[10px] text-gray-400 block">24h High</span><span id="statHigh" class="text-green-400 text-xs font-semibold">0.02450000</span></div>
-                        <div><span class="text-[10px] text-gray-400 block">24h Low</span><span id="statLow" class="text-rose-400 text-xs font-semibold">0.00000012</span></div>
-                        <div><span class="text-[10px] text-gray-400 block">24h Vol</span><span id="statVol" class="text-gray-200 text-xs font-semibold">9.81B</span></div>
-                    </div>
-                </div>
-
-                <div data-win95-window="Orderbook.exe" class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-5 flex flex-col justify-between shadow-lg space-y-4">
-                    <div>
-                        <div class="border-b border-[#1A2232] pb-3 mb-3 flex items-center justify-between">
-                            <h3 class="font-bold text-sm text-gray-200 mc-title-accent">Live Orderbook</h3>
-                        </div>
-                        <div class="space-y-1 text-[11px] mono">
-                            <div class="space-y-0.5" id="orderBookAsks"></div>
-                            <div class="border-y border-[#1C212E] py-1 text-center my-2 bg-[#10141D] rounded mc-inset-panel">
-                                <span class="text-gray-400">Spread:</span> <span id="liveSpread" class="text-amber-500 font-bold ml-1">99.8% (Danger)</span>
-                            </div>
-                            <div class="space-y-0.5" id="orderBookBids"></div>
-                        </div>
-                    </div>
-
-                    <!-- Wager + Leverage controls get injected here by markets.js -->
-                    <div id="marketWagerAnchor"></div>
-
-                    <!-- MEV Frontrun: unlocked at Level 3 -->
-                    <div id="mevPanel" class="hidden pt-4 border-t border-[#1A2232] space-y-2">
-                        <h4 class="text-xs font-bold text-rose-400 uppercase flex items-center gap-1.5"><i class="fa-solid fa-bolt"></i> Shadow Validator Tools</h4>
-                        <p class="text-[10px] text-gray-400 font-light leading-relaxed">Sandwich your own community's swaps straight from the mempool. Free cash, guaranteed trust damage and Regulatory Heat.</p>
-                        <button id="mevFrontrunBtn" onclick="runMevFrontrun()" class="w-full py-2.5 bg-gradient-to-r from-purple-600 to-fuchsia-700 hover:from-purple-500 hover:to-fuchsia-600 text-white font-bold rounded-lg text-xs shadow-lg transition uppercase">
-                            <i class="fa-solid fa-robot mr-1"></i> Frontrun The Mempool
-                        </button>
-                    </div>
-                    <div id="mevLockedNotice" class="pt-4 border-t border-[#1A2232] text-center text-[11px] text-gray-500 font-light">
-                        <i class="fa-solid fa-lock mr-1"></i> Reach Level 3: The Shadow Validator to unlock MEV frontrunning.
-                    </div>
-                </div>
-            </div>
-
-            <div data-win95-window="ChainFeed.exe" class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-4 shadow-lg">
-                <div class="flex items-center justify-between mb-3">
-                    <h4 class="text-sm font-semibold flex items-center gap-2">
-                        <span>Live Shitcore Chain Feed</span>
-                        <span class="w-2.5 h-2.5 bg-green-500 rounded-full animate-ping"></span>
-                    </h4>
-                    <span class="text-[10px] text-gray-500 font-mono" id="simulatedBlockNum">BLOCK #942,012</span>
-                </div>
-                <div class="space-y-2 text-xs mono max-h-[220px] overflow-y-auto" id="blockchainLogs"></div>
-            </div>
-        </section>
-
-        <!-- ================= AI AUDITOR TAB ================= -->
-        <section id="content-ai" class="hidden space-y-6">
-            <div class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-6 shadow-lg">
-                <div class="flex items-center space-x-3 border-b border-[#1A2232] pb-4 mb-4">
-                    <div class="bg-blue-500/20 p-2.5 rounded-lg text-blue-400">
-                        <i class="fa-solid fa-robot text-xl animate-bounce"></i>
-                    </div>
-                    <div>
-                        <h2 class="text-lg font-bold text-white">Shit-GPT Smart Auditor</h2>
-                        <p class="text-xs text-gray-400">Paste a toy contract (or just type anything) and get a fully local, procedurally-generated roast. No network calls, no API keys.</p>
-                    </div>
-                </div>
-                <div class="space-y-4">
-                    <div class="flex justify-between items-center flex-wrap gap-2">
-                        <label class="block text-xs text-gray-400 uppercase tracking-wider font-semibold">Code / Address / Vibe:</label>
-                        <div class="flex gap-1.5 flex-wrap">
-                            <button onclick="loadTemplate('safemoon')" class="bg-[#1C212E] hover:bg-[#252E3E] text-[11px] text-gray-300 px-2 py-1 rounded border border-[#1A2232]">SafePlunge.sol</button>
-                            <button onclick="loadTemplate('infinite')" class="bg-[#1C212E] hover:bg-[#252E3E] text-[11px] text-gray-300 px-2 py-1 rounded border border-[#1A2232]">LamboSqueeze.sol</button>
-                            <button onclick="loadTemplate('gigapump')" class="bg-[#1C212E] hover:bg-[#252E3E] text-[11px] text-gray-300 px-2 py-1 rounded border border-[#1A2232]">GigaPumpPresale.sol</button>
-                            <button onclick="loadTemplate('taxrug')" class="bg-[#1C212E] hover:bg-[#252E3E] text-[11px] text-gray-300 px-2 py-1 rounded border border-[#1A2232]">TaxRugBooster.sol</button>
-                        </div>
-                    </div>
-                    <textarea id="contractInput" rows="7" class="w-full bg-[#10141D] text-white font-mono px-4 py-3 rounded-lg border border-[#1A2232] focus:outline-none focus:border-blue-500 text-xs" placeholder="Paste toy Solidity, a fake address, or just a token name to roast..."></textarea>
-                    <button onclick="auditContract()" class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white py-3 rounded-lg font-bold text-sm tracking-wide shadow-lg transition">
-                        Compile &amp; Audit Bytecode
-                    </button>
-
-                    <div id="auditResults" class="hidden bg-[#10141D] rounded-lg p-5 border border-dashed border-[#1A2232] space-y-4">
-                        <div class="flex items-center justify-between border-b border-[#1A2232] pb-3 mb-1">
-                            <span class="font-bold text-sm tracking-wider uppercase text-gray-300">Risk Vector Analysis</span>
-                            <span id="auditSafetyBadge" class="px-2.5 py-1 text-[11px] rounded-full font-bold"></span>
-                        </div>
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-                            <div class="bg-[#070A0F] p-3 rounded-md">
-                                <span class="text-gray-400 block mb-1">Probability of Instant Dev Exit:</span>
-                                <span id="auditProb" class="text-xl font-bold"></span>
-                            </div>
-                            <div class="bg-[#070A0F] p-3 rounded-md">
-                                <span class="text-gray-400 block mb-1">Detected Bytecode Signature:</span>
-                                <span id="auditDevSentiment" class="text-xl font-bold text-amber-500"></span>
-                            </div>
-                            <div class="bg-[#070A0F] p-3 rounded-md">
-                                <span class="text-gray-400 block mb-1">Liquidity Lock Status:</span>
-                                <span id="auditLiqStatus" class="text-xl font-bold"></span>
-                            </div>
-                        </div>
-                        <div class="bg-[#070A0F] p-4 rounded-md">
-                            <span class="text-xs text-gray-400 font-semibold block mb-2"><i class="fa-solid fa-comment-dots mr-1"></i> Auditor Verdict:</span>
-                            <p id="auditParagraph" class="text-sm italic text-gray-200 leading-relaxed font-light"></p>
-                        </div>
-                        <div class="bg-[#040609] p-3 rounded-md border border-[#1E293B]">
-                            <span class="text-[10px] text-rose-400 uppercase font-bold tracking-wider block mb-1.5"><i class="fa-solid fa-bug mr-1"></i> Line-by-Line Roast Console:</span>
-                            <div id="lineRoastLogs" class="space-y-1.5 text-[11px] font-mono text-gray-400 max-h-[140px] overflow-y-auto"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- ================= RUG DEPLOYER ================= -->
-        <section id="content-deployer" class="hidden space-y-6">
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <!-- Config panel -->
-                <div class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-6 flex flex-col justify-between shadow-lg space-y-4">
-                    <div class="space-y-3.5 text-xs">
-                        <div class="border-b border-[#1A2232] pb-3 mb-1 flex justify-between items-center">
-                            <h3 class="font-bold text-base flex items-center gap-1.5 text-amber-500"><i class="fa-solid fa-rocket animate-pulse"></i> Token Creator</h3>
-                        </div>
-                        <div>
-                            <label class="block text-gray-400 mb-1.5 uppercase font-semibold">Token Name</label>
-                            <input type="text" id="deployName" value="Golden Toilet Elon" class="w-full bg-[#10141D] text-white px-3 py-2 rounded border border-[#1A2232] focus:outline-none focus:border-amber-500">
-                        </div>
-                        <div>
-                            <label class="block text-gray-400 mb-1.5 uppercase font-semibold">Token Ticker</label>
-                            <input type="text" id="deployTicker" value="GTE" class="w-full bg-[#10141D] text-white px-3 py-2 rounded border border-[#1A2232] focus:outline-none focus:border-amber-500 uppercase">
-                        </div>
-                        <div>
-                            <label class="block text-gray-400 mb-1.5 uppercase font-semibold">Initial Liquidity Pool (USDT)</label>
-                            <input type="number" id="deployLiquidity" value="200" min="50" class="w-full bg-[#10141D] text-white px-3 py-2 rounded border border-[#1A2232] focus:outline-none focus:border-amber-500">
-                            <p class="text-[10px] text-gray-500 mt-1">Spent from your wallet. Seeds the pool so it looks legit.</p>
-                        </div>
-
-                        <!-- Toxicity Tax slider -->
-                        <div>
-                            <div class="flex justify-between mb-1">
-                                <label class="text-gray-400 uppercase font-semibold">Contract Toxicity Tax</label>
-                                <span id="toxicityTaxVal" class="text-rose-400 font-bold font-mono">10%</span>
-                            </div>
-                            <input type="range" id="toxicityTaxSlider" min="0" max="99" value="10" class="w-full accent-rose-500 bg-[#10141D] rounded h-2">
-                            <p class="text-[10px] text-rose-400/70 mt-1 leading-normal">Higher tax = faster cash extraction, faster Audit Threat growth.</p>
-                        </div>
-
-                        <!-- Marketing -->
-                        <div>
-                            <label class="block text-gray-400 mb-1.5 uppercase font-semibold">Manual Marketing</label>
-                            <button onclick="manualShill()" id="manualShillBtn" class="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded text-xs transition">
-                                📱 Pay TikTok Influencer ($50 → +Hype)
-                            </button>
-                        </div>
-                        <div id="campaignPanel" class="hidden">
-                            <label class="block text-gray-400 mb-1.5 uppercase font-semibold">Marketing Campaign <span class="text-[9px] text-blue-400">(Lvl 2+)</span></label>
-                            <select id="campaignSelect" class="w-full bg-[#10141D] text-white px-3 py-2 rounded border border-[#1A2232] focus:outline-none focus:border-amber-500 mb-2"></select>
-                            <button onclick="runCampaign()" class="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded text-xs transition">
-                                🚀 Run Campaign
-                            </button>
-                        </div>
-
-                        <!-- Honeypot toggle: Level 4 -->
-                        <div id="honeypotPanel" class="hidden bg-[#1C0D0D] border border-[#441818] rounded-lg p-3">
-                            <label class="flex items-center justify-between cursor-pointer">
-                                <span class="text-rose-400 font-bold text-[11px] uppercase">🍯 Honeypot Backdoor</span>
-                                <input type="checkbox" id="honeypotToggle" onchange="toggleHoneypot()" class="accent-rose-500 w-4 h-4">
-                            </label>
-                            <p class="text-[9px] text-gray-400 mt-1 leading-normal">Locks all sells on this token. Guarantees you keep every dollar raised — and guarantees a faster Audit Threat climb.</p>
-                        </div>
-                    </div>
-
-                    <div class="space-y-2">
-                        <button onclick="launchToken()" id="launchBtn" class="w-full py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-extrabold rounded-lg text-sm tracking-wide shadow-lg transition">
-                            Deploy Toxic Contract
-                        </button>
-                        <button onclick="pullTheRug()" id="pullRugBtn" disabled class="w-full py-3 bg-gradient-to-r from-red-600 to-rose-700 text-white font-extrabold rounded-lg text-xs shadow-lg transition uppercase opacity-40 cursor-not-allowed">
-                            <i class="fa-solid fa-skull-crossbones mr-1"></i> Pull The Rug (Exit Scam)
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Live monitor -->
-                <div class="lg:col-span-2 bg-[#0C0F16] border border-[#1A2232] rounded-xl p-6 flex flex-col justify-between relative overflow-hidden shadow-lg min-h-[560px]">
-                    <div id="deployerPlaceholder" class="absolute inset-0 bg-[#0C0F16]/95 z-30 flex flex-col items-center justify-center text-center p-6">
-                        <i class="fa-solid fa-toilet-paper text-6xl text-gray-600 mb-4 animate-bounce"></i>
-                        <h4 class="font-bold text-lg text-gray-300">No Active Deployment</h4>
-                        <p class="text-xs text-gray-400 max-w-sm mt-1 leading-relaxed font-light">Configure parameters on the left, then hit "Deploy Toxic Contract" to start collecting victims.</p>
-                    </div>
-
-                    <div class="z-10 space-y-4 flex-grow flex flex-col justify-between">
-                        <div>
-                            <div class="flex items-center justify-between border-b border-[#1A2232] pb-3 mb-3">
-                                <div>
-                                    <h3 id="monitorTokenName" class="font-extrabold text-xl tracking-wide text-white">TOKEN_NAME</h3>
-                                    <p id="monitorTokenTicker" class="text-xs text-amber-500 font-mono">TICKER</p>
-                                </div>
-                                <span id="monitorStatus" class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-green-500/10 text-green-400">NO DEPLOYMENT</span>
-                            </div>
-
-                            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-center mb-4">
-                                <div class="bg-[#070A0F] p-2 rounded border border-[#131924]"><span class="text-gray-400 text-[10px] block">Capital Raised</span><span id="monitorRaised" class="text-green-400 font-bold text-sm font-mono">$0</span></div>
-                                <div class="bg-[#070A0F] p-2 rounded border border-[#131924]"><span class="text-gray-400 text-[10px] block">Suckers</span><span id="monitorSuckers" class="text-white font-bold text-sm font-mono">0</span></div>
-                                <div class="bg-[#070A0F] p-2 rounded border border-[#131924]"><span class="text-gray-400 text-[10px] block">Price</span><span id="monitorPrice" class="text-amber-400 font-bold text-sm font-mono">$0.0001</span></div>
-                                <div class="bg-[#070A0F] p-2 rounded border border-[#131924]"><span class="text-gray-400 text-[10px] block">Honeypot</span><span id="monitorHoneypot" class="text-gray-500 font-bold text-sm font-mono">OFF</span></div>
-                            </div>
-
-                            <!-- Hype meter -->
-                            <div class="space-y-1 mb-3">
-                                <div class="flex justify-between text-[11px] font-semibold"><span class="text-gray-400 uppercase">Hype Meter</span><span id="hypePct" class="text-blue-400">0%</span></div>
-                                <div class="w-full bg-[#10141D] h-2.5 rounded-full overflow-hidden border border-[#1A2232]">
-                                    <div id="hypeBar" class="bg-gradient-to-r from-blue-500 to-cyan-400 h-full w-0 transition-all duration-300"></div>
-                                </div>
-                            </div>
-
-                            <!-- Audit Threat meter -->
-                            <div class="space-y-1">
-                                <div class="flex justify-between text-[11px] font-semibold"><span class="text-gray-400 uppercase">Audit Threat</span><span id="auditThreatPct" class="text-rose-400">0%</span></div>
-                                <div class="w-full bg-[#10141D] h-2.5 rounded-full overflow-hidden border border-[#1A2232]">
-                                    <div id="auditThreatBar" class="bg-gradient-to-r from-amber-500 to-rose-600 h-full w-0 transition-all duration-300"></div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Chat Feed -->
-                        <div class="p-3 bg-[#10141D] rounded-lg border border-[#1A2232]">
-                            <span class="text-[10px] text-gray-400 font-bold block mb-1.5"><i class="fa-solid fa-comments mr-1"></i> Degen Chat Feed:</span>
-                            <div id="chatFeed" class="space-y-1 h-28 overflow-y-auto text-[11px] mono text-gray-300"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- ================= PONZI YIELD FARM ================= -->
-        <section id="content-staking" class="hidden space-y-6">
-            <div id="stakingLocked" class="hidden bg-[#0C0F16] border border-[#1A2232] rounded-xl p-10 text-center shadow-lg">
-                <i class="fa-solid fa-lock text-5xl text-gray-600 mb-4"></i>
-                <h3 class="text-white font-bold text-lg">Ponzi Yield Pools Locked</h3>
-                <p class="text-gray-400 text-sm mt-2">Reach <strong class="text-amber-400">Degen Level 2: The Shiller</strong> to unlock yield farming.</p>
-            </div>
-
-            <div id="stakingUnlocked" class="hidden space-y-6">
-                <div class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-6 shadow-lg">
-                    <div class="flex flex-col md:flex-row md:items-center justify-between border-b border-[#1A2232] pb-4 mb-6 gap-4">
-                        <div class="flex items-center space-x-3">
-                            <div class="bg-amber-500/10 text-amber-500 p-2.5 rounded-lg"><i class="fa-solid fa-tractor text-xl"></i></div>
-                            <div>
-                                <h2 class="text-lg font-bold text-white">Shit-Staking Yield Vaults</h2>
-                                <p class="text-xs text-gray-400 font-light">Lock funds into unstable yield traps. APY is fully unhinged. Harvesting is risky.</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div id="poolCardsContainer" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6"></div>
-
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div class="bg-[#10141D] p-5 rounded-lg border border-[#1A2232] space-y-3">
-                            <h4 class="font-bold text-sm text-gray-300 uppercase tracking-wider">Deposit Funds</h4>
-                            <div class="bg-[#070A0F] p-2.5 rounded border border-[#1A2232] flex justify-between items-center">
-                                <input type="number" id="stakeAmount" value="200" class="bg-transparent text-white font-bold font-mono focus:outline-none w-2/3 text-sm" placeholder="Amount">
-                                <span class="text-xs font-semibold text-amber-500">CASH</span>
-                            </div>
-                            <button onclick="stakeTokens()" class="w-full py-3 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-black font-extrabold text-xs rounded-lg transition shadow-md uppercase tracking-wider">
-                                Deposit Into Selected Pool
-                            </button>
-                            <div class="text-[11px] font-mono space-y-1.5 pt-2 border-t border-[#1A2232]">
-                                <div class="flex justify-between"><span class="text-gray-400">Currently Staked:</span><span id="stakedLocked" class="text-white font-bold">$0.00</span></div>
-                                <div class="flex justify-between"><span class="text-gray-400">Active Pool:</span><span id="stakedPoolType" class="text-amber-500 font-bold">—</span></div>
-                            </div>
-                        </div>
-
-                        <div class="bg-[#10141D] p-5 rounded-lg border border-[#1A2232] space-y-3">
-                            <h4 class="font-bold text-sm text-gray-300 uppercase tracking-wider">Rewards Vault</h4>
-                            <div class="bg-[#070A0F] p-3 rounded-md text-center">
-                                <span class="text-gray-400 text-[10px] block">Unclaimed Shitcoins</span>
-                                <span id="unclaimedShitcoins" class="text-green-400 font-extrabold text-2xl font-mono">0.00</span>
-                            </div>
-                            <button onclick="harvestRewards()" class="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-lg transition shadow uppercase">
-                                Harvest Rewards
-                            </button>
-                            <p class="text-[9px] text-rose-400/80 text-center leading-relaxed">⚠️ 15% chance of a "Protocol Exploit" on every harvest — liquidates 100% of your staked principal.</p>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-5 shadow-lg">
-                    <h4 class="font-bold text-sm text-gray-300 border-b border-[#1A2232] pb-2 mb-3 uppercase tracking-wider">Live Yield Logs</h4>
-                    <div class="space-y-2 h-[160px] overflow-y-auto text-[10px] mono text-gray-400" id="stakingEventLog">
-                        <div class="text-gray-500 italic">[System] Pool modules initialized.</div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- ================= MEMPOOL ROULETTE TAB ================= -->
-        <section id="content-mempool" class="hidden space-y-6">
-            <div class="relative">
-                <div class="absolute inset-0 z-20 bg-black/70 backdrop-blur-sm rounded-xl flex items-center justify-center pointer-events-auto">
-                    <span class="text-3xl md:text-5xl font-black uppercase text-rose-500 border-4 border-rose-500 px-6 py-3 rounded-lg -rotate-6 shadow-2xl tracking-widest" style="text-shadow: 0 0 20px rgba(244,63,94,0.6);">
-                        Coming Soon
-                    </span>
-                </div>
-                <div class="pointer-events-none opacity-50 space-y-6">
-            <!-- Header Metrics -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div class="bg-[#0b0f19] border border-cyan-500/30 p-4 rounded shadow-[0_0_15px_rgba(6,182,212,0.15)] text-center">
-                    <div class="text-xs text-gray-400 font-mono tracking-wider uppercase">Target Bitcoin Block</div>
-                    <div id="mempool-target-block" class="text-2xl font-black text-cyan-400 font-mono tracking-normal mt-1">#910,251</div>
-                </div>
-                <div class="bg-[#0b0f19] border border-amber-500/30 p-4 rounded shadow-[0_0_15px_rgba(245,158,11,0.15)] text-center">
-                    <div class="text-xs text-gray-400 font-mono tracking-wider uppercase">Est. Time Remaining</div>
-                    <div id="mempool-timer" class="text-2xl font-black text-amber-400 font-mono tracking-normal mt-1">~06m 42s</div>
-                </div>
-                <div class="bg-[#0b0f19] border border-emerald-500/30 p-4 rounded shadow-[0_0_15px_rgba(16,185,129,0.15)] text-center">
-                    <div class="text-xs text-gray-400 font-mono tracking-wider uppercase">Total Alkane Pot Size</div>
-                    <div id="mempool-pot-size" class="text-2xl font-black text-emerald-400 font-mono tracking-normal mt-1">125,000 $ALK</div>
-                </div>
-            </div>
-
-            <!-- Main Game Board -->
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <!-- Left Column: Network Status & Ratios -->
-                <div class="bg-[#070b12] border border-slate-800 p-5 rounded font-mono">
-                    <h3 class="text-sm font-bold text-gray-300 border-b border-slate-800 pb-2 mb-4 uppercase tracking-wider">// Network Hashes & Pool Distribution</h3>
-                    
-                    <div class="space-y-4">
-                        <!-- Foundry -->
-                        <div>
-                            <div class="flex justify-between text-xs mb-1">
-                                <span class="text-gray-400">Foundry USA</span>
-                                <span id="ratio-foundry-text" class="text-cyan-400">52%</span>
-                            </div>
-                            <div class="w-full bg-slate-900 h-3 rounded-full overflow-hidden border border-slate-800">
-                                <div id="ratio-foundry-bar" class="bg-cyan-500 h-full shadow-[0_0_8px_#06b6d4]" style="width: 52%"></div>
-                            </div>
-                        </div>
-                        <!-- AntPool -->
-                        <div>
-                            <div class="flex justify-between text-xs mb-1">
-                                <span class="text-gray-400">AntPool</span>
-                                <span id="ratio-antpool-text" class="text-amber-400">30%</span>
-                            </div>
-                            <div class="w-full bg-slate-900 h-3 rounded-full overflow-hidden border border-slate-800">
-                                <div id="ratio-antpool-bar" class="bg-amber-500 h-full shadow-[0_0_8px_#f59e0b]" style="width: 30%"></div>
-                            </div>
-                        </div>
-                        <!-- ViaBTC -->
-                        <div>
-                            <div class="flex justify-between text-xs mb-1">
-                                <span class="text-gray-400">ViaBTC / Others</span>
-                                <span id="ratio-viabtc-text" class="text-emerald-400">18%</span>
-                            </div>
-                            <div class="w-full bg-slate-900 h-3 rounded-full overflow-hidden border border-slate-800">
-                                <div id="ratio-viabtc-bar" class="bg-emerald-500 h-full shadow-[0_0_8px_#10b981]" style="width: 18%"></div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="mt-6 p-3 bg-cyan-950/20 border border-cyan-800/50 rounded text-center">
-                        <span id="mempool-lock-status" class="text-xs text-cyan-400 font-bold tracking-widest uppercase animate-pulse">
-                            ● LOCK STATUS: BETTING OPEN
-                        </span>
-                    </div>
-                </div>
-
-                <!-- Right Column: The Betting Desk -->
-                <div class="bg-[#070b12] border border-slate-800 p-5 rounded font-mono flex flex-col justify-between">
-                    <div>
-                        <h3 class="text-sm font-bold text-gray-300 border-b border-slate-800 pb-2 mb-4 uppercase tracking-wider">// The Betting Desk</h3>
-                        
-                        <!-- Radio Options -->
-                        <div class="space-y-2 mb-4">
-                            <label class="flex items-center justify-between p-2 rounded border border-slate-800 bg-[#090d16] hover:border-slate-700 cursor-pointer text-sm">
-                                <div class="flex items-center space-x-3">
-                                    <input type="radio" name="miningPool" value="Foundry USA" checked class="accent-cyan-500">
-                                    <span class="text-gray-300">Foundry USA</span>
-                                </div>
-                                <span class="text-cyan-400 text-xs font-bold bg-cyan-950/50 px-2 py-0.5 rounded border border-cyan-900/50">1.8x Odds</span>
-                            </label>
-                            <label class="flex items-center justify-between p-2 rounded border border-slate-800 bg-[#090d16] hover:border-slate-700 cursor-pointer text-sm">
-                                <div class="flex items-center space-x-3">
-                                    <input type="radio" name="miningPool" value="AntPool" class="accent-cyan-500">
-                                    <span class="text-gray-300">AntPool</span>
-                                </div>
-                                <span class="text-amber-400 text-xs font-bold bg-amber-950/50 px-2 py-0.5 rounded border border-amber-900/50">2.4x Odds</span>
-                            </label>
-                            <label class="flex items-center justify-between p-2 rounded border border-slate-800 bg-[#090d16] hover:border-slate-700 cursor-pointer text-sm">
-                                <div class="flex items-center space-x-3">
-                                    <input type="radio" name="miningPool" value="ViaBTC" class="accent-cyan-500">
-                                    <span class="text-gray-300">ViaBTC / Others</span>
-                                </div>
-                                <span class="text-emerald-400 text-xs font-bold bg-emerald-950/50 px-2 py-0.5 rounded border border-emerald-900/50">4.5x Odds</span>
-                            </label>
-                        </div>
-
-                        <!-- Input Amount -->
-                        <div class="mb-4">
-                            <label class="block text-xs text-gray-400 mb-1 uppercase tracking-wider">Wager Amount ($ALK / Fake USD)</label>
-                            <div class="relative">
-                                <input type="number" id="mempool-wager-amount" value="500" min="10" class="w-full bg-[#05070b] border border-slate-800 rounded p-2 text-sm text-gray-200 font-mono focus:outline-none focus:border-cyan-500">
-                                <span class="absolute right-3 top-2.5 text-xs text-gray-500 font-bold">TOKENS</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <button onclick="placeMempoolBet()" id="btn-place-mempool" class="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-2.5 px-4 rounded transition duration-200 text-sm uppercase tracking-wider shadow-[0_0_15px_rgba(6,182,212,0.4)]">
-                        Place On-Chain Wager
-                    </button>
-                </div>
-            </div>
-
-            <!-- History Log Feed -->
-            <div class="bg-[#070b12] border border-slate-800 p-4 rounded font-mono">
-                <h3 class="text-xs font-bold text-gray-400 mb-2 uppercase tracking-wider">// Recent Mined Blocks & Payout Log</h3>
-                <div id="mempool-log-feed" class="text-xs space-y-1.5 max-h-32 overflow-y-auto pr-2 text-slate-400">
-                    <div class="border-b border-slate-900 pb-1"><span class="text-slate-500">[02:14:11]</span> Block #910,250 → Mined by <span class="text-amber-400 font-bold">[AntPool]</span> → Global Pot: 180k $ALK → <span class="text-emerald-400 font-bold">Paid out to winners!</span></div>
-                    <div class="border-b border-slate-900 pb-1"><span class="text-slate-500">[02:01:45]</span> Block #910,249 → Mined by <span class="text-cyan-400 font-bold">[Foundry USA]</span> → Global Pot: 95k $ALK → <span class="text-emerald-400 font-bold">Paid out to winners!</span></div>
-                </div>
-            </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- ================= ONLINE FIGHT CLUB TAB (Stage 1: lobby only, no live match sync yet) ================= -->
-        <section id="content-onlinelobby" class="hidden space-y-6">
-            <div class="relative">
-                <div id="onlineLobbySoonOverlay" class="absolute inset-0 z-20 bg-black/70 backdrop-blur-sm rounded-xl flex flex-col items-center justify-center gap-4 pointer-events-auto">
-                    <span class="text-3xl md:text-5xl font-black uppercase text-rose-500 border-4 border-rose-500 px-6 py-3 rounded-lg -rotate-6 shadow-2xl tracking-widest" style="text-shadow: 0 0 20px rgba(244,63,94,0.6);">
-                        Holders Only
-                    </span>
-                    <div class="text-center text-[11px] md:text-xs text-gray-300 space-y-1">
-                        <div><span class="text-gray-500 uppercase tracking-wide">Unlocks with:</span> Mid Evils NFT &bull; The Conmen NFT</div>
-                        <div class="text-gray-500"><span class="uppercase tracking-wide">Coming soon:</span> Bitcoin Wizards &bull; SkullX &bull; Genuine Undead &bull; $MIM SOL/BTC Holders</div>
-                    </div>
-                </div>
-                <div class="space-y-6">
-                    <div class="bg-[#0C0F16] rounded-xl p-6 border border-[#1A2232] shadow-2xl">
-                        <div class="flex items-center justify-between mb-4">
-                            <h3 class="text-lg font-black text-white flex items-center gap-2"><i class="fa-solid fa-globe text-purple-400"></i>Online Fight Club</h3>
-                            <button onclick="createLobbyRoom()" class="bg-purple-600/20 hover:bg-purple-600/40 border border-purple-500/30 text-purple-300 rounded px-4 py-2 text-xs font-bold transition">
-                                <i class="fa-solid fa-plus mr-1"></i>Create Room
-                            </button>
-                        </div>
-                        <div class="text-[11px] text-gray-500 mb-4">Stage 1: matchmaking only, relayed through the same Supabase setup as your leaderboard - not a direct connection between players. Getting matched opens the Fight Game on both sides, but each side is still its own local game for now - real synced play between two devices isn't wired up yet.</div>
-                        <div id="lobbyRoomList" class="space-y-1"></div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-    </main>
-
-    <!-- ============================================================ -->
-    <!-- COMMAND CENTER (always visible) -->
-    <!-- ============================================================ -->
-    <section id="commandCenterSection" class="max-w-7xl mx-auto px-4 pb-6 w-full">
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-            <!-- Lambo + Level progress -->
-            <div data-win95-window="LamboTracker.exe" class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-5 shadow-lg space-y-5">
-                <div>
-                    <h4 class="font-bold text-xs uppercase text-amber-500 tracking-widest mb-2"><i class="fa-solid fa-car"></i> Lambo Target Tracker</h4>
-                    <div class="bg-[#10141D] p-4 rounded-lg border border-[#1A2232] space-y-3 mc-inset-panel">
-                        <div class="flex justify-between items-center text-xs">
-                            <span class="text-gray-400">Rugged Savings:</span>
-                            <span class="text-green-400 font-bold font-mono">$<span id="ruggedSavingsDisplay">0.00</span> / $1,000,000</span>
-                        </div>
-                        <div class="flex justify-between items-center text-xs">
-                            <span class="text-gray-400">Current Lambo Tier:</span>
-                            <span id="lamboTierDisplay" class="text-amber-500 font-extrabold uppercase">Hot Wheels Lambo</span>
-                        </div>
-                        <div class="w-full bg-[#070A0F] h-2 rounded-full overflow-hidden border border-[#1A2232]">
-                            <div id="lamboProgressBar" class="bg-gradient-to-r from-amber-500 to-yellow-400 h-full w-0 transition-all duration-300"></div>
-                        </div>
-                    </div>
-                </div>
-                <div>
-                    <h4 class="font-bold text-xs uppercase text-blue-400 tracking-widest mb-2"><i class="fa-solid fa-ranking-star"></i> Degen Level Progress</h4>
-                    <div class="bg-[#10141D] p-4 rounded-lg border border-[#1A2232] space-y-2 mc-inset-panel">
-                        <div class="flex justify-between text-xs"><span id="levelProgressLabel" class="text-gray-300 font-semibold">LVL 1 — The Basement Dev</span><span id="levelProgressNext" class="text-gray-500">Next: $3,000</span></div>
-                        <div class="w-full bg-[#070A0F] h-2 rounded-full overflow-hidden border border-[#1A2232]">
-                            <div id="levelProgressBar" class="bg-gradient-to-r from-blue-500 to-indigo-400 h-full w-0 transition-all duration-300"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Perk shop -->
-            <div data-win95-window="PerkShop.exe" class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-5 shadow-lg">
-                <h4 class="font-bold text-xs uppercase text-emerald-400 tracking-widest mb-3"><i class="fa-solid fa-cart-shopping"></i> Perk Shop (Permanent Upgrades)</h4>
-                <div id="perkShopContainer" class="space-y-2.5"></div>
-            </div>
-        </div>
-
-        <!-- Victim leaderboard -->
-        <div data-win95-window="VictimHOF.exe" class="bg-[#0C0F16] border border-[#1A2232] rounded-xl p-5 shadow-lg mt-6">
-            <h4 class="font-bold text-xs uppercase text-rose-500 tracking-widest mb-3"><i class="fa-solid fa-skull"></i> Live Degen Victim Hall of Fame</h4>
-            <div id="victimLeaderboard" class="bg-[#10141D] p-4 rounded-lg border border-[#1A2232] space-y-2 max-h-[160px] overflow-y-auto text-xs mono mc-inset-panel">
-                <div class="text-gray-500 italic text-[11px]">No rugs pulled yet. Get to work.</div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Toast -->
-    <!-- Default toast - shown unless medieval-mode is active -->
-    <div id="toastDefault" class="fixed bottom-6 right-6 z-50 bg-[#0C0F16] border-l-4 border-blue-500 px-5 py-3.5 rounded-lg shadow-2xl flex items-center space-x-3 text-sm text-gray-100 hidden max-w-sm">
-        <img id="toastImageDefault" src="" alt="" class="hidden w-12 h-12 rounded object-cover flex-shrink-0 border border-white/10">
-        <span id="toastIconDefault" class="text-blue-400"><i class="fa-solid fa-info-circle text-lg"></i></span>
-        <span id="toastMessageDefault">Default Alert State</span>
-    </div>
-
-    <!-- Mid Evils toast - the character himself slides up bottom-left, speech bubble to his right -->
-    <div id="toastMedieval" class="fixed bottom-0 left-6 z-50 hidden flex items-end gap-2 max-w-md">
-        <img src="assets/pfp.webp?v=2" alt="" class="w-48 h-auto flex-shrink-0 drop-shadow-2xl">
-        <div id="toastBubble" class="bg-white text-black px-4 py-3 rounded-2xl shadow-2xl text-sm font-semibold mb-6 relative border-[3px] border-black">
-            <span id="toastMessageMedieval">Default Alert State</span>
-            <div class="absolute -bottom-[9px] left-6 w-4 h-4 bg-white border-l-[3px] border-b-[3px] border-black" style="transform: rotate(45deg);"></div>
-        </div>
-    </div>
-
-    <!-- Conmen toast - same slide-up-from-bottom-left treatment as Mid Evils, own character art -->
-    <div id="toastConmen" class="fixed bottom-0 left-6 z-50 hidden flex items-end gap-2 max-w-md">
-        <img src="assets/conmen-pfp.webp?v=2" alt="" class="w-48 h-auto flex-shrink-0 drop-shadow-2xl">
-        <div id="toastBubbleConmen" class="bg-white text-black px-4 py-3 rounded-2xl shadow-2xl text-sm font-semibold mb-6 relative border-[3px] border-black">
-            <span id="toastMessageConmen">Default Alert State</span>
-            <div class="absolute -bottom-[9px] left-6 w-4 h-4 bg-white border-l-[3px] border-b-[3px] border-black" style="transform: rotate(45deg);"></div>
-        </div>
-    </div>
-
-    <!-- McDonald's mini-game promo popup - random interval, only when the Bonus
-         Stage is actually available (see js/mcdonalds-egg.js). Clicking the
-         bubble opens the mini-game. -->
-    <div id="mcdEggPopup" class="fixed bottom-0 left-6 z-[60] hidden flex items-end gap-2 max-w-md" style="pointer-events: auto;">
-        <img src="assets/mcdonalds-pfp.webp" alt="" class="w-40 h-auto flex-shrink-0 drop-shadow-2xl">
-        <div id="mcdEggBubble" onclick="openBonusStage()" class="bg-white text-black px-4 py-3 rounded-2xl shadow-2xl text-sm font-semibold mb-6 relative border-[3px] border-black cursor-pointer">
-            Would you like <span class="mcd-fries-link">fries</span> with that?
-            <div class="absolute -bottom-[9px] left-6 w-4 h-4 bg-white border-l-[3px] border-b-[3px] border-black" style="transform: rotate(45deg);"></div>
-        </div>
-    </div>
-
-
-    <!-- Generic alert modal -->
-    <div id="customAlertModal" class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 hidden p-4">
-        <div class="bg-[#0C0F16] border border-rose-500/40 max-w-md w-full p-6 rounded-xl shadow-2xl text-center space-y-4">
-            <div class="w-16 h-16 bg-red-500/10 text-rose-500 rounded-full flex items-center justify-center mx-auto text-3xl animate-pulse"><i class="fa-solid fa-biohazard"></i></div>
-            <h3 class="text-rose-500 font-black text-xl tracking-tight">NOTICE</h3>
-            <p id="alertModalMessage" class="text-gray-300 text-sm leading-relaxed font-light"></p>
-            <button onclick="closeAlertModal()" class="px-6 py-2 bg-rose-500 text-white hover:bg-rose-600 rounded-lg text-xs font-bold uppercase transition">I accept and wash my hands</button>
-        </div>
-    </div>
-
-    <!-- Live leaderboard modal -->
-    <div id="leaderboardModal" class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 hidden p-4">
-        <div class="bg-[#0C0F16] border border-amber-500/40 max-w-sm w-full p-6 rounded-xl shadow-2xl space-y-3">
-            <div class="flex items-center justify-between">
-                <h3 class="text-amber-400 font-black text-lg tracking-tight"><i class="fa-solid fa-ranking-star mr-1.5"></i>Top Degens</h3>
-                <button onclick="closeLeaderboard()" class="text-gray-500 hover:text-white text-xl leading-none">&times;</button>
-            </div>
-            <p class="text-[10px] text-gray-500">Ranked by lifetime earned. Updates live.</p>
-            <div id="leaderboardBody" class="max-h-80 overflow-y-auto space-y-0.5">
-                <div class="text-gray-500 italic text-xs">Loading...</div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Theme preview panel - only ever shown to MASTER_WALLET, lets you
-         preview any cosmetic theme without needing to actually hold the NFT -->
-    <div id="themePreviewModal" class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 hidden p-4">
-        <div class="bg-[#0C0F16] border border-purple-500/40 max-w-sm w-full p-6 rounded-xl shadow-2xl space-y-3">
-            <div class="flex items-center justify-between">
-                <h3 class="text-purple-400 font-black text-lg tracking-tight"><i class="fa-solid fa-palette mr-1.5"></i>Theme Preview</h3>
-                <button onclick="closeThemePreview()" class="text-gray-500 hover:text-white text-xl leading-none">&times;</button>
-            </div>
-            <p class="text-[10px] text-gray-500">Master wallet only. Preview any cosmetic theme without owning the NFT - doesn't affect real holder detection.</p>
-            <div id="themePreviewButtons" class="space-y-2"></div>
-            <button onclick="previewTheme(null)" class="w-full py-2 border border-[#1A2232] hover:border-gray-500 text-gray-400 hover:text-white rounded text-xs transition">
-                Reset to normal
-            </button>
-        </div>
-    </div>
-
-    <!-- Wallet picker - now the one and only wallet-connect entry point,
-         covering both chains in clearly separated sections instead of
-         the old setup (auto-connect if exactly one Solana wallet was
-         found, a completely separate TEST-only modal for Bitcoin). -->
-    <div id="walletPickerModal" class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 hidden p-4">
-        <div class="bg-[#0C0F16] border border-cyan-500/40 max-w-sm w-full p-6 rounded-xl shadow-2xl space-y-3">
-            <div class="flex items-center justify-between">
-                <h3 class="text-cyan-400 font-black text-lg tracking-tight"><i class="fa-solid fa-wallet mr-1.5"></i>Choose a Wallet</h3>
-                <button onclick="closeWalletPicker()" class="text-gray-500 hover:text-white text-xl leading-none">&times;</button>
-            </div>
-            <p class="text-[10px] text-gray-500">More than one wallet was found on this browser - pick which one to connect with.</p>
-
-            <div>
-                <div class="text-[10px] uppercase tracking-wide text-gray-500 font-bold mb-1.5">Solana</div>
-                <div id="walletPickerButtons" class="space-y-2"></div>
-            </div>
-
-            <div>
-                <div class="text-[10px] uppercase tracking-wide text-orange-500/80 font-bold mb-1.5">Bitcoin</div>
-                <p class="text-[10px] text-gray-500 mb-1.5">Unlocks Ordinals-gated content (Skull X, Bitcoin Wizards). Read-only, never asks you to sign a transaction.</p>
-                <div class="space-y-2">
-                    <button onclick="closeWalletPicker(); connectXverse();" class="w-full py-2.5 bg-orange-600/20 hover:bg-orange-600/40 border border-orange-500/30 text-orange-300 rounded font-bold text-sm transition">Xverse</button>
-                    <button onclick="closeWalletPicker(); connectUnisat();" class="w-full py-2.5 bg-orange-600/20 hover:bg-orange-600/40 border border-orange-500/30 text-orange-300 rounded font-bold text-sm transition">UniSat</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Theme choice - shown when a wallet holds NFTs from more than one
-         cosmetic-theme collection (e.g. both Mid Evils and Conmen). The
-         "switch theme" button in the header re-opens this any time. -->
-    <div id="themeChoiceModal" class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 hidden p-4">
-        <div class="bg-[#0C0F16] border border-emerald-500/40 max-w-sm w-full p-6 rounded-xl shadow-2xl space-y-3">
-            <div class="flex items-center justify-between">
-                <h3 class="text-emerald-400 font-black text-lg tracking-tight"><i class="fa-solid fa-shuffle mr-1.5"></i>Choose Your Theme</h3>
-                <button onclick="closeThemeChoice()" class="text-gray-500 hover:text-white text-xl leading-none">&times;</button>
-            </div>
-            <p class="text-[10px] text-gray-500">This wallet holds NFTs from more than one collection - pick which look you want.</p>
-            <div id="themeChoiceButtons" class="space-y-2"></div>
-        </div>
-    </div>
-
-
-    <!-- Play Mode choice - master wallet only, shown every time it connects.
-         LIVE PLAY = exactly what any real player experiences, no bypasses.
-         TEST PLAY = every testing tool unlocked, plus the debug menu. -->
-    <div id="playModeModal" class="fixed inset-0 bg-black/90 flex items-center justify-center z-[60] hidden p-4">
-        <div class="bg-[#0C0F16] border border-cyan-500/40 max-w-md w-full p-6 rounded-xl shadow-2xl space-y-4">
-            <div class="flex items-center justify-between">
-                <h3 class="text-cyan-400 font-black text-lg tracking-tight"><i class="fa-solid fa-user-shield mr-1.5"></i>Master Wallet Detected</h3>
-            </div>
-            <p class="text-xs text-gray-400">Choose how you want to play this session.</p>
-            <button onclick="choosePlayMode('live')" class="w-full text-left p-4 bg-emerald-600/10 hover:bg-emerald-600/25 border border-emerald-500/30 rounded-lg transition group">
-                <div class="text-emerald-400 font-black text-sm mb-1"><i class="fa-solid fa-play mr-1.5"></i>LIVE Play</div>
-                <div class="text-[11px] text-gray-400">The exact experience every real player gets. No test buttons, no cheats, no bypasses - only what your real NFT holdings actually unlock.</div>
-            </button>
-            <button onclick="choosePlayMode('test')" class="w-full text-left p-4 bg-amber-600/10 hover:bg-amber-600/25 border border-amber-500/30 rounded-lg transition group">
-                <div class="text-amber-400 font-black text-sm mb-1"><i class="fa-solid fa-flask mr-1.5"></i>TEST Play</div>
-                <div class="text-[11px] text-gray-400">Every testing tool unlocked - Theme Preview, Bonus Stage, the Easter Egg trigger - plus a debug menu for tracking down errors.</div>
-            </button>
-        </div>
-    </div>
-
-    <!-- Debug menu - TEST PLAY only. Surfaces exactly the kind of info
-         that's slow to dig out through DevTools by hand: which script
-         versions are actually loaded, what theme is active, and any JS
-         errors caught since page load. "Copy Debug Report" packages all
-         of it as plain text to hand over for troubleshooting. -->
-    <div id="debugMenuModal" class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 hidden p-4">
-        <div class="bg-[#0C0F16] border border-amber-500/40 max-w-lg w-full p-6 rounded-xl shadow-2xl space-y-3 max-h-[85vh] overflow-y-auto">
-            <div class="flex items-center justify-between">
-                <h3 class="text-amber-400 font-black text-lg tracking-tight"><i class="fa-solid fa-bug mr-1.5"></i>Debug Menu</h3>
-                <button onclick="closeDebugMenu()" class="text-gray-500 hover:text-white text-xl leading-none">&times;</button>
-            </div>
-            <div>
-                <div class="text-[10px] uppercase tracking-wide text-gray-500 mb-1">Current State</div>
-                <div id="debugStateBox" class="bg-black/40 border border-[#1A2232] rounded p-3 text-[11px] font-mono text-gray-300 space-y-0.5"></div>
-            </div>
-            <div>
-                <div class="text-[10px] uppercase tracking-wide text-gray-500 mb-1">Loaded Script Versions</div>
-                <div id="debugVersionsBox" class="bg-black/40 border border-[#1A2232] rounded p-3 text-[11px] font-mono text-gray-300 space-y-0.5"></div>
-            </div>
-            <div>
-                <div class="text-[10px] uppercase tracking-wide text-gray-500 mb-1">Caught Errors (this page load)</div>
-                <div id="debugErrorsBox" class="bg-black/40 border border-[#1A2232] rounded p-3 text-[11px] font-mono text-rose-300 space-y-1 max-h-40 overflow-y-auto"></div>
-            </div>
-            <div>
-                <div class="flex items-center justify-between mb-1">
-                    <div class="text-[10px] uppercase tracking-wide text-gray-500">Connectivity</div>
-                    <button onclick="checkConnectivity()" class="text-[10px] text-amber-400 hover:text-amber-300 transition"><i class="fa-solid fa-wifi mr-1"></i>Check</button>
-                </div>
-                <div id="connectivityCheckResult" class="bg-black/40 border border-[#1A2232] rounded p-3 text-[11px] font-mono text-gray-300">Not checked yet.</div>
-            </div>
-            <div>
-                <div class="flex items-center justify-between mb-1">
-                    <div class="text-[10px] uppercase tracking-wide text-gray-500">Fight Sync (Online Fight Club)</div>
-                    <button onclick="checkFightSyncStatus()" class="text-[10px] text-amber-400 hover:text-amber-300 transition"><i class="fa-solid fa-satellite-dish mr-1"></i>Check</button>
-                </div>
-                <div id="fightSyncCheckResult" class="bg-black/40 border border-[#1A2232] rounded p-3 text-[11px] font-mono text-gray-300">Not in an online match right now - start or join a Fight Club room, then check.</div>
-            </div>
-            <div class="flex gap-2">
-                <button onclick="refreshDebugInfo()" class="flex-1 py-2 border border-[#1A2232] hover:border-gray-500 text-gray-400 hover:text-white rounded text-xs transition">
-                    <i class="fa-solid fa-rotate mr-1"></i>Refresh
-                </button>
-                <button onclick="copyDebugReport()" class="flex-1 py-2 bg-amber-600/20 hover:bg-amber-600/40 border border-amber-500/30 text-amber-300 rounded text-xs font-bold transition">
-                    <i class="fa-solid fa-copy mr-1"></i>Copy Debug Report
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Deposit to Rugged Savings -->
-    <div id="depositModal" class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 hidden p-4">
-        <div class="bg-[#0C0F16] border border-amber-500/40 max-w-sm w-full p-6 rounded-xl shadow-2xl space-y-3">
-            <div class="flex items-center justify-between">
-                <h3 class="text-amber-400 font-black text-lg tracking-tight"><i class="fa-solid fa-piggy-bank mr-1.5"></i>Deposit to Savings</h3>
-                <button onclick="closeDepositModal()" class="text-gray-500 hover:text-white text-xl leading-none">&times;</button>
-            </div>
-            <p class="text-[10px] text-gray-500">Move cash out of your spendable balance and into Rugged Savings, toward your $1,000,000 Lambo goal. Available: $<span id="depositAvailableCash">0.00</span></p>
-            <div class="grid grid-cols-3 gap-2">
-                <button onclick="depositPercent(25)" class="py-2.5 bg-[#1C212E] hover:bg-[#252E3E] text-gray-200 text-sm font-bold rounded transition">25%</button>
-                <button onclick="depositPercent(50)" class="py-2.5 bg-[#1C212E] hover:bg-[#252E3E] text-gray-200 text-sm font-bold rounded transition">50%</button>
-                <button onclick="depositPercent(100)" class="py-2.5 bg-[#1C212E] hover:bg-[#252E3E] text-gray-200 text-sm font-bold rounded transition">100%</button>
-            </div>
-            <div class="flex items-center gap-2">
-                <input id="depositCustomInput" type="number" min="0" step="1" placeholder="Custom $" class="flex-1 bg-[#10141D] text-white text-sm font-mono px-3 py-2 rounded border border-[#1A2232] focus:outline-none focus:border-amber-500">
-                <button onclick="depositCustom()" class="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white text-sm font-bold rounded transition">Deposit</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Bonus Stage mini-game - Windows 95 style window, Mid Evils exclusive -->
-    <div id="bonusStageOverlay" class="fixed inset-0 bg-black/70 hidden items-center justify-center z-[100] p-4">
-        <div class="win95-window">
-            <div class="win95-titlebar">
-                <span class="win95-title"><i class="fa-solid fa-gamepad"></i> BONUS_STAGE.EXE</span>
-                <div class="win95-controls">
-                    <button class="win95-btn mg-music-btn" onclick="if (typeof toggleMiniGameMusic === 'function') toggleMiniGameMusic()" title="Music: ON (click to mute)"><i class="fa-solid fa-music"></i></button>
-                    <button class="win95-btn mg-sfx-btn" onclick="if (typeof toggleMiniGameSfx === 'function') toggleMiniGameSfx()" title="SFX: ON (click to mute)"><i class="fa-solid fa-volume-high"></i></button>
-                    <button class="win95-btn" disabled title="Minimize (not implemented)">_</button>
-                    <button class="win95-btn" disabled title="Maximize (not implemented)"><i class="fa-regular fa-square"></i></button>
-                    <button class="win95-btn win95-close" onclick="closeBonusStage()" title="Close">&times;</button>
-                </div>
-            </div>
-            <div class="win95-menubar">
-                <span>File</span><span>Edit</span><span>View</span><span>Help</span>
-            </div>
-            <div class="win95-content">
-                <canvas id="bonusStageCanvas" width="960" height="540"></canvas>
-            </div>
-            <div class="win95-statusbar">
-                <span class="win95-statusfield">Ready</span>
-                <span class="win95-statusfield">Mid Evils Exclusive</span>
-            </div>
-        </div>
-    </div>
-
-    <!-- Fight Game - TEST PLAY only for now. Conmen vs Mid Evils, CPU
-         opponent. Same window chrome as the Bonus Stage on purpose. -->
-    <div id="fightGameOverlay" class="fixed inset-0 bg-black/70 hidden items-center justify-center z-[100] p-4">
-        <div class="win95-window">
-            <div class="win95-titlebar">
-                <span class="win95-title"><i class="fa-solid fa-hand-fist"></i> FIGHT_CLUB.EXE</span>
-                <div class="win95-controls">
-                    <button class="win95-btn mg-music-btn" onclick="if (typeof toggleMiniGameMusic === 'function') toggleMiniGameMusic()" title="Music: ON (click to mute)"><i class="fa-solid fa-music"></i></button>
-                    <button class="win95-btn mg-sfx-btn" onclick="if (typeof toggleMiniGameSfx === 'function') toggleMiniGameSfx()" title="SFX: ON (click to mute)"><i class="fa-solid fa-volume-high"></i></button>
-                    <button class="win95-btn" disabled title="Minimize (not implemented)">_</button>
-                    <button class="win95-btn" disabled title="Maximize (not implemented)"><i class="fa-regular fa-square"></i></button>
-                    <button class="win95-btn win95-close" onclick="closeFightGame()" title="Close">&times;</button>
-                </div>
-            </div>
-            <div class="win95-menubar">
-                <span>File</span><span>Edit</span><span>View</span><span>Help</span>
-            </div>
-            <div class="win95-content">
-                <canvas id="fightGameCanvas" width="960" height="540"></canvas>
-            </div>
-            <div class="win95-statusbar">
-                <span class="win95-statusfield">Ready</span>
-                <span class="win95-statusfield">TEST PLAY Only</span>
-            </div>
-        </div>
-    </div>
-
-    <!-- Conmen easter egg: roaming clickable popup (Conmen-mode only, see js/conmen-egg.js) -->
-    <div id="conmenEggPopup" onclick="openConmenLauncher()">
-        <span class="conmen-egg-tag">psst...</span>
-        <img src="assets/conmen-easteregg.webp" alt="">
-    </div>
-
-    <!-- Conmen easter egg: full-screen Win95-style launcher for the marketplace link -->
-    <div id="conmenLauncherOverlay" class="fixed inset-0 bg-black hidden z-[110]">
-        <div class="win95-window-full">
-            <div class="win95-titlebar">
-                <span class="win95-title"><i class="fa-solid fa-store"></i> CONMEN_EASTER.EGG</span>
-                <div class="win95-controls">
-                    <button class="win95-btn" disabled title="Minimize (not implemented)">_</button>
-                    <button class="win95-btn" disabled title="Maximize (not implemented)"><i class="fa-regular fa-square"></i></button>
-                    <button class="win95-btn win95-close" onclick="closeConmenLauncher()" title="Close">&times;</button>
-                </div>
-            </div>
-            <div class="win95-menubar">
-                <span>File</span><span>Edit</span><span>View</span><span>Help</span>
-            </div>
-            <div class="win95-content-full">
-                <div class="conmen-launcher-inner">
-                    <img src="assets/conmen-easteregg.webp" alt="">
-                    <h2>You Found the CON!</h2>
-                    <p>Congrats ya filthy animal, you found the easter egg. The right man in the wrong place can make all the difference in the world. So, wake up, Mister Freeman. Wake up and... smell the ashes.</p>
-                    <a class="conmen-launcher-btn" href="https://hl2.slqnt.dev/" target="_blank" rel="noopener noreferrer">
-                        <i class="fa-solid fa-arrow-up-right-from-square"></i> Welcome to City 17!
-                    </a>
-                </div>
-            </div>
-            <div class="win95-statusbar">
-                <span class="win95-statusfield">Ready</span>
-                <span class="win95-statusfield">Conmen Exclusive</span>
-            </div>
-        </div>
-    </div>
-
-    <div id="skullxEggPopup" onclick="openSkullXLauncher()">
-        <span class="skullx-egg-tag">psst...</span>
-        <img src="assets/skullx-easteregg.webp" alt="">
-    </div>
-
-    <!-- Skull X easter egg: same full-screen launcher pattern as Conmen,
-         pointing at the Skull X Linktree instead of a marketplace listing. -->
-    <div id="skullxLauncherOverlay" class="fixed inset-0 bg-black hidden z-[110]">
-        <div class="win95-window-full">
-            <div class="win95-titlebar skullx-titlebar">
-                <span class="win95-title"><i class="fa-solid fa-skull"></i> SKULLX_EASTER.EGG</span>
-                <div class="win95-controls">
-                    <button class="win95-btn" disabled title="Minimize (not implemented)">_</button>
-                    <button class="win95-btn" disabled title="Maximize (not implemented)"><i class="fa-regular fa-square"></i></button>
-                    <button class="win95-btn win95-close" onclick="closeSkullXLauncher()" title="Close">&times;</button>
-                </div>
-            </div>
-            <div class="win95-menubar">
-                <span>File</span><span>Edit</span><span>View</span><span>Help</span>
-            </div>
-            <div class="win95-content-full skullx-launcher-bg">
-                <div class="conmen-launcher-inner">
-                    <img src="assets/skullx-easteregg.webp" alt="">
-                    <h2>You Found Skull X!</h2>
-                    <p>You dug deep enough to find this. Real ones get rewarded - here's where the rest of the collection lives.</p>
-                    <a class="conmen-launcher-btn skullx-launcher-btn" href="https://joeheyming.github.io/doom/" target="_blank" rel="noopener noreferrer">
-                        <i class="fa-solid fa-arrow-up-right-from-square"></i> Enter Skull X
-                    </a>
-                </div>
-            </div>
-            <div class="win95-statusbar">
-                <span class="win95-statusfield">Ready</span>
-                <span class="win95-statusfield">Skull X Exclusive</span>
-            </div>
-        </div>
-    </div>
-
-    <!-- WIN modal -->
-    <div id="winModal" class="fixed inset-0 bg-black/85 flex items-center justify-center z-50 hidden p-4">
-        <div class="bg-[#0C0F16] border-2 border-emerald-500/60 neon-glow-green max-w-md w-full p-7 rounded-xl shadow-2xl text-center space-y-4">
-            <div class="w-20 h-20 bg-emerald-500/10 text-emerald-400 rounded-full flex items-center justify-center mx-auto text-4xl"><i class="fa-solid fa-car"></i></div>
-            <h3 class="text-emerald-400 font-black text-2xl tracking-tight">YOU BOUGHT A REAL LAMBO! 🎉</h3>
-            <p class="text-gray-300 text-sm leading-relaxed font-light">One million fake dollars later, you've made it. Somewhere, a regulator is crying. Want to do it all again?</p>
-            <button onclick="restartGame()" class="px-6 py-2.5 bg-emerald-500 text-black hover:bg-emerald-400 rounded-lg text-xs font-bold uppercase transition">Play Again From Zero</button>
-        </div>
-    </div>
-
-    <!-- LOSS modal -->
-    <div id="lossModal" class="fixed inset-0 bg-black/85 flex items-center justify-center z-50 hidden p-4">
-        <div class="bg-[#0C0F16] border-2 border-rose-500/60 neon-glow-red max-w-md w-full p-7 rounded-xl shadow-2xl text-center space-y-4">
-            <div class="w-20 h-20 bg-rose-500/10 text-rose-500 rounded-full flex items-center justify-center mx-auto text-4xl"><i class="fa-solid fa-handcuffs"></i></div>
-            <h3 id="lossTitle" class="text-rose-500 font-black text-2xl tracking-tight">GAME OVER</h3>
-            <p id="lossMessage" class="text-gray-300 text-sm leading-relaxed font-light"></p>
-            <button onclick="restartGame()" class="px-6 py-2.5 bg-rose-500 text-white hover:bg-rose-600 rounded-lg text-xs font-bold uppercase transition">Start A New Scam</button>
-        </div>
-    </div>
-
-    <!-- Zero-balance choice - shown when cash hits $0. No close/backdrop-dismiss
-         on purpose, this blocks until a choice is made. -->
-    <div id="zeroBalanceModal" class="fixed inset-0 bg-black/85 flex items-center justify-center z-[110] hidden p-4">
-        <div class="bg-[#0C0F16] border-2 border-rose-500/60 max-w-md w-full p-7 rounded-xl shadow-2xl text-center space-y-4">
-            <div class="w-20 h-20 bg-rose-500/10 text-rose-500 rounded-full flex items-center justify-center mx-auto text-4xl">💀</div>
-            <h3 class="text-rose-500 font-black text-2xl tracking-tight">YOU'RE REKT</h3>
-            <p class="text-gray-300 text-sm leading-relaxed font-light">Your wallet's at $0. Grind out some quick cash, or wipe the slate and start over.</p>
-            <div class="space-y-2 pt-1">
-                <button onclick="closeZeroBalanceModalForBonusStage()" class="w-full py-3 bg-amber-600/20 hover:bg-amber-600/40 border border-amber-500/30 text-amber-300 rounded-lg font-bold transition">
-                    🍟 Play Bonus Stage for Cash
-                    <div class="text-[10px] font-normal text-gray-500 mt-0.5 normal-case">Rugged Savings stays exactly where it is</div>
-                </button>
-                <button onclick="confirmZeroBalanceGameOver()" class="w-full py-3 bg-rose-600/20 hover:bg-rose-600/40 border border-rose-500/30 text-rose-300 rounded-lg font-bold transition">
-                    💀 GAME OVER — Start Fresh
-                    <div class="text-[10px] font-normal text-gray-500 mt-0.5 normal-case">Resets everything, including Rugged Savings, back to $1,000</div>
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <footer class="bg-[#090C12] border-t border-[#1A2232] py-3 px-4 text-center text-[10px] text-gray-500 font-mono flex flex-col md:flex-row justify-between items-center max-w-7xl mx-auto w-full gap-2">
-        <div class="flex items-center space-x-3">
-            <span>NETWORK: <span class="text-green-400 font-bold">SHITCORE_MAINNET-3.0 (FAKE)</span></span>
-            <span class="text-gray-700">|</span>
-            <span>GAS: <span class="text-amber-500">4,206 GWEI</span></span>
-        </div>
-        <div>
-            <span>Satire. No real funds, blockchain, or smart contracts involved. <a href="https://github.com/" class="underline hover:text-gray-300">View source</a></span>
-        </div>
-    </footer>
-
-    <!-- ============================================================ -->
-    <!-- SCRIPTS (ALL FIXED FOR ROOT DEPLOYMENT IN SHITCORE-TEST)     -->
-    <!-- ============================================================ -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>
-<script src="js/audio.js?v=19" defer></script>
-<script src="js/state.js?v=15" defer></script>
-<script src="js/ui.js?v=6" defer></script>
-<script src="js/markets.js?v=19" defer></script>
-<script src="js/auditor.js" defer></script>
-<script src="js/deployer.js?v=3" defer></script>
-<script src="js/volatility.js" defer></script>
-<script src="js/staking.js" defer></script>
-<script src="js/perks.js?v=3" defer></script>
-<script src="js/bonusstage.js?v=22" defer></script>
-<script src="js/fightgame.js?v=43" defer></script>
-<script src="js/conmen-egg.js?v=6" defer></script>
-<script src="js/skullx-egg.js?v=1" defer></script>
-<script src="js/mcdonalds-egg.js?v=4" defer></script>
-<script src="js/web3.js?v=48" defer></script>
-<script src="js/wizardpopup.js?v=2" defer></script>
-<script src="js/win95desktop.js?v=5" defer></script>
-<script src="js/btcwallet.js?v=4" defer></script>
-<script src="js/onlinesync.js?v=1" defer></script>
-<script src="js/onlinelobby.js?v=6" defer></script>
-<script type="module" src="js/sns.js?v=5"></script>
-<script type="module" src="js/nftgate.js?v=3"></script>
-<script src="js/gate.js?v=2" defer></script>
-<script src="js/main.js?v=7" defer></script>
-<script src="js/openshit.js?v=3" defer></script>
-</body>
-</html>
+    `).join("");
+}
+
+function subscribeLeaderboardRealtime() {
+    if (!sb || leaderboardChannel) return;
+    leaderboardChannel = sb
+        .channel("players-leaderboard")
+        .on("postgres_changes", { event: "*", schema: "public", table: "players" }, renderLeaderboard)
+        .subscribe();
+}
+
+function openLeaderboard() {
+    document.getElementById("leaderboardModal")?.classList.remove("hidden");
+    renderLeaderboard();
+    subscribeLeaderboardRealtime();
+}
+function closeLeaderboard() {
+    document.getElementById("leaderboardModal")?.classList.add("hidden");
+}
+
+/* ---------------- Theme preview panel (master wallet only) ---------------- */
+
+function renderThemePreviewButtons() {
+    const box = document.getElementById("themePreviewButtons");
+    if (!box) return;
+    box.innerHTML = COSMETIC_THEMES.map((t) => `
+        <button onclick="previewTheme('${t.id}')"
+            class="w-full py-2 bg-purple-600/20 hover:bg-purple-600/40 border border-purple-500/30 text-purple-300 rounded text-xs font-bold transition">
+            ${t.label}
+        </button>
+    `).join("");
+}
+
+function previewTheme(themeId) {
+    clearCosmeticThemes(); // also exits Win95 desktop if it was active
+    window.activePreviewThemeId = themeId || null; // read by fightgame.js for themes with no cssClass, like Genuine Undead
+    if (!themeId) {
+        showToast("Preview reset to normal.", "info");
+        closeThemePreview();
+        return;
+    }
+    const theme = COSMETIC_THEMES.find((t) => t.id === themeId);
+    if (!theme) return;
+    if (theme.cssClass) document.body.classList.add(theme.cssClass);
+    showToast(`Previewing: ${theme.label} (not a real ownership check)`, "info", theme.id === "skullx" ? pickRandomSkullXOrdinal() : null);
+    if (theme.id === "mimwizard" && typeof enterWin95Desktop === "function") {
+        enterWin95Desktop();
+    }
+    if (theme.id === "midevils" || theme.id === "conmen" || theme.id === "mimwizard") {
+        // Same auto-start as the real-ownership path in applyTheme() -
+        // TEST Play previewing a theme should get music starting too,
+        // not just genuine holders.
+        document.getElementById("audioToggleBtn")?.classList.remove("hidden");
+        if (typeof autoStartThemeMusicIfMuted === 'function') autoStartThemeMusicIfMuted();
+    }
+    // Theme Preview is a full-screen modal (inset-0) - without this it just
+    // sits on top of everything after you pick a theme, silently eating
+    // clicks on stuff behind it (like the Play Fight Game button) until
+    // someone notices and hits the X. Closing on selection is the fix.
+    closeThemePreview();
+}
+
+function openThemePreview() {
+    renderThemePreviewButtons();
+    document.getElementById("themePreviewModal")?.classList.remove("hidden");
+}
+function closeThemePreview() {
+    document.getElementById("themePreviewModal")?.classList.add("hidden");
+}
+
+/* ---------------- Bonus Stage mini-game (Mid Evils exclusive) ---------------- */
+
+function _bonusStageEscHandler(ev) {
+    if (ev.key === "Escape") closeBonusStage();
+}
+
+function openBonusStage() {
+    // Real access rule, not just "is the button visible": a genuine Mid
+    // Evils/Conmen holder gets this in LIVE too, same as the McDonald's
+    // popup checks (see _mcdEggBonusStageAvailable() in mcdonalds-egg.js)
+    // - TEST Play users get it via the Theme Preview override applying
+    // the same body classes. Hard-gating here (not just hiding the
+    // button) closes off calling this directly from the console.
+    const themeUnlocked = document.body.classList.contains('medieval-mode') || document.body.classList.contains('conmen-mode');
+    if (!themeUnlocked) {
+        console.warn('[bonusstage] openBonusStage() blocked - neither medieval-mode nor conmen-mode is active on <body> right now.');
+        if (typeof showToast === 'function') showToast("Mini-game needs Mid Evils or Conmen active first.", "error");
+        return;
+    }
+    const overlay = document.getElementById("bonusStageOverlay");
+    const canvas = document.getElementById("bonusStageCanvas");
+    if (!overlay || !canvas) return;
+    if (typeof window.BonusStage === "undefined") {
+        console.error("[bonusstage] js/bonusstage.js didn't load - check the <script> tag in index.html");
+        showToast("Mini-game failed to load. Try refreshing the page.", "error");
+        return;
+    }
+    if (typeof pauseMainThemeForBonusStage === "function") pauseMainThemeForBonusStage();
+    overlay.classList.remove("hidden");
+    overlay.classList.add("flex");
+    document.addEventListener("keydown", _bonusStageEscHandler);
+    window.BonusStage.start(canvas);
+}
+
+function closeBonusStage() {
+    const overlay = document.getElementById("bonusStageOverlay");
+    if (overlay) {
+        overlay.classList.add("hidden");
+        overlay.classList.remove("flex");
+    }
+    document.removeEventListener("keydown", _bonusStageEscHandler);
+    if (typeof window.BonusStage !== "undefined") window.BonusStage.stop();
+    if (typeof resumeMainThemeAfterBonusStage === "function") resumeMainThemeAfterBonusStage();
+}
+
+// TEST PLAY only - see choosePlayMode(). Escape-to-quit is handled inside
+// fightgame.js itself (its own keydown listener, torn down in stop()), so
+// unlike Bonus Stage there's no separate handler to wire up here.
+// Shared with fightgame.js (solo matches) and onlinelobby.js (online room
+// creation/join, so both sides know which fighter you'll appear as before
+// the match even starts). Single source of truth so a real Conmen holder
+// looks like Conmen everywhere, not just in some paths and not others -
+// this used to only special-case Wizard/Genuine Undead/Skull X and quietly
+// defaulted every Mid Evils AND Conmen holder to the plain Reiffer look.
+// Mid Evils has no separate character (Reiffer already IS the Mid Evils
+// look), so it doesn't need its own branch here - only Conmen did.
+// Skull X ordinal art for toasts - randomly picked so it's not the same
+// piece every time. Purely cosmetic flourish, not tied to real ownership
+// (Theme Preview already says as much in its own toast text).
+const SKULLX_ORDINAL_IMAGES = [
+    'assets/skullx_ordinals/skullx_aspectofthedeer.webp',
+    'assets/skullx_ordinals/skullx_avernus.webp',
+    'assets/skullx_ordinals/skullx_aviator.webp',
+    'assets/skullx_ordinals/skullx_devout.webp',
+    'assets/skullx_ordinals/skullx_fire.webp',
+    'assets/skullx_ordinals/skullx_guardiansofthegateclan.webp',
+    'assets/skullx_ordinals/skullx_hindudeities.webp',
+    'assets/skullx_ordinals/skullx_hoodiepunk.webp',
+    'assets/skullx_ordinals/skullx_kylanshellhound.webp',
+    'assets/skullx_ordinals/skullx_pirateclan.webp',
+    'assets/skullx_ordinals/skullx_plague_doctor.webp',
+    'assets/skullx_ordinals/skullx_vampiric.webp',
+    'assets/skullx_ordinals/skullx_wastelander.webp',
+    'assets/skullx_ordinals/skullx_wildwestclan.webp',
+    'assets/skullx_ordinals/skullx_zarathustracult.webp',
+];
+function pickRandomSkullXOrdinal() {
+    return SKULLX_ORDINAL_IMAGES[Math.floor(Math.random() * SKULLX_ORDINAL_IMAGES.length)];
+}
+
+function getActiveFighterKey() {
+    if (document.body.classList.contains('win95-mode')) return 'wizard';
+    if (document.body.classList.contains('conmen-mode')) return 'conmen';
+    if (window.activePreviewThemeId === 'genuineundead') return 'undead';
+    if (window.activePreviewThemeId === 'skullx') return 'skullx';
+    return 'reiffer';
+}
+
+function openFightGame() {
+    // TEST Play only, EXCEPT for a real online match that's already been
+    // through real ownership gating to get here (Mid Evils/Conmen holders,
+    // see updateOnlineLobbyAccess() and onlinelobby.js) - this used to
+    // block that path too with no exception, which would have silently
+    // done nothing for every real holder the instant they got matched.
+    const isRealOnlineMatch = !!window.fightClubOnlineActive;
+    if ((typeof isTestPlayMode === 'undefined' || !isTestPlayMode) && !isRealOnlineMatch) return;
+    const overlay = document.getElementById("fightGameOverlay");
+    const canvas = document.getElementById("fightGameCanvas");
+    if (!overlay || !canvas) return;
+    if (typeof window.FightGame === "undefined") {
+        console.error("[fightgame] js/fightgame.js didn't load - check the <script> tag in index.html");
+        showToast("Fight game failed to load. Try refreshing the page.", "error");
+        return;
+    }
+    if (typeof pauseMainThemeForBonusStage === "function") pauseMainThemeForBonusStage();
+    overlay.classList.remove("hidden");
+    overlay.classList.add("flex");
+    window.FightGame.start(canvas);
+}
+
+function closeFightGame() {
+    const overlay = document.getElementById("fightGameOverlay");
+    if (overlay) {
+        overlay.classList.add("hidden");
+        overlay.classList.remove("flex");
+    }
+    if (typeof window.FightGame !== "undefined") window.FightGame.stop();
+    if (typeof resumeMainThemeAfterBonusStage === "function") resumeMainThemeAfterBonusStage();
+    // Online match cleanup lives here rather than only in onlinelobby.js so
+    // ANY way of closing the fight game (Escape key, the in-game quit
+    // button, a peer disconnecting) reliably tears the sync channel down -
+    // a leftover open channel would otherwise bleed into the next match.
+    if (typeof stopFightSync === 'function') stopFightSync();
+    window.fightClubOnlineActive = false;
+    window.fightClubOnlineRoomId = null;
+    window.fightClubOnlineIsHost = false;
+    window.fightClubOnlineFighters = null;
+    window.fightClubOnlineArena = null;
+}
+
+/* ---------------- Debug menu: Fight Sync connectivity check ---------------- */
+// Same idea as checkConnectivity() above, but for the actual per-match
+// sync channel rather than general Supabase reachability - answers "is my
+// connection to my current opponent actually alive right now" with real
+// numbers instead of guesswork.
+function checkFightSyncStatus() {
+    const out = document.getElementById('fightSyncCheckResult');
+    if (!out) return;
+    if (typeof getFightSyncStatus !== 'function') { out.textContent = '❌ Sync module not loaded - check the <script> tag for js/onlinesync.js.'; return; }
+    const s = getFightSyncStatus();
+    if (!s.active) { out.textContent = 'Not in an online match right now - start or join a Fight Club room, then check.'; return; }
+    const lines = [];
+    lines.push(s.peerPresent ? '✅ Opponent present in the sync channel' : '⚠️ Channel open, but opponent not detected yet');
+    lines.push(s.lastPingMs !== null ? `Round-trip to opponent: ${s.lastPingMs}ms` : 'No ping response yet');
+    lines.push(s.msSinceLastRemoteInput !== null ? `Last input received from opponent: ${s.msSinceLastRemoteInput}ms ago` : 'No input received yet');
+    lines.push(`Connected for: ${Math.round((s.connectedForMs || 0) / 1000)}s`);
+    out.textContent = lines.join('\n');
+}
+
+/* ---------------- Init ---------------- */
+
+document.addEventListener("DOMContentLoaded", () => {
+    initSupabase();
+    updateWalletUI();
+});
