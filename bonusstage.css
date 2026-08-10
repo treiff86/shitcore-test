@@ -187,6 +187,63 @@
     box-shadow: 0 2px 6px rgba(0,0,0,0.4);
 }
 
+/* Skull X easter egg - same popup/launcher mechanics as Conmen above
+   (see js/skullx-egg.js), teal palette instead of gray to match the
+   Skull X site theme. Sits a bit further left than Conmen's so the two
+   don't overlap if both could theoretically be visible at once. */
+#skullxEggPopup {
+    position: fixed;
+    right: 150px;
+    bottom: -14px;
+    z-index: 90;
+    cursor: pointer;
+    width: 110px;
+    opacity: 0;
+    transform: translateY(16px) scale(0.9);
+    transition: opacity 0.35s ease, transform 0.35s ease;
+    pointer-events: none;
+    filter: drop-shadow(0 8px 18px rgba(0,0,0,0.65)) drop-shadow(0 2px 6px rgba(0,0,0,0.5));
+}
+#skullxEggPopup.show {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    pointer-events: auto;
+}
+#skullxEggPopup img {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+#skullxEggPopup .skullx-egg-tag {
+    position: absolute;
+    top: -10px;
+    right: -6px;
+    background: #0c1019;
+    color: #6fc4b3;
+    border: 2px solid #45746e;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 800;
+    padding: 2px 7px;
+    white-space: nowrap;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+}
+#skullxLauncherOverlay { font-family: 'Tahoma', 'Segoe UI', Geneva, Verdana, sans-serif; }
+#skullxLauncherOverlay.hidden { display: none !important; }
+.skullx-titlebar {
+    background: linear-gradient(180deg, #45746e 0%, #2c4156 100%) !important;
+}
+.skullx-launcher-bg {
+    background: #0a0e17 !important;
+}
+.skullx-launcher-bg .conmen-launcher-inner {
+    background: linear-gradient(160deg, #0c1019 0%, #101623 100%);
+}
+.skullx-launcher-btn {
+    background: linear-gradient(180deg, #6fc4b3 0%, #45746e 100%) !important;
+    color: #0c1019 !important;
+}
+
 /* Full-screen Win95 window - same bevel language as the Bonus Stage
    window, just scaled up to take over the viewport instead of sitting
    in a centered dialog. */
