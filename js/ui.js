@@ -84,7 +84,7 @@ function updateUI() {
     updateDeployerUI();
 }
 
-function showToast(message, type = "info") {
+function showToast(message, type = "info", imageSrc = null) {
     const isMedieval = document.body.classList.contains('medieval-mode');
     const isConmen = document.body.classList.contains('conmen-mode');
     const activeId = isMedieval ? 'toastMedieval' : (isConmen ? 'toastConmen' : 'toastDefault');
@@ -111,6 +111,14 @@ function showToast(message, type = "info") {
         const iconClasses = { info: 'fa-info-circle text-blue-400', success: 'fa-check-circle text-emerald-400', error: 'fa-triangle-exclamation text-rose-400' };
         icon.className = (iconClasses[type] || iconClasses.info).split(' ').slice(1).join(' ');
         icon.innerHTML = `<i class="fa-solid ${(iconClasses[type] || iconClasses.info).split(' ')[0]} text-lg"></i>`;
+        // Optional thumbnail (Skull X ordinal art, see pickRandomSkullXOrdinal
+        // in web3.js) - only the default toast skin supports this, Mid
+        // Evils/Conmen have their own dedicated character art instead.
+        const img = document.getElementById('toastImageDefault');
+        if (img) {
+            if (imageSrc) { img.src = imageSrc; img.classList.remove('hidden'); }
+            else { img.classList.add('hidden'); img.src = ''; }
+        }
     }
 
     toast.classList.remove('hidden');
