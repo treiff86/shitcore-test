@@ -131,9 +131,6 @@
                 <button id="walletConnectBtn" title="Connect a wallet to save your progress and appear on the leaderboard - read-only, never asks you to sign a transaction" class="text-gray-400 hover:text-emerald-400 transition text-[10px] font-bold border border-[#1A2232] rounded px-2 py-1.5 whitespace-nowrap">
                     Connect Wallet
                 </button>
-                <button id="btcWalletConnectBtn" onclick="document.getElementById('btcWalletChoiceModal')?.classList.remove('hidden')" title="Connect a Bitcoin wallet (Xverse or UniSat) to unlock Ordinals-gated content - TEST Play only" class="hidden text-gray-400 hover:text-orange-400 transition text-[10px] font-bold border border-[#1A2232] rounded px-2 py-1.5 whitespace-nowrap">
-                    🟠 BTC
-                </button>
                 <button id="btcWalletDisplay" onclick="disconnectBitcoinWallet()" title="Click to disconnect" class="hidden text-orange-400 hover:text-rose-400 transition text-[10px] font-bold border border-[#1A2232] rounded px-2 py-1.5 whitespace-nowrap">
                     🟠 <span id="btcWalletAddressText"></span>
                 </button>
@@ -863,6 +860,7 @@
     <!-- Toast -->
     <!-- Default toast - shown unless medieval-mode is active -->
     <div id="toastDefault" class="fixed bottom-6 right-6 z-50 bg-[#0C0F16] border-l-4 border-blue-500 px-5 py-3.5 rounded-lg shadow-2xl flex items-center space-x-3 text-sm text-gray-100 hidden max-w-sm">
+        <img id="toastImageDefault" src="" alt="" class="hidden w-12 h-12 rounded object-cover flex-shrink-0 border border-white/10">
         <span id="toastIconDefault" class="text-blue-400"><i class="fa-solid fa-info-circle text-lg"></i></span>
         <span id="toastMessageDefault">Default Alert State</span>
     </div>
@@ -937,15 +935,31 @@
         </div>
     </div>
 
-    <!-- Wallet picker - shown when more than one Solana wallet is detected -->
+    <!-- Wallet picker - now the one and only wallet-connect entry point,
+         covering both chains in clearly separated sections instead of
+         the old setup (auto-connect if exactly one Solana wallet was
+         found, a completely separate TEST-only modal for Bitcoin). -->
     <div id="walletPickerModal" class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 hidden p-4">
         <div class="bg-[#0C0F16] border border-cyan-500/40 max-w-sm w-full p-6 rounded-xl shadow-2xl space-y-3">
             <div class="flex items-center justify-between">
                 <h3 class="text-cyan-400 font-black text-lg tracking-tight"><i class="fa-solid fa-wallet mr-1.5"></i>Choose a Wallet</h3>
                 <button onclick="closeWalletPicker()" class="text-gray-500 hover:text-white text-xl leading-none">&times;</button>
             </div>
-            <p class="text-[10px] text-gray-500">More than one Solana wallet was found on this browser - pick which one to connect with.</p>
-            <div id="walletPickerButtons" class="space-y-2"></div>
+            <p class="text-[10px] text-gray-500">More than one wallet was found on this browser - pick which one to connect with.</p>
+
+            <div>
+                <div class="text-[10px] uppercase tracking-wide text-gray-500 font-bold mb-1.5">Solana</div>
+                <div id="walletPickerButtons" class="space-y-2"></div>
+            </div>
+
+            <div>
+                <div class="text-[10px] uppercase tracking-wide text-orange-500/80 font-bold mb-1.5">Bitcoin</div>
+                <p class="text-[10px] text-gray-500 mb-1.5">Unlocks Ordinals-gated content (Skull X, Bitcoin Wizards). Read-only, never asks you to sign a transaction.</p>
+                <div class="space-y-2">
+                    <button onclick="closeWalletPicker(); connectXverse();" class="w-full py-2.5 bg-orange-600/20 hover:bg-orange-600/40 border border-orange-500/30 text-orange-300 rounded font-bold text-sm transition">Xverse</button>
+                    <button onclick="closeWalletPicker(); connectUnisat();" class="w-full py-2.5 bg-orange-600/20 hover:bg-orange-600/40 border border-orange-500/30 text-orange-300 rounded font-bold text-sm transition">UniSat</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -963,20 +977,6 @@
         </div>
     </div>
 
-    <!-- Bitcoin wallet provider choice - separate from the Solana connect
-         flow entirely. Ordinals-gated content (Skull X, Bitcoin Wizards)
-         checks whichever Bitcoin wallet gets connected here. -->
-    <div id="btcWalletChoiceModal" class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 hidden p-4">
-        <div class="bg-[#0C0F16] border border-orange-500/40 max-w-sm w-full p-6 rounded-xl shadow-2xl space-y-3">
-            <div class="flex items-center justify-between">
-                <h3 class="text-orange-400 font-black text-lg tracking-tight">🟠 Connect Bitcoin Wallet</h3>
-                <button onclick="document.getElementById('btcWalletChoiceModal')?.classList.add('hidden')" class="text-gray-500 hover:text-white text-xl leading-none">&times;</button>
-            </div>
-            <p class="text-[10px] text-gray-500">Unlocks Ordinals-gated content (Skull X, Bitcoin Wizards). Read-only, never asks you to sign a transaction.</p>
-            <button onclick="document.getElementById('btcWalletChoiceModal')?.classList.add('hidden'); connectXverse();" class="w-full py-2.5 bg-orange-600/20 hover:bg-orange-600/40 border border-orange-500/30 text-orange-300 rounded font-bold text-sm transition">Xverse</button>
-            <button onclick="document.getElementById('btcWalletChoiceModal')?.classList.add('hidden'); connectUnisat();" class="w-full py-2.5 bg-orange-600/20 hover:bg-orange-600/40 border border-orange-500/30 text-orange-300 rounded font-bold text-sm transition">UniSat</button>
-        </div>
-    </div>
 
     <!-- Play Mode choice - master wallet only, shown every time it connects.
          LIVE PLAY = exactly what any real player experiences, no bypasses.
@@ -1213,7 +1213,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>
 <script src="js/audio.js?v=18" defer></script>
 <script src="js/state.js?v=15" defer></script>
-<script src="js/ui.js?v=5" defer></script>
+<script src="js/ui.js?v=6" defer></script>
 <script src="js/markets.js?v=19" defer></script>
 <script src="js/auditor.js" defer></script>
 <script src="js/deployer.js?v=3" defer></script>
@@ -1224,7 +1224,7 @@
 <script src="js/fightgame.js?v=43" defer></script>
 <script src="js/conmen-egg.js?v=6" defer></script>
 <script src="js/mcdonalds-egg.js?v=4" defer></script>
-<script src="js/web3.js?v=46" defer></script>
+<script src="js/web3.js?v=47" defer></script>
 <script src="js/wizardpopup.js?v=2" defer></script>
 <script src="js/win95desktop.js?v=5" defer></script>
 <script src="js/btcwallet.js?v=4" defer></script>
