@@ -162,7 +162,15 @@ async function applyCosmeticThemes(addr, showChoiceIfMultiple = true) {
             if (theme.checkFn) {
                 owns = await theme.checkFn();
             } else if (theme.collectionAddress && typeof window.checkCollectionOwnership === 'function') {
-                owns = await window.checkCollectionOwnership(addr, theme.collectionAddress);
+                // collectionAddress checks are always Solana-specific -
+                // always use the actual connected Solana wallet here,
+                // NOT the addr parameter, which might be a Bitcoin
+                // address if this re-check was triggered by a BTC wallet
+                // connecting/disconnecting instead of a Solana one. That
+                // mismatch is what caused "Invalid pubkey bc1..." errors
+                // from the Solana NFT checker.
+                if (typeof walletAddress === 'undefined' || !walletAddress) continue;
+                owns = await window.checkCollectionOwnership(walletAddress, theme.collectionAddress);
             }
         } catch (e) {
             console.warn(`[web3] ownership check failed for theme "${theme.id}":`, e);
