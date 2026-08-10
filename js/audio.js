@@ -19,6 +19,7 @@ const THEME_MUSIC_TRACKS = {
     'medieval-mode': 'assets/midevil-theme.mp3',
     'conmen-mode': 'assets/conmen-theme.mp3?v=2',
     'win95-mode': 'assets/wizard-theme.mp3',
+    'skullx-mode': 'assets/skullx-theme.mp3',
 };
 
 // Returns the music file for whichever cosmetic theme is currently active
