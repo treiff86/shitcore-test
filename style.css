@@ -830,6 +830,80 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     background: #45746e;
 }
 
+/* Digital/terminal font across the whole theme - this was the biggest
+   miss in the first pass. JetBrains Mono is already loaded on the page
+   (used for the chart's entry-price label), so no new font import
+   needed - just applying it everywhere for Skull X specifically. */
+.skullx-mode,
+.skullx-mode * {
+    font-family: 'JetBrains Mono', monospace !important;
+}
+.skullx-mode h1,
+.skullx-mode h2,
+.skullx-mode h3,
+.skullx-mode .font-black {
+    font-family: 'JetBrains Mono', monospace !important;
+    font-weight: 700 !important;
+}
+/* Same reason as Conmen/Mid Evils needed this: the blanket font
+   override above also hijacks Font Awesome's icon font, since icons
+   render via specific characters mapped to glyphs in that font -
+   without this, every icon on the page goes blank. */
+.skullx-mode .fa-solid,
+.skullx-mode .fas {
+    font-family: "Font Awesome 6 Free" !important;
+    font-weight: 900 !important;
+}
+.skullx-mode .fa-regular,
+.skullx-mode .far {
+    font-family: "Font Awesome 6 Free" !important;
+    font-weight: 400 !important;
+}
+.skullx-mode .fa-brands,
+.skullx-mode .fab {
+    font-family: "Font Awesome 6 Brands" !important;
+    font-weight: 400 !important;
+}
+
+/* The trading chart's own container - separate fix from the panel
+   selector above because this one specific box uses bg-[#040609]
+   (near-black) instead of the bg-[#0C0F16] every other panel uses, so
+   it never matched that selector and stayed black in the first pass. */
+.skullx-mode [class*="bg-[#040609]"] {
+    background-color: #0a1a17 !important;
+    border-color: #45746e !important;
+}
+
+/* PUMP/DUMP buttons - toned down from the stock bright green/red to
+   match the reference's more muted teal/dusty-rose palette instead of
+   clashing with it. */
+.skullx-mode .bg-green-500 {
+    background-color: #3d8f78 !important;
+}
+.skullx-mode .bg-green-500:hover {
+    background-color: #4aa88d !important;
+}
+.skullx-mode .bg-red-500 {
+    background-color: #6e444e !important;
+}
+.skullx-mode .bg-red-500:hover {
+    background-color: #7f505b !important;
+}
+.skullx-mode .bg-green-600 {
+    background-color: #316b59 !important;
+}
+.skullx-mode .bg-green-600:hover,
+.skullx-mode .hover\:bg-green-500:hover {
+    background-color: #3d8f78 !important;
+}
+.skullx-mode .bg-red-600 {
+    background-color: #5c3941 !important;
+}
+.skullx-mode .bg-red-600:hover,
+.skullx-mode .hover\:bg-red-500:hover {
+    background-color: #6e444e !important;
+}
+
 /* No blanket color override on text this time (unlike Conmen/Mid
    Evils), so the site's existing money/status color coding (green
    cash, red/rose danger, amber warnings, blue info) already survives
