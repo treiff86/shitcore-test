@@ -83,10 +83,12 @@ function onBitcoinWalletConnected() {
     document.getElementById('btcWalletConnectBtn')?.classList.add('hidden');
 
     // Re-check gated cosmetic themes now that a Bitcoin wallet is
-    // available too - quiet update (no popup), same as how TEST Play
-    // applies a baseline pick instead of interrupting with a choice modal.
-    if (typeof applyCosmeticThemes === 'function' && typeof walletAddress !== 'undefined') {
-        applyCosmeticThemes(walletAddress, false);
+    // available too - shows the same "Choose Your Theme" picker as the
+    // Solana side if this wallet turns out to hold more than one gated
+    // thing (e.g. Skull X + Bitcoin Wizards), instead of silently
+    // picking one for them.
+    if (typeof applyCosmeticThemes === 'function') {
+        applyCosmeticThemes(btcWalletAddress, true);
     }
 }
 
