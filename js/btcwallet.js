@@ -124,42 +124,84 @@ async function getMyInscriptions() {
     return [];
 }
 
-// Skull X: Origins uses a real on-chain parent inscription (ord.net shows
-// it as parent #63994951). We don't have that parent's full long-form
-// inscription ID confirmed yet - only the inscription NUMBER, and a
-// candidate ID pulled from a CoinMarketCap listing that hasn't been
-// verified as the true parent vs. just another piece from the same batch
-// reveal. Rather than gate on an unverified guess, this logs everything
-// it sees from the connected wallet so the real ID can be confirmed
-// against an actual Skull X holder's wallet, then hardcoded here for real.
-const SKULLX_ORIGINS_PARENT_NUMBER = 63994951;
-const SKULLX_ORIGINS_PARENT_ID_CANDIDATE = '666552489f01b1f478e28d7c34b601e50ac6ed2f9c2e75da1f6702016bf8e666i0'; // UNVERIFIED
+// Skull X: Origins uses a real on-chain parent inscription. Confirmed
+// directly from a real Skull X: Infinite piece's own "Parents" data
+// (Infinite pieces have 2 parents, one of which is explicitly labeled
+// "SKULLX ORIGINS" - inscription #60983386). This REPLACES the earlier
+// unverified guess (63994951 / a candidate ID pulled from a CoinMarketCap
+// listing), which turned out to be wrong - that's why real Origins
+// holders weren't being recognized before this fix.
+const SKULLX_ORIGINS_PARENT_NUMBER = 60983386;
+const SKULLX_ORIGINS_PARENT_ID_CANDIDATE = '666da210350e1d444a69bb9df97e9dc2338fbfb78534c6251f56f275e75b6666i0';
+
+// All 5 Skull X galleries count toward the same "Skull X" status - one
+// unified check, holding any single one unlocks it, not tracked as
+// separate tiers. Slugs are Ordiscan's OWN collection identifiers, which
+// don't necessarily match ord.net's, Magic Eden's, or OpenSea's slug for
+// the same collection - each needs independently confirming against
+// Ordiscan itself (ordiscan.com/collection/<slug>, or a real holder's
+// connected-wallet console output) the same way bitcoin-wizards was.
+//
+// Cyber Raider is worth calling out specifically: it originally minted
+// on ETHEREUM with a burn-to-redeem flow for the actual Bitcoin Ordinal
+// (see OpenSea/Superful listings) - checking here is intentionally the
+// BTC Ordinal side only, same as every other gallery, so only wallets
+// that actually completed the redemption will pass. There's no ETH-side
+// check anywhere in this codebase and there isn't meant to be one.
+//
+// Status of each slug below: "infinite" and "cyber-raiders" are
+// reasonable candidates from web search (ord.net and Magic Eden
+// respectively) but NEITHER has been independently confirmed against
+// Ordiscan's own site yet. "cursed-raider", "origins", and "hell-raiders"
+// don't have a candidate slug at all yet - search kept surfacing an
+// unrelated Ordinals phenomenon called "Cursed Inscriptions" instead of
+// Tim's actual Cursed Raider collection, so this is a placeholder to
+// fill in once confirmed, not a guess. Note that Infinite's confirmed
+// Origins parentage (above) means the parent-ID check below already
+// covers BOTH Infinite and Origins holders on its own, regardless of
+// whether these collection-slug guesses are ever confirmed.
+const SKULLX_GALLERY_SLUGS = [
+    "skullx_infinite",       // candidate from ord.net - not yet confirmed against Ordiscan directly
+    "skullx-cyber-raiders",  // candidate from Magic Eden - not yet confirmed against Ordiscan directly
+    // "skullx-cursed-raider",  // TODO: fill in once confirmed
+    // "skullx-origins",        // TODO: fill in once confirmed
+    // "skullx-hell-raiders",   // TODO: fill in once confirmed
+];
 
 window.checkSkullXOrigins = async function () {
-    // Primary check: Ordiscan's own collection tagging, same proven
-    // method that confirmed Bitcoin Wizards (see checkOrdiscanCollection
-    // above) - this works regardless of on-chain parent-child provenance,
-    // which most of Skull X doesn't use anyway (see comment above this
-    // function). "skullx_infinite" matches the slug confirmed on
-    // ord.net/collection/skullx_infinite - NOT yet independently verified
-    // against Ordiscan's own site the way bitcoin-wizards was, so if this
-    // comes back false for a real holder, that slug string is the first
-    // thing to double check (Ordiscan's collection page for it, or one
-    // real holder's console output, same as how Bitcoin Wizards got
-    // confirmed).
-    if (await checkOrdiscanCollection("skullx_infinite")) return true;
-
-    // Fallback: the old parent-ID/number guess, kept in case some subset
-    // of the collection does use real on-chain provenance after all.
+    // Primary check: real on-chain parent inscription, now that we have
+    // the confirmed Origins parent ID/number (see above) instead of a
+    // guess. Checks EVERY parent an inscription has, not just the first -
+    // Infinite pieces specifically have 2 parents, and Origins isn't
+    // guaranteed to be the first one in the array, so only checking
+    // index [0] (the old bug) could silently miss real Infinite holders
+    // even with the right ID.
     const inscriptions = await getMyInscriptions();
     console.log('[btcwallet] Inscriptions seen for Skull X check:', inscriptions);
-    return inscriptions.some(i => {
-        const parentId = i.parentInscriptionId || i.parent || (Array.isArray(i.parents) ? i.parents[0] : null);
-        const parentNumber = i.parentInscriptionNumber;
-        if (parentId && parentId === SKULLX_ORIGINS_PARENT_ID_CANDIDATE) return true;
-        if (parentNumber && parentNumber === SKULLX_ORIGINS_PARENT_NUMBER) return true;
-        return false;
+    const hasOriginsParent = inscriptions.some(i => {
+        const parentIds = [];
+        if (i.parentInscriptionId) parentIds.push(i.parentInscriptionId);
+        if (i.parent) parentIds.push(i.parent);
+        if (Array.isArray(i.parents)) parentIds.push(...i.parents);
+        if (parentIds.includes(SKULLX_ORIGINS_PARENT_ID_CANDIDATE)) return true;
+
+        const parentNumbers = [];
+        if (i.parentInscriptionNumber) parentNumbers.push(i.parentInscriptionNumber);
+        if (Array.isArray(i.parentInscriptionNumbers)) parentNumbers.push(...i.parentInscriptionNumbers);
+        return parentNumbers.includes(SKULLX_ORIGINS_PARENT_NUMBER);
     });
+    if (hasOriginsParent) return true;
+
+    // Secondary check: Ordiscan's own collection tagging, same proven
+    // method that confirmed Bitcoin Wizards (see checkOrdiscanCollection
+    // above). Covers galleries that AREN'T Origins-parented (Cyber
+    // Raider, and whichever of the other 3 turn out not to be either),
+    // for whichever slugs above are actually confirmed.
+    for (const slug of SKULLX_GALLERY_SLUGS) {
+        if (await checkOrdiscanCollection(slug)) return true;
+    }
+
+    return false;
 };
 
 /* ============================================================
