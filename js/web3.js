@@ -43,7 +43,7 @@ const COSMETIC_THEMES = [
         label: "Conmen - Cell Block",
         collectionAddress: "9DqJWp9jF2M7F5Be8Sxs1GSJz7HZYVcyFgyMU9CBLmUQ", // verified via Solscan
         cssClass: "conmen-mode",
-        toastMsg: "🔒 Conmen detected! Welcome to the cell block.",
+        toastMsg: "🔒 Conman detected! Welcome to the cell block.",
     },
     {
         id: "skullx",
@@ -147,6 +147,7 @@ function clearCosmeticThemes() {
 // later without having to reconnect.
 let ownedThemesList = [];
 let isConmenHolder = false; // real Conmen NFT ownership - separate from cosmetic theme choice, used to gate the Online Fight Club tab and the Conmen heat perks below
+let isSkullXHolder = false; // real Skull X ownership - same idea, gates the Skull X easter egg below
 
 // showChoiceIfMultiple=false is used specifically for the master wallet's
 // TEST Play path, where Theme Preview is about to open right after and
@@ -170,6 +171,7 @@ async function applyCosmeticThemes(addr, showChoiceIfMultiple = true) {
     }
     ownedThemesList = owned;
     isConmenHolder = owned.some((t) => t.id === "conmen");
+    isSkullXHolder = owned.some((t) => t.id === "skullx");
     updateOnlineLobbyAccess();
 
     const switchBtn = document.getElementById("themeSwitchBtn");
@@ -278,6 +280,7 @@ function choosePlayMode(mode) {
         document.getElementById("bonusStageBtn")?.classList.remove("hidden");
         document.getElementById("audioToggleBtn")?.classList.remove("hidden");
         document.getElementById("conmenEggTestBtn")?.classList.remove("hidden");
+        document.getElementById("skullxEggTestBtn")?.classList.remove("hidden");
         document.getElementById("debugMenuBtn")?.classList.remove("hidden");
         document.getElementById("fightGameBtn")?.classList.remove("hidden");
         document.getElementById("onlineLobbySoonOverlay")?.classList.add("hidden");
@@ -575,12 +578,14 @@ function disconnectWallet() {
     clearCosmeticThemes();
     ownedThemesList = [];
     isConmenHolder = false;
+    isSkullXHolder = false;
     isTestPlayMode = false;
     updateOnlineLobbyAccess();
     document.getElementById("themePreviewBtn")?.classList.add("hidden");
     document.getElementById("themeSwitchBtn")?.classList.add("hidden");
     document.getElementById("bonusStageBtn")?.classList.add("hidden");
     document.getElementById("conmenEggTestBtn")?.classList.add("hidden");
+    document.getElementById("skullxEggTestBtn")?.classList.add("hidden");
     document.getElementById("debugMenuBtn")?.classList.add("hidden");
     document.getElementById("fightGameBtn")?.classList.add("hidden");
     document.getElementById("btcWalletConnectBtn")?.classList.add("hidden");
