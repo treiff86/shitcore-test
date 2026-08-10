@@ -850,6 +850,15 @@ window.FightGame = (function () {
             }
         }
 
+        // Checked every frame, not just once per decision tick above - a
+        // fighter closing at normal walk speed covers real ground during
+        // one 0.2s tick (~55px), so only checking at tick boundaries meant
+        // the CPU regularly walked straight through attackRange and deep
+        // into the player before it next noticed, triggering the push-
+        // apart, then walking back in for the same thing next tick. This
+        // stops it the instant it's actually in range instead.
+        if (ai.moveDir !== 0 && absDist <= diff.attackRange) ai.moveDir = 0;
+
         if (ai.moveDir > 0) keys[bind.right] = true;
         else if (ai.moveDir < 0) keys[bind.left] = true;
 
