@@ -27,7 +27,6 @@ function getXverseProvider() {
 }
 
 async function connectXverse() {
-    if (typeof isTestPlayMode === 'undefined' || !isTestPlayMode) return; // TEST Play only, full stop
     if (typeof walletAddress !== 'undefined' && walletAddress) {
         if (typeof showToast === 'function') showToast("Only one wallet at a time - disconnect your Solana wallet first.", "error");
         return;
@@ -53,7 +52,6 @@ async function connectXverse() {
 }
 
 async function connectUnisat() {
-    if (typeof isTestPlayMode === 'undefined' || !isTestPlayMode) return; // TEST Play only, full stop
     if (typeof walletAddress !== 'undefined' && walletAddress) {
         if (typeof showToast === 'function') showToast("Only one wallet at a time - disconnect your Solana wallet first.", "error");
         return;
