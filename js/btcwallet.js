@@ -81,6 +81,7 @@ function onBitcoinWalletConnected() {
     if (disp) disp.textContent = `${btcWalletAddress.slice(0, 6)}...${btcWalletAddress.slice(-4)}`;
     document.getElementById('btcWalletDisplay')?.classList.remove('hidden');
     document.getElementById('btcWalletConnectBtn')?.classList.add('hidden');
+    document.getElementById('walletConnectBtn')?.classList.add('hidden'); // only one wallet active at a time - no point showing a button that'll just error if clicked
 
     // Re-check gated cosmetic themes now that a Bitcoin wallet is
     // available too - shows the same "Choose Your Theme" picker as the
@@ -97,6 +98,7 @@ function disconnectBitcoinWallet() {
     btcWalletProvider = null;
     document.getElementById('btcWalletDisplay')?.classList.add('hidden');
     document.getElementById('btcWalletConnectBtn')?.classList.remove('hidden');
+    document.getElementById('walletConnectBtn')?.classList.remove('hidden');
     if (typeof applyCosmeticThemes === 'function' && typeof walletAddress !== 'undefined') {
         applyCosmeticThemes(walletAddress, false);
     }
