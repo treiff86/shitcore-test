@@ -797,7 +797,7 @@
                                 <i class="fa-solid fa-plus mr-1"></i>Create Room
                             </button>
                         </div>
-                        <div class="text-[11px] text-gray-500 mb-4">Stage 1: matchmaking only, relayed through the same Supabase setup as your leaderboard - not a direct connection between players. Getting matched opens the Fight Game on both sides, but each side is still its own local game for now - real synced play between two devices isn't wired up yet.</div>
+                        <div class="text-[11px] text-gray-500 mb-4">Matchmaking is relayed through the same Supabase setup as your leaderboard - not a direct peer-to-peer connection. Once matched, your actual inputs (movement, punches, kicks, blocks) are synced live to your opponent and back, so you're really fighting them, not a local CPU. Since it's relayed through a server rather than a direct connection, expect a bit of input delay depending on connection quality.</div>
                         <div id="lobbyRoomList" class="space-y-1"></div>
                     </div>
                 </div>
