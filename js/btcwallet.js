@@ -37,17 +37,39 @@ async function connectXverse() {
         window.open('https://www.xverse.app/', '_blank');
         return;
     }
-    try {
-        const res = await provider.request('getAccounts', { purposes: ['ordinals', 'payment'] });
-        const accounts = res?.result || res || [];
-        const ordinalsAccount = Array.isArray(accounts) ? accounts.find(a => a.purpose === 'ordinals') : null;
-        if (!ordinalsAccount?.address) throw new Error('No ordinals address in response');
-        btcWalletAddress = ordinalsAccount.address;
-        btcWalletProvider = 'xverse';
-        onBitcoinWalletConnected();
-    } catch (e) {
-        console.error('[btcwallet] Xverse connect failed:', e);
-        if (typeof showToast === 'function') showToast("Couldn't connect Xverse - try again.", 'error');
+
+    // Pulls the ordinals-purpose address out of whatever shape Xverse
+    // actually responds with - seen it come back as res.result (array),
+    // res.result.addresses (nested), and plain res (array) depending on
+    // extension state, so this checks all of them instead of assuming one.
+    const extractOrdinalsAddress = (res) => {
+        const accounts = res?.result?.addresses || res?.result || res?.addresses || res || [];
+        const list = Array.isArray(accounts) ? accounts : [];
+        return list.find(a => a?.purpose === 'ordinals')?.address || null;
+    };
+
+    for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+            const res = await provider.request('getAccounts', { purposes: ['ordinals', 'payment'] });
+            const address = extractOrdinalsAddress(res);
+            if (address) {
+                btcWalletAddress = address;
+                btcWalletProvider = 'xverse';
+                onBitcoinWalletConnected();
+                return;
+            }
+            throw new Error('No ordinals address in response');
+        } catch (e) {
+            console.error(`[btcwallet] Xverse connect attempt ${attempt} failed:`, e);
+            if (attempt === 1) {
+                // Right after a disconnect/reconnect, the extension can
+                // occasionally answer before it's fully ready - one short
+                // pause and a second try clears this most of the time.
+                await new Promise(r => setTimeout(r, 600));
+                continue;
+            }
+            if (typeof showToast === 'function') showToast("Couldn't connect Xverse - try again.", 'error');
+        }
     }
 }
 
@@ -240,17 +262,26 @@ const ORDISCAN_API_KEY = "abe0d88c-74bd-4828-8f8b-ed7b66efafd7";
 const ORDISCAN_BASE = "https://api.ordiscan.com/v1";
 
 async function ordiscanFetch(path) {
+    console.log(`[btcwallet] Ordiscan request starting: ${path}`);
     try {
         const res = await fetch(`${ORDISCAN_BASE}${path}`, {
             headers: { Authorization: `Bearer ${ORDISCAN_API_KEY}` },
         });
+        console.log(`[btcwallet] Ordiscan responded: HTTP ${res.status} for ${path}`);
         if (!res.ok) {
             console.warn(`[btcwallet] Ordiscan returned HTTP ${res.status} for ${path}`);
             return null;
         }
-        return await res.json();
+        const json = await res.json();
+        console.log(`[btcwallet] Ordiscan response body for ${path}:`, JSON.stringify(json).slice(0, 500));
+        return json;
     } catch (e) {
-        console.warn(`[btcwallet] Ordiscan request failed for ${path}:`, e);
+        // If this fires with a generic "Failed to fetch" / TypeError and
+        // no HTTP status ever logged above, that's the signature of a
+        // CORS block or network-level failure - the request never
+        // actually reached Ordiscan's server at all, browser blocked it
+        // client-side before it could.
+        console.error(`[btcwallet] Ordiscan request FAILED before getting any HTTP response for ${path} (likely CORS or network-level, not an API error):`, e);
         return null;
     }
 }
@@ -263,7 +294,12 @@ async function ordiscanFetch(path) {
 async function checkOrdiscanCollection(slug) {
     if (!btcWalletAddress) return false;
     const data = await ordiscanFetch(`/address/${btcWalletAddress}/inscriptions`);
-    if (!Array.isArray(data)) return false;
+    if (!Array.isArray(data)) {
+        console.log(`[btcwallet] Ordiscan collection check for "${slug}": no usable data returned, treating as not owned`);
+        return false;
+    }
+    const slugsSeen = [...new Set(data.map(i => i.collection_slug).filter(Boolean))];
+    console.log(`[btcwallet] Ordiscan collection check for "${slug}": ${data.length} inscriptions returned, collection_slug values actually present: ${JSON.stringify(slugsSeen)}`);
     return data.some(i => i.collection_slug === slug);
 }
 
@@ -272,7 +308,11 @@ async function checkOrdiscanCollection(slug) {
 async function checkOrdiscanRune(runeName) {
     if (!btcWalletAddress) return false;
     const data = await ordiscanFetch(`/address/${btcWalletAddress}/runes`);
-    if (!Array.isArray(data)) return false;
+    if (!Array.isArray(data)) {
+        console.log(`[btcwallet] Ordiscan rune check for "${runeName}": no usable data returned, treating as not owned`);
+        return false;
+    }
+    console.log(`[btcwallet] Ordiscan rune check for "${runeName}": runes actually present in wallet:`, JSON.stringify(data.map(r => ({ name: r.name, balance: r.balance }))));
     return data.some(r => r.name === runeName && BigInt(r.balance || "0") > 0n);
 }
 
