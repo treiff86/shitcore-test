@@ -253,13 +253,27 @@ function renderThemeChoiceButtons() {
             class="w-full py-2 bg-emerald-600/20 hover:bg-emerald-600/40 border border-emerald-500/30 text-emerald-300 rounded text-xs font-bold transition">
             ${t.label}
         </button>
-    `).join("");
+    `).join("") + `
+        <button onclick="selectNoTheme()"
+            class="w-full py-2 bg-gray-600/20 hover:bg-gray-600/40 border border-gray-500/30 text-gray-300 rounded text-xs font-bold transition">
+            No Theme (standard look)
+        </button>
+    `;
 }
 
 function selectOwnedTheme(themeId) {
     const theme = ownedThemesList.find((t) => t.id === themeId);
     if (!theme) return;
     applyTheme(theme);
+    closeThemeChoice();
+}
+
+// Opting out - holding a gated NFT doesn't have to mean wanting the
+// themed look every time. Doesn't forget what they own (ownedThemesList
+// is untouched, so the "switch theme" button can still bring this modal
+// back up later) - just clears whichever theme is currently applied.
+function selectNoTheme() {
+    clearCosmeticThemes();
     closeThemeChoice();
 }
 
