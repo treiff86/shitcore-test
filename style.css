@@ -1479,3 +1479,140 @@ body.win95-mode nav button[class*="border-blue-500"] {
     .wizard-im-popup { width: calc(100vw - 20px); right: 10px; }
     .wizard-im-popup .wizard-im-avatar { width: 40px; height: 40px; }
 }
+
+/* ==================================================================
+   GENUINE UNDEAD THEME - dark terminal/"hacker green" look, matched
+   to the reference mockup. Colors sampled directly from it: near-
+   black navy base (#0c0f16, same base as the rest of the site),
+   vivid terminal green (#2ecc71-ish, sampled range #1e6233-#4a8e5f)
+   for headings/accents/the chart line, muted green for secondary
+   panels. Skull silhouette watermark pattern is a hand-made SVG
+   (assets/undead-skull-pattern.svg), not a photo/generated image -
+   simple enough to just draw directly, keeps it crisp at any size.
+   Mirrors skullx-mode's structure. Deliberately swapping this theme
+   from cssClass:"" to a real visual - see the comment on the
+   genuineundead entry in web3.js for why that's a deliberate change,
+   not an oversight.
+   ================================================================== */
+.undead-mode {
+    background-color: #0c0f16;
+    background-image:
+        radial-gradient(ellipse at 20% 15%, rgba(46,204,113,0.10), transparent 55%),
+        radial-gradient(ellipse at 80% 85%, rgba(30,98,51,0.12), transparent 55%),
+        url('assets/undead-skull-pattern.svg');
+    background-repeat: no-repeat, no-repeat, repeat;
+    background-position: center, center, center;
+    background-size: auto, auto, 240px 240px;
+    background-attachment: fixed, fixed, fixed;
+}
+.undead-mode,
+.undead-mode * {
+    font-family: 'JetBrains Mono', monospace !important;
+    color: #a8c9b0 !important;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+}
+.undead-mode h1,
+.undead-mode h2,
+.undead-mode h3,
+.undead-mode .font-black {
+    font-family: 'JetBrains Mono', monospace !important;
+    font-weight: 700 !important;
+    color: #2ecc71 !important;
+    text-shadow: 0 0 8px rgba(46,204,113,0.5), 0 1px 3px rgba(0,0,0,0.7);
+    letter-spacing: 0.5px;
+}
+.undead-mode .fa-solid,
+.undead-mode .fas {
+    font-family: "Font Awesome 6 Free" !important;
+    font-weight: 900 !important;
+}
+.undead-mode .fa-regular,
+.undead-mode .far {
+    font-family: "Font Awesome 6 Free" !important;
+    font-weight: 400 !important;
+}
+.undead-mode .fa-brands,
+.undead-mode .fab {
+    font-family: "Font Awesome 6 Brands" !important;
+    font-weight: 400 !important;
+}
+
+/* Panels - same verified-safe selector as the other themes. */
+.undead-mode [class*="bg-[#0C0F16]"][class*="border-[#1A2232]"] {
+    background-color: #0d1310 !important;
+    border: 1px solid #2ecc71 !important;
+    box-shadow: 0 0 14px rgba(46,204,113,0.20), inset 0 0 20px rgba(46,204,113,0.06) !important;
+}
+/* The trading chart's own container uses a different bg color than the
+   other panels (bg-[#040609]) - same gotcha found and fixed for Skull X. */
+.undead-mode [class*="bg-[#040609]"] {
+    background-color: #081410 !important;
+    border-color: #2ecc71 !important;
+}
+.undead-mode header {
+    background-color: #0a0d12 !important;
+    border-bottom: 1px solid #2ecc71 !important;
+}
+.undead-mode nav,
+.undead-mode footer {
+    background-color: #0c0f16 !important;
+    border-color: #1e6233 !important;
+}
+.undead-mode footer * {
+    color: #7fa88b !important;
+}
+.undead-mode footer .text-green-400 {
+    color: #2ecc71 !important;
+}
+.undead-mode footer .text-amber-500 {
+    color: #d9a85e !important;
+}
+.undead-mode .mc-inset-panel,
+.undead-mode #wagerControlPanel {
+    background-color: #0f1712 !important;
+    border: 1px solid #1e6233 !important;
+}
+
+/* PUMP/DUMP buttons - muted sage green and a warmer red than the stock
+   Tailwind colors, matching the reference instead of clashing with it. */
+.undead-mode .bg-green-500 {
+    background-color: #2e8a4f !important;
+}
+.undead-mode .bg-green-500:hover {
+    background-color: #37a15c !important;
+}
+.undead-mode .bg-red-500 {
+    background-color: #a6403a !important;
+}
+.undead-mode .bg-red-500:hover {
+    background-color: #bc4a43 !important;
+}
+.undead-mode .bg-green-600 {
+    background-color: #25693d !important;
+}
+.undead-mode .bg-green-600:hover,
+.undead-mode .hover\:bg-green-500:hover {
+    background-color: #2e8a4f !important;
+}
+.undead-mode .bg-red-600 {
+    background-color: #833330 !important;
+}
+.undead-mode .bg-red-600:hover,
+.undead-mode .hover\:bg-red-500:hover {
+    background-color: #a6403a !important;
+}
+
+.undead-mode ::-webkit-scrollbar {
+    width: 10px;
+}
+.undead-mode ::-webkit-scrollbar-track {
+    background: #0c0f16;
+}
+.undead-mode ::-webkit-scrollbar-thumb {
+    background: #1e6233;
+    border: 2px solid #0a0d12;
+    border-radius: 4px;
+}
+.undead-mode ::-webkit-scrollbar-thumb:hover {
+    background: #2ecc71;
+}
