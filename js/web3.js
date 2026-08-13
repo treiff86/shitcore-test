@@ -80,12 +80,14 @@ const COSMETIC_THEMES = [
     {
         id: "genuineundead",
         label: "Genuine Undead",
-        cssClass: "", // uses the normal site background on purpose - only the Fight Game arena/fighter change for this one
+        cssClass: "undead-mode", // dark terminal-green "hacker" theme, matched to the reference mockup - previously "" on purpose (see old comment below), changed deliberately per Tim's request
         toastMsg: "☠️ Genuine Undead detected!",
         // TEST Play preview only, on purpose - no collectionAddress/checkFn
         // means real ownership detection (applyCosmeticThemes) can never
         // match this for an actual player; it only ever shows up via the
         // Theme Preview modal, which is itself TEST-Play-gated already.
+        // (This part is still true - only the cssClass changed, not the
+        // TEST-only reachability.)
     },
 ];
 
