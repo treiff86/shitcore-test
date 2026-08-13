@@ -429,6 +429,7 @@ function renderChart() {
     const range = maxVal - minVal || 1;
 
     const skullxActive = document.body.classList.contains('skullx-mode');
+    const undeadActive = document.body.classList.contains('undead-mode');
     if (skullxActive) {
         // Skull X gets its own bar-style chart to match the reference
         // mockup - solid teal bars instead of a line, no painter-tip
@@ -442,7 +443,12 @@ function renderChart() {
             ctx.fillRect(x, canvas.height - barH, barW, barH);
         }
     } else {
-        ctx.strokeStyle = '#3B82F6';
+        // Genuine Undead keeps the normal line-chart shape (its
+        // reference mockup does too, unlike Skull X's bars) - just
+        // recolored to the theme's neon green instead of the default
+        // blue. Painter-tip logic (lineRightEdge) stays intact either
+        // way since that's a Mid Evils-only easter egg, unaffected here.
+        ctx.strokeStyle = undeadActive ? '#2ecc71' : '#3B82F6';
         ctx.lineWidth = 2.5;
         ctx.beginPath();
         for (let i = 0; i < priceHistory.length; i++) {
