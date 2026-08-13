@@ -192,12 +192,11 @@ async function applyCosmeticThemes(addr, showChoiceIfMultiple = true) {
     if (owned.length === 0) {
         return; // no gated collection owned, normal look
     }
-    if (owned.length === 1) {
-        applyTheme(owned[0]);
-        return;
-    }
-    // Owns more than one gated collection - let them pick rather than
-    // silently defaulting to whichever happens to be checked first.
+    // Ask before applying, even with exactly one match - holding a
+    // gated NFT doesn't mean the themed look should switch on
+    // automatically without confirmation. Only exception: showChoiceIfMultiple
+    // === false is the "quiet re-check" path (e.g. disconnecting a wallet),
+    // which should never pop up a modal on its own.
     if (!showChoiceIfMultiple) {
         applyTheme(owned[0]); // baseline pick; caller has its own way to let them override (Theme Preview)
         return;
@@ -536,7 +535,7 @@ function openWalletPicker(wallets) {
     const modal = document.getElementById("walletPickerModal");
     if (!box || !modal) return;
     if (wallets.length === 0) {
-        box.innerHTML = `<p class="text-[10px] text-gray-500 italic">No Solana wallet detected - install Phantom, Solflare, Backpack, or similar, or use a Bitcoin wallet below instead.</p>`;
+        box.innerHTML = `<p class="text-[10px] text-gray-500 italic">No Solana wallet detected - install Phantom, Solflare, Backpack, or similar, or use a Bitcoin/Ethereum wallet below instead.</p>`;
     } else {
         box.innerHTML = wallets.map((w, i) => `
             <button onclick="connectToProvider(_walletPickerList[${i}])"
@@ -544,6 +543,7 @@ function openWalletPicker(wallets) {
                 ${w.name}
             </button>`).join("");
     }
+    if (typeof renderEthWalletPickerButtons === 'function') renderEthWalletPickerButtons();
     modal.classList.remove("hidden");
 }
 
