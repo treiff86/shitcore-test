@@ -34,17 +34,26 @@ window.addEventListener('eip6963:announceProvider', (event) => {
 });
 window.dispatchEvent(new Event('eip6963:requestProvider'));
 
+// Wallets that technically announce an EIP-1193/EIP-6963-compatible
+// interface (for cross-chain dApp compatibility) but aren't genuine
+// Ethereum wallets someone would pick here - TronLink is the known case,
+// it exposes this for Tron dApps, not because it's meant to be an
+// Ethereum option.
+const ETH_PROVIDER_EXCLUDE_NAMES = ['tronlink'];
+
 function getEthereumProviders() {
+    let list;
     if (_eip6963Providers.length > 0) {
-        return _eip6963Providers.map(p => ({ name: p.info.name, icon: p.info.icon, provider: p.provider }));
+        list = _eip6963Providers.map(p => ({ name: p.info.name, icon: p.info.icon, provider: p.provider }));
+    } else if (typeof window.ethereum !== 'undefined') {
+        // No EIP-6963 announcements (older wallet, or the announce event
+        // fired before this script loaded) - fall back to the plain
+        // window.ethereum injection if one exists.
+        list = [{ name: window.ethereum.isMetaMask ? 'MetaMask' : 'Browser Wallet', icon: null, provider: window.ethereum }];
+    } else {
+        list = [];
     }
-    // No EIP-6963 announcements (older wallet, or the announce event
-    // fired before this script loaded) - fall back to the plain
-    // window.ethereum injection if one exists.
-    if (typeof window.ethereum !== 'undefined') {
-        return [{ name: window.ethereum.isMetaMask ? 'MetaMask' : 'Browser Wallet', icon: null, provider: window.ethereum }];
-    }
-    return [];
+    return list.filter(p => !ETH_PROVIDER_EXCLUDE_NAMES.includes((p.name || '').toLowerCase()));
 }
 
 async function connectEthereum(providerIndex) {
