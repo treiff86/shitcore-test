@@ -28,9 +28,15 @@ let ethWalletProviderInfo = null; // the EIP-6963 provider detail (name, icon, t
 // this collects whatever announces itself before the picker is opened.
 // Falls back to plain window.ethereum (older wallets that don't support
 // EIP-6963 yet, or only one wallet installed) if nothing announces itself.
-const _eip6963Providers = [];
+// Keyed by the provider's own info.uuid (a real unique ID EIP-6963
+// requires every announcement to include, specifically so listeners can
+// tell "this is the same wallet re-announcing" apart from "this is a
+// genuinely different wallet") - a Map here means a wallet re-announcing
+// itself (which is normal, expected behavior, not a bug on the wallet's
+// side) just overwrites its own entry instead of adding a duplicate.
+const _eip6963Providers = new Map();
 window.addEventListener('eip6963:announceProvider', (event) => {
-    _eip6963Providers.push(event.detail);
+    _eip6963Providers.set(event.detail.info.uuid, event.detail);
 });
 window.dispatchEvent(new Event('eip6963:requestProvider'));
 
@@ -43,8 +49,8 @@ const ETH_PROVIDER_EXCLUDE_NAMES = ['tronlink'];
 
 function getEthereumProviders() {
     let list;
-    if (_eip6963Providers.length > 0) {
-        list = _eip6963Providers.map(p => ({ name: p.info.name, icon: p.info.icon, provider: p.provider }));
+    if (_eip6963Providers.size > 0) {
+        list = Array.from(_eip6963Providers.values()).map(p => ({ name: p.info.name, icon: p.info.icon, provider: p.provider }));
     } else if (typeof window.ethereum !== 'undefined') {
         // No EIP-6963 announcements (older wallet, or the announce event
         // fired before this script loaded) - fall back to the plain
