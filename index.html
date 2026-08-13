@@ -134,6 +134,9 @@
                 <button id="btcWalletDisplay" onclick="disconnectBitcoinWallet()" title="Click to disconnect" class="hidden text-orange-400 hover:text-rose-400 transition text-[10px] font-bold border border-[#1A2232] rounded px-2 py-1.5 whitespace-nowrap">
                     🟠 <span id="btcWalletAddressText"></span>
                 </button>
+                <button id="ethWalletDisplay" onclick="disconnectEthereumWallet()" title="Click to disconnect" class="hidden text-indigo-400 hover:text-rose-400 transition text-[10px] font-bold border border-[#1A2232] rounded px-2 py-1.5 whitespace-nowrap">
+                    🔷 <span id="ethWalletAddressText"></span>
+                </button>
                 <button id="resetGameBtn" title="Refresh your funds to $1,000" class="text-gray-500 hover:text-rose-400 transition text-xs border border-[#1A2232] rounded px-2 py-1.5">
                     <i class="fa-solid fa-arrows-rotate"></i>
                 </button>
@@ -960,6 +963,12 @@
                     <button onclick="closeWalletPicker(); connectUnisat();" class="w-full py-2.5 bg-orange-600/20 hover:bg-orange-600/40 border border-orange-500/30 text-orange-300 rounded font-bold text-sm transition">UniSat</button>
                 </div>
             </div>
+
+            <div>
+                <div class="text-[10px] uppercase tracking-wide text-indigo-400/80 font-bold mb-1.5">Ethereum</div>
+                <p class="text-[10px] text-gray-500 mb-1.5">Read-only, never asks you to sign a transaction.</p>
+                <div id="ethWalletPickerButtons" class="space-y-2"></div>
+            </div>
         </div>
     </div>
 
@@ -1262,10 +1271,11 @@
 <script src="js/conmen-egg.js?v=6" defer></script>
 <script src="js/skullx-egg.js?v=2" defer></script>
 <script src="js/mcdonalds-egg.js?v=4" defer></script>
-<script src="js/web3.js?v=51" defer></script>
+<script src="js/web3.js?v=53" defer></script>
 <script src="js/wizardpopup.js?v=2" defer></script>
 <script src="js/win95desktop.js?v=5" defer></script>
-<script src="js/btcwallet.js?v=16" defer></script>
+<script src="js/btcwallet.js?v=17" defer></script>
+<script src="js/ethwallet.js?v=1" defer></script>
 <script src="js/onlinesync.js?v=1" defer></script>
 <script src="js/onlinelobby.js?v=6" defer></script>
 <script type="module" src="js/sns.js?v=5"></script>
