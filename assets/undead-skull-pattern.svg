@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240" viewBox="0 0 240 240">
+  <defs>
+    <g id="skull">
+      <path fill="#1a3d26" opacity="0.55" d="
+        M40 8
+        C 20 8 6 24 6 44
+        C 6 58 12 68 20 74
+        L 20 88 C 20 94 24 98 30 98 L 34 98 C 34 92 38 90 40 90
+        C 42 90 46 92 46 98 L 50 98 C 56 98 60 94 60 88 L 60 74
+        C 68 68 74 58 74 44 C 74 24 60 8 40 8 Z
+        M 24 46 a 8 10 0 1 1 0.1 0 Z
+        M 56 46 a 8 10 0 1 1 0.1 0 Z
+        M 34 62 L 40 70 L 46 62 Z
+      "/>
+    </g>
+  </defs>
+  <use href="#skull" x="10" y="10"/>
+  <use href="#skull" x="130" y="70" opacity="0.4"/>
+  <use href="#skull" x="60" y="150" opacity="0.35"/>
+</svg>
