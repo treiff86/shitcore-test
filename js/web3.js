@@ -455,7 +455,16 @@ function getInstalledWallets() {
         if (found.some(w => w.name === name)) continue; // already found via the legacy check above
         found.push({ name, kind: "standard", provider: wallet });
     }
-    return found;
+    // Final dedup pass on the combined list, not just within each source
+    // separately - some wallets (Backpack included) can fire their
+    // Wallet Standard announce event more than once, which the per-source
+    // checks above don't always catch.
+    const seen = new Set();
+    return found.filter(w => {
+        if (seen.has(w.name)) return false;
+        seen.add(w.name);
+        return true;
+    });
 }
 
 let activeProvider = null; // whichever wallet's provider/wallet object we actually connected with
