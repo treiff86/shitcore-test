@@ -1481,29 +1481,29 @@ body.win95-mode nav button[class*="border-blue-500"] {
 }
 
 /* ==================================================================
-   GENUINE UNDEAD THEME - dark terminal/"hacker green" look, matched
-   to the reference mockup. Colors sampled directly from it: near-
-   black navy base (#0c0f16, same base as the rest of the site),
-   vivid terminal green (#2ecc71-ish, sampled range #1e6233-#4a8e5f)
-   for headings/accents/the chart line, muted green for secondary
-   panels. Skull silhouette watermark pattern is a hand-made SVG
-   (assets/undead-skull-pattern.svg), not a photo/generated image -
-   simple enough to just draw directly, keeps it crisp at any size.
-   Mirrors skullx-mode's structure. Deliberately swapping this theme
-   from cssClass:"" to a real visual - see the comment on the
-   genuineundead entry in web3.js for why that's a deliberate change,
-   not an oversight.
+   GENUINE UNDEAD THEME - dark terminal/"hacker green" look. Colors
+   sampled from the original reference mockup: near-black navy base
+   (#0c0f16, same base as the rest of the site), vivid terminal green
+   (#2ecc71-ish, sampled range #1e6233-#4a8e5f) for headings/accents/
+   the chart line, muted green for secondary panels. Background is a
+   cyberpunk "Neo-Kyoto" city image Tim provided (assets/undead-
+   cyberpunk-bg.webp) - replaces the earlier hand-drawn skull-pattern
+   SVG (assets/undead-skull-pattern.svg, no longer referenced here,
+   safe to delete from the repo whenever). Mirrors skullx-mode's
+   overall structure. Deliberately swapping this theme from
+   cssClass:"" to a real visual - see the comment on the genuineundead
+   entry in web3.js for why that's a deliberate change, not an
+   oversight.
    ================================================================== */
 .undead-mode {
     background-color: #0c0f16;
     background-image:
-        radial-gradient(ellipse at 20% 15%, rgba(46,204,113,0.10), transparent 55%),
-        radial-gradient(ellipse at 80% 85%, rgba(30,98,51,0.12), transparent 55%),
-        url('assets/undead-skull-pattern.svg');
-    background-repeat: no-repeat, no-repeat, repeat;
-    background-position: center, center, center;
-    background-size: auto, auto, 240px 240px;
-    background-attachment: fixed, fixed, fixed;
+        linear-gradient(rgba(12,15,22,0.55), rgba(12,15,22,0.55)),
+        url('assets/undead-cyberpunk-bg.webp');
+    background-repeat: no-repeat, no-repeat;
+    background-position: center, center;
+    background-size: cover, cover;
+    background-attachment: fixed, fixed;
 }
 .undead-mode,
 .undead-mode * {
