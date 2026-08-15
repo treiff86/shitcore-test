@@ -172,49 +172,105 @@ window.MevSandwichGame = (function () {
         ctx.save();
         ctx.translate(x, y);
         ctx.rotate(angle);
-        const s = size;
-        const h = s * 0.62;
-        ctx.fillStyle = 'rgba(0,0,0,0.25)';
+        const r = size / 2;
+
+        // soft drop shadow first, same as before
+        ctx.fillStyle = 'rgba(0,0,0,0.28)';
         ctx.beginPath();
-        ctx.ellipse(2, 3, s / 2, h / 2, 0, 0, Math.PI * 2);
+        ctx.ellipse(2, 3, r, r * 0.82, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        // bottom bread
-        ctx.fillStyle = '#e2b869';
-        roundedRect(-s / 2, -h * 0.30, s, h * 0.34, h * 0.12);
-        // meat
-        ctx.fillStyle = '#a85a3a';
-        roundedRect(-s / 2 + 1, -h * 0.06, s - 2, h * 0.16, 3);
-        // lettuce
-        ctx.fillStyle = '#7fc26b';
-        roundedRect(-s / 2 + 1, h * 0.08, s - 2, h * 0.10, 3);
-        // tomato
-        ctx.fillStyle = '#d6564a';
-        roundedRect(-s / 2 + 1, h * 0.16, s - 2, h * 0.09, 3);
-        // top bread
-        ctx.fillStyle = '#eccb85';
-        roundedRect(-s / 2, -h * 0.5, s, h * 0.24, h * 0.12);
+        // round glossy body - radial gradient gives the smooth "worm tube"
+        // highlight/shadow look instead of a flat-shaded rectangle
+        const grad = ctx.createRadialGradient(-r * 0.35, -r * 0.35, r * 0.15, 0, 0, r);
+        grad.addColorStop(0, '#f6dfa0');
+        grad.addColorStop(0.55, '#e6bd72');
+        grad.addColorStop(1, '#a5763f');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, r, r * 0.82, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // sandwich filling, visible as a clipped cross-section band across
+        // the middle of the round segment instead of stacked rectangles -
+        // reads as "sandwich" while keeping the round glossy silhouette
+        ctx.save();
+        ctx.beginPath();
+        ctx.ellipse(0, 0, r, r * 0.82, 0, 0, Math.PI * 2);
+        ctx.clip();
+        ctx.fillStyle = '#a85a3a'; // meat
+        ctx.fillRect(-r, -r * 0.16, r * 2, r * 0.30);
+        ctx.fillStyle = '#7fc26b'; // lettuce
+        ctx.fillRect(-r, r * 0.10, r * 2, r * 0.16);
+        ctx.fillStyle = '#d6564a'; // tomato
+        ctx.fillRect(-r, r * 0.24, r * 2, r * 0.14);
+        ctx.restore();
+
+        // thin dark outline ties the whole segment together, same trick
+        // every smooth-worm-style game uses to keep segments readable
+        // against each other and the background
+        ctx.strokeStyle = 'rgba(40,25,10,0.45)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, r, r * 0.82, 0, 0, Math.PI * 2);
+        ctx.stroke();
 
         if (isHead) {
-            // little cartoon eyes so the front reads clearly as "the front"
-            ctx.fillStyle = '#1a1a1a';
-            ctx.beginPath();
-            ctx.arc(s * 0.18, -h * 0.05, s * 0.06, 0, Math.PI * 2);
-            ctx.arc(s * 0.18, h * 0.12, s * 0.06, 0, Math.PI * 2);
-            ctx.fill();
+            // bigger, rounder, glossy cartoon eyes - white base, black
+            // pupil, tiny highlight dot for the glossy look
+            for (const ey of [-r * 0.32, r * 0.32]) {
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.arc(r * 0.35, ey, r * 0.22, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#161616';
+                ctx.beginPath();
+                ctx.arc(r * 0.42, ey, r * 0.12, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = 'rgba(255,255,255,0.9)';
+                ctx.beginPath();
+                ctx.arc(r * 0.46, ey - r * 0.05, r * 0.045, 0, Math.PI * 2);
+                ctx.fill();
+            }
         }
         ctx.restore();
     }
 
-    function roundedRect(x, y, w, h, r) {
-        ctx.beginPath();
-        ctx.moveTo(x + r, y);
-        ctx.arcTo(x + w, y, x + w, y + h, r);
-        ctx.arcTo(x + w, y + h, x, y + h, r);
-        ctx.arcTo(x, y + h, x, y, r);
-        ctx.arcTo(x, y, x + w, y, r);
-        ctx.closePath();
-        ctx.fill();
+    // Hex-tile background - each hex a very slightly different dark shade
+    // so the tiling reads without being distracting, same general
+    // technique the reference used. Pre-rendered once to an offscreen
+    // canvas so redrawing it every frame is just one cheap blit instead
+    // of hundreds of polygon fills.
+    let _hexBgCanvas = null;
+    function buildHexBackground() {
+        const hexR = 26; // hex "radius" (center to corner)
+        const hexW = hexR * Math.sqrt(3);
+        const hexH = hexR * 2;
+        const off = document.createElement('canvas');
+        off.width = SW; off.height = SH;
+        const octx = off.getContext('2d');
+        octx.fillStyle = '#0b0f16';
+        octx.fillRect(0, 0, SW, SH);
+        for (let row = -1; row * (hexH * 0.75) < SH + hexH; row++) {
+            const y = row * hexH * 0.75;
+            const xOffset = (row % 2) ? hexW / 2 : 0;
+            for (let col = -1; col * hexW < SW + hexW; col++) {
+                const x = col * hexW + xOffset;
+                const shade = (Math.abs(row * 31 + col * 17) % 5) / 5; // pseudo-random per-tile variation, deterministic so it doesn't flicker
+                const lightness = 12 + shade * 4;
+                octx.fillStyle = `hsl(155, 18%, ${lightness}%)`;
+                octx.beginPath();
+                for (let i = 0; i < 6; i++) {
+                    const a = Math.PI / 3 * i - Math.PI / 6;
+                    const px = x + hexR * 0.94 * Math.cos(a);
+                    const py = y + hexR * 0.94 * Math.sin(a);
+                    if (i === 0) octx.moveTo(px, py); else octx.lineTo(px, py);
+                }
+                octx.closePath();
+                octx.fill();
+            }
+        }
+        _hexBgCanvas = off;
     }
 
     function draw() {
@@ -223,22 +279,25 @@ window.MevSandwichGame = (function () {
         ctx.save();
         ctx.translate(shakeX, shakeY);
 
-        // background - dark "mempool" grid
-        ctx.fillStyle = '#0b0f16';
-        ctx.fillRect(-10, -10, SW + 20, SH + 20);
-        ctx.strokeStyle = 'rgba(46,204,113,0.06)';
-        ctx.lineWidth = 1;
-        for (let x = 0; x < SW; x += 40) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, SH); ctx.stroke(); }
-        for (let y = 0; y < SH; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(SW, y); ctx.stroke(); }
+        if (!_hexBgCanvas) buildHexBackground();
+        ctx.drawImage(_hexBgCanvas, 0, 0);
         ctx.strokeStyle = '#2ecc71';
         ctx.lineWidth = 4;
         ctx.strokeRect(6, 6, SW - 12, SH - 12);
 
-        // food
+        // food - soft glow behind each dot, matching the "glowing energy
+        // particle" look instead of a flat filled circle
         for (const f of g.food) {
             const bobY = Math.sin(f.bob) * 3;
             ctx.save();
             ctx.translate(f.x, f.y + bobY);
+            const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, f.r * 2.6);
+            glow.addColorStop(0, f.color + 'aa');
+            glow.addColorStop(1, f.color + '00');
+            ctx.fillStyle = glow;
+            ctx.beginPath();
+            ctx.arc(0, 0, f.r * 2.6, 0, Math.PI * 2);
+            ctx.fill();
             ctx.fillStyle = f.color;
             ctx.beginPath();
             ctx.arc(0, 0, f.r, 0, Math.PI * 2);
