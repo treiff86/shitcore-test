@@ -333,7 +333,13 @@ async function checkOrdiscanSkullXParent() {
     }
     const parentIdsSeen = [...new Set(data.map(i => i.parent_inscription_id).filter(Boolean))];
     console.log(`[btcwallet] Ordiscan Skull X parent check: ${data.length} inscriptions returned, parent_inscription_id values actually present: ${JSON.stringify(parentIdsSeen)}`);
-    return data.some(i => i.parent_inscription_id === SKULLX_ORIGINS_PARENT_ID_CANDIDATE);
+    // Skull X galleries don't share ONE parent ID - real data confirmed at
+    // least 8 distinct ones, but every single one follows the same
+    // consistent branded shape: starts with "666" and ends with
+    // "666i<digit>". Matching that pattern catches every gallery at once
+    // instead of chasing individual IDs one at a time.
+    const skullXPattern = /^666[0-9a-f]+666i\d+$/i;
+    return data.some(i => i.parent_inscription_id && skullXPattern.test(i.parent_inscription_id));
 }
 
 // Checks the connected BTC wallet's Rune balance for a real amount > 0 of
