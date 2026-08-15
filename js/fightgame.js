@@ -384,6 +384,7 @@ window.FightGame = (function () {
         }
         lastArenaBg = src;
         currentArena = ARENA_CONFIG[src] || null;
+        console.log(`[fightgame] Arena loaded: ${src} | config:`, currentArena ? JSON.stringify(currentArena) : '(none - using default GROUND=' + GROUND + ', no platform)');
         if (typeof playFightMusicForBackground === 'function') playFightMusicForBackground(src);
         try {
             const img = await loadImage(src);
