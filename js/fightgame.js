@@ -223,7 +223,7 @@ window.FightGame = (function () {
         },
     };
 
-    const BACKGROUNDS = ['assets/fight_game/bg_prison.webp', 'assets/fight_game/bg_market.webp', 'assets/fight_game/bg_wizard.webp', 'assets/fight_game/bg_skullx.webp'];
+    const BACKGROUNDS = ['assets/fight_game/bg_prison.webp', 'assets/fight_game/bg_market.webp', 'assets/fight_game/bg_wizard.webp', 'assets/fight_game/bg_skullx.webp', 'assets/fight_game/bg_undead.webp'];
     // Online matches decide the arena once, at room-creation time (see
     // onlinelobby.js), so both players load the same image instead of each
     // independently rolling their own - this is what that picks from.
@@ -254,6 +254,9 @@ window.FightGame = (function () {
         },
         'assets/fight_game/bg_skullx.webp': {
             ground: 480,           // throne-room art - estimated from the rug/floor line, no platform (no obvious ledge like some other arenas have) - nudge this if feet look off once it's live
+        },
+        'assets/fight_game/bg_undead.webp': {
+            ground: 460,           // revived orphaned asset - never had feet placed against it before, estimated ground line, adjust once it's actually live and visible
         },
     };
     let currentArena = null; // set fresh each time loadArenaBackground() runs
