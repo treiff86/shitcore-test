@@ -74,7 +74,7 @@ function testSkullXEgg() {
     _skullxEggShow();
 }
 
-// Single debug-menu "Easter Egg" button now covers both eggs - fires
+// Single debug-menu "Easter Egg" button now covers all three eggs - fires
 // whichever one matches the currently active theme instead of needing a
 // separate button per theme. Defaults to Conmen's for every other theme
 // (including no theme at all), same as the button did before Skull X's
@@ -82,6 +82,8 @@ function testSkullXEgg() {
 function testThemeEasterEgg() {
     if (document.body.classList.contains('skullx-mode') && typeof testSkullXEgg === 'function') {
         testSkullXEgg();
+    } else if (document.body.classList.contains('undead-mode') && typeof testUndeadEgg === 'function') {
+        testUndeadEgg();
     } else if (typeof testConmenEgg === 'function') {
         testConmenEgg();
     }
