@@ -893,6 +893,18 @@
         </div>
     </div>
 
+    <!-- Genuine Undead toast - same slide-up-from-bottom-left character
+         treatment as Mid Evils/Conmen, but a glowing black-and-green
+         terminal-style bubble instead of the white one, matching
+         undead-mode's own visual language. -->
+    <div id="toastUndead" class="fixed bottom-0 left-6 z-50 hidden flex items-end gap-2 max-w-md">
+        <img src="assets/undead-easteregg.webp" alt="" class="w-48 h-auto flex-shrink-0 drop-shadow-2xl" style="filter: drop-shadow(0 0 14px rgba(46,204,113,0.45));">
+        <div id="toastBubbleUndead" class="bg-[#0a0e14] text-[#7fe8a0] px-4 py-3 rounded-2xl text-sm font-semibold mb-6 relative border-[3px] border-[#2ecc71]" style="font-family: 'JetBrains Mono', monospace; box-shadow: 0 0 18px rgba(46,204,113,0.5), 0 0 4px rgba(46,204,113,0.8) inset;">
+            <span id="toastMessageUndead">Default Alert State</span>
+            <div class="absolute -bottom-[9px] left-6 w-4 h-4 bg-[#0a0e14] border-l-[3px] border-b-[3px] border-[#2ecc71]" style="transform: rotate(45deg);"></div>
+        </div>
+    </div>
+
     <!-- McDonald's mini-game promo popup - random interval, only when the Bonus
          Stage is actually available (see js/mcdonalds-egg.js). Clicking the
          bubble opens the mini-game. -->
@@ -1293,7 +1305,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>
 <script src="js/audio.js?v=20" defer></script>
 <script src="js/state.js?v=15" defer></script>
-<script src="js/ui.js?v=6" defer></script>
+<script src="js/ui.js?v=7" defer></script>
 <script src="js/markets.js?v=21" defer></script>
 <script src="js/auditor.js" defer></script>
 <script src="js/deployer.js?v=3" defer></script>
