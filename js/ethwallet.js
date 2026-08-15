@@ -232,7 +232,7 @@ const GU_ORIGINS_CONTRACT = '0x209e639a0ec166ac7a1a4ba41968fa967db30221'; // Eth
 // ApeChain. Fill these in the moment Tim sends the real addresses (see
 // Details > Contract Address on the collection's OpenSea page).
 const GENUINE_UNDEAD_V3_CONTRACT = null; // TODO: Ethereum mainnet
-const FOREVER_UNDEAD_CONTRACT = null;    // TODO: ApeChain
+const FOREVER_UNDEAD_CONTRACT = '0x0178a9d0b0cba1b2ede3afdb6dd021db24ff4240'; // ApeChain - confirmed via Tim's own lookup
 
 window.checkGenuineUndeadOwnership = async function () {
     if (GENUINE_UNDEAD_V3_CONTRACT && await checkERC721BalanceViaWallet(GENUINE_UNDEAD_V3_CONTRACT)) return true;
