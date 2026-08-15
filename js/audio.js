@@ -20,6 +20,7 @@ const THEME_MUSIC_TRACKS = {
     'conmen-mode': 'assets/conmen-theme.mp3?v=2',
     'win95-mode': 'assets/wizard-theme.mp3',
     'skullx-mode': 'assets/skullx-theme.mp3',
+    'undead-mode': 'assets/undead-theme.mp3',
 };
 
 // Returns the music file for whichever cosmetic theme is currently active
@@ -134,6 +135,7 @@ const FIGHT_ARENA_MUSIC_OVERRIDES = {
     'assets/fight_game/bg_prison.webp': 'assets/conmen-theme.mp3?v=2',
     'assets/fight_game/bg_wizard.webp': 'assets/fight_game/wizard_fight_theme.mp3',
     'assets/fight_game/bg_skullx.webp': 'assets/fight_game/skullx_theme.mp3',
+    'assets/fight_game/bg_undead.webp': 'assets/fight_game/undead_fight_theme.mp3',
 };
 
 // Called by Fight Game once it knows which arena background got picked
