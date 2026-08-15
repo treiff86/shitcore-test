@@ -250,6 +250,12 @@ window.checkSkullXOrigins = async function () {
         if (await checkOrdiscanCollection(slug)) return true;
     }
 
+    // Ethereum side - separate collections entirely from the Bitcoin
+    // Ordinals galleries above, but count toward the same unified
+    // "Skull X" status. Lives in ethwallet.js since that's where the
+    // EVM balanceOf() machinery already is.
+    if (typeof window.checkSkullXEvmOwnership === 'function' && await window.checkSkullXEvmOwnership()) return true;
+
     return false;
 };
 
