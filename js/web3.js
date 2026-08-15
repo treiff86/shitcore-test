@@ -79,9 +79,9 @@ const COSMETIC_THEMES = [
     },
     {
         id: "genuineundead",
-        label: "Genuine Undead",
+        label: "Genuine Undead / Forever Undead",
         cssClass: "undead-mode", // dark terminal-green "hacker" theme, matched to the reference mockup
-        toastMsg: "☠️ Genuine Undead detected!",
+        toastMsg: "☠️ GU/FU Detected!",
         checkFn: async () => {
             if (typeof window.checkGenuineUndeadOwnership !== 'function') return false;
             return await window.checkGenuineUndeadOwnership();
@@ -196,7 +196,8 @@ async function applyCosmeticThemes(addr, showChoiceIfMultiple = true) {
     }
 
     if (owned.length === 0) {
-        return; // no gated collection owned, normal look
+        clearCosmeticThemes(); // nothing owned anymore (e.g. wallet disconnected) - back to the standard look, not whatever was applied before
+        return;
     }
     // Ask before applying, even with exactly one match - holding a
     // gated NFT doesn't mean the themed look should switch on
