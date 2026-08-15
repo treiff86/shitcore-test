@@ -256,7 +256,8 @@ window.FightGame = (function () {
             ground: 480,           // throne-room art - estimated from the rug/floor line, no platform (no obvious ledge like some other arenas have) - nudge this if feet look off once it's live
         },
         'assets/fight_game/bg_undead.webp': {
-            ground: 460,           // revived orphaned asset - never had feet placed against it before, estimated ground line, adjust once it's actually live and visible
+            ground: 481,           // measured directly from the source art (desk base meets floor at source y=712, scaled to the 960x540 canvas) - was 460, a guess made before this background had ever actually been seen live
+            platform: { x1: 528, x2: 715, topY: 335 }, // the green filing cabinets on the right - measured the same way
         },
     };
     let currentArena = null; // set fresh each time loadArenaBackground() runs
