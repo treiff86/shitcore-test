@@ -87,8 +87,9 @@ function updateUI() {
 function showToast(message, type = "info", imageSrc = null) {
     const isMedieval = document.body.classList.contains('medieval-mode');
     const isConmen = document.body.classList.contains('conmen-mode');
-    const activeId = isMedieval ? 'toastMedieval' : (isConmen ? 'toastConmen' : 'toastDefault');
-    const allToastIds = ['toastMedieval', 'toastConmen', 'toastDefault'];
+    const isUndead = document.body.classList.contains('undead-mode');
+    const activeId = isMedieval ? 'toastMedieval' : (isConmen ? 'toastConmen' : (isUndead ? 'toastUndead' : 'toastDefault'));
+    const allToastIds = ['toastMedieval', 'toastConmen', 'toastUndead', 'toastDefault'];
 
     const toast = document.getElementById(activeId);
     allToastIds.filter(id => id !== activeId).forEach(id => {
@@ -105,6 +106,16 @@ function showToast(message, type = "info", imageSrc = null) {
         const bubble = document.getElementById('toastBubbleConmen');
         const borderColors = { info: '#000', success: '#16a34a', error: '#dc2626' };
         bubble.style.borderColor = borderColors[type] || '#000';
+    } else if (isUndead) {
+        document.getElementById('toastMessageUndead').innerText = message;
+        const bubble = document.getElementById('toastBubbleUndead');
+        // Keeps the glowing-green look for info/success; error still reads
+        // as an error (red glow) without breaking the terminal aesthetic.
+        const borderColors = { info: '#2ecc71', success: '#2ecc71', error: '#e05c5c' };
+        const glowColors = { info: 'rgba(46,204,113,0.5)', success: 'rgba(46,204,113,0.5)', error: 'rgba(224,92,92,0.55)' };
+        bubble.style.borderColor = borderColors[type] || borderColors.info;
+        bubble.style.boxShadow = `0 0 18px ${glowColors[type] || glowColors.info}, 0 0 4px ${glowColors[type] || glowColors.info} inset`;
+        document.querySelector('#toastUndead .absolute').style.borderColor = borderColors[type] || borderColors.info;
     } else {
         document.getElementById('toastMessageDefault').innerText = message;
         const icon = document.getElementById('toastIconDefault');
@@ -113,7 +124,7 @@ function showToast(message, type = "info", imageSrc = null) {
         icon.innerHTML = `<i class="fa-solid ${(iconClasses[type] || iconClasses.info).split(' ')[0]} text-lg"></i>`;
         // Optional thumbnail (Skull X ordinal art, see pickRandomSkullXOrdinal
         // in web3.js) - only the default toast skin supports this, Mid
-        // Evils/Conmen have their own dedicated character art instead.
+        // Evils/Conmen/Undead have their own dedicated character art instead.
         const img = document.getElementById('toastImageDefault');
         if (img) {
             if (imageSrc) { img.src = imageSrc; img.classList.remove('hidden'); }
