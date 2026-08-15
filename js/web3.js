@@ -303,6 +303,7 @@ function choosePlayMode(mode) {
         document.getElementById("bonusStageBtn")?.classList.remove("hidden");
         document.getElementById("audioToggleBtn")?.classList.remove("hidden");
         document.getElementById("conmenEggTestBtn")?.classList.remove("hidden");
+        document.getElementById("mevSandwichGameTestBtn")?.classList.remove("hidden");
         document.getElementById("debugMenuBtn")?.classList.remove("hidden");
         document.getElementById("fightGameBtn")?.classList.remove("hidden");
         document.getElementById("onlineLobbySoonOverlay")?.classList.add("hidden");
@@ -617,6 +618,7 @@ function disconnectWallet() {
     document.getElementById("themeSwitchBtn")?.classList.add("hidden");
     document.getElementById("bonusStageBtn")?.classList.add("hidden");
     document.getElementById("conmenEggTestBtn")?.classList.add("hidden");
+    document.getElementById("mevSandwichGameTestBtn")?.classList.add("hidden");
     document.getElementById("debugMenuBtn")?.classList.add("hidden");
     document.getElementById("fightGameBtn")?.classList.add("hidden");
     document.getElementById("btcWalletConnectBtn")?.classList.add("hidden");
