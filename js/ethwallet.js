@@ -240,3 +240,26 @@ window.checkGenuineUndeadOwnership = async function () {
     if (FOREVER_UNDEAD_CONTRACT && await checkERC721BalanceViaRPC(FOREVER_UNDEAD_CONTRACT, APECHAIN_RPC)) return true;
     return false;
 };
+
+// Confirmed real contracts - Tim's own collection lookups (Skullx,
+// Skullx Aeons, KinkySkullx, whatever SkullxSummoner deployed). Two of
+// the originally sent four addresses were identical, so this covers 3
+// distinct contracts, not 4 - which exact name maps to which specific
+// address wasn't specified, so all 3 are just treated as "Skull X, some
+// gallery" equally, same as how the Bitcoin side already unifies its
+// galleries.
+const SKULLX_EVM_CONTRACTS = [
+    '0x495f947276749ce646f68ac8c248420045cb7b5e',
+    '0xd4f417cfd29ae83a303b6d75f88b62a696de47e1',
+    '0x1dc5d3b2162f9500d7ddec14eb0ba9ccb43bc20c',
+];
+
+// Checks a list of ERC-721 contracts via the connected wallet's own
+// provider, returns true on the first one with a positive balance.
+window.checkSkullXEvmOwnership = async function () {
+    for (const addr of SKULLX_EVM_CONTRACTS) {
+        if (await checkERC721BalanceViaWallet(addr)) return true;
+    }
+    return false;
+};
+
