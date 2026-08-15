@@ -43,7 +43,7 @@ window.FightGame = (function () {
     const P_H = 220;
 
     const P_SPD = 4.6;
-    const ROUND_T = 60.0;
+    const ROUND_T = 90.0;
     const STAGE_MARGIN = 40;
 
     const JUMP_VELOCITY = -560; // px/s
@@ -703,83 +703,43 @@ window.FightGame = (function () {
     // back to CPU_MEDIUM whenever you want the normal opponent back.
     const CPU_HARD = {
         attackRange: 96,
-        decisionInterval: 0.2,
-        attackChance: 0.7,
-        attackCooldown: 0.35,
-        blockChance: 0.8,
-        blockReactRange: 150,
-        jumpChance: 0.08,
+        decisionInterval: 0.14,   // was 0.2 - reacts and re-decides noticeably faster
+        attackChance: 0.85,       // was 0.7 - attacks far more often when in range
+        attackCooldown: 0.22,     // was 0.35 - strings attacks together much tighter
+        blockChance: 0.9,         // was 0.8 - blocks almost everything it sees coming
+        blockReactRange: 170,     // was 150 - starts blocking a bit earlier
+        jumpChance: 0.1,          // was 0.08 - slightly more willing to jump in
     };
 
     // Keeps the two fighters from walking through each other. Only
     // applies while BOTH are grounded, so jumping over your opponent
-    // still works fine - this just stops the "standing on top of each
-    // other" overlap while both have feet on the floor.
-    // Push resistance while grounded and overlapping. Blocking barely
-    // budges you (a small one-time nudge); anyone not blocking can still
-    // be shoved, but at a crawl - and only up to a hard cap of total
-    // distance before it just stops moving them entirely, like they've
-    // planted their feet. Both numbers are in px/sec, tiny next to the
-    // normal walk speed (P_SPD=4.6/frame ≈ 276px/sec) on purpose.
-    // Lowered from 6/40/26/14 - was giving up too much ground too fast
-    // per Tim's testing feedback, fighters should feel much more planted.
-    const PUSH_BLOCK_MAX = 4;
-    const PUSH_BLOCK_SPEED = 28;
-    const PUSH_IDLE_MAX = 14;
-    const PUSH_IDLE_SPEED = 9;
+    // still works fine - this just stops full sprite-overlap while both
+    // have feet on the floor. No continuous pushing anymore - per Tim's
+    // request, fighters no longer shove each other around just from
+    // standing close/walking into one another. The only knockback left
+    // in the game now is BLOCK_HIT_NUDGE below, a single small shove
+    // applied once, at the exact moment a hit actually lands on a
+    // blocking defender - not a per-frame proximity effect.
+    const BLOCK_HIT_NUDGE = 18; // px, one-time shove away from the attacker when a hit connects on a blocking defender
 
-    function resolveFighterCollision(p1, p2, dt) {
+    function resolveFighterCollision(p1, p2) {
         if (!p1.grounded || !p2.grounded) return;
         // Lets them stand close/overlapping a bit (like sprites clinching
         // in most 2D fighters) instead of a hard wall the instant they
-        // touch - only pushes apart once they'd overlap by more than this.
+        // touch - only closes the gap once they'd overlap by more than
+        // this, and even then just enough to stop true stacking, not a
+        // shove-apart effect.
         const ALLOWED_OVERLAP = 45;
 
-        function currentOverlap() {
-            const p1Right = p1.x + p1._fw, p2Right = p2.x + p2._fw;
-            return Math.min(p1Right, p2Right) - Math.max(p1.x, p2.x);
-        }
-
-        let overlap = currentOverlap();
-        if (overlap <= ALLOWED_OVERLAP) {
-            // Not currently overlapping-beyond-threshold - reset both so the
-            // next time they meet starts a fresh push instead of picking up
-            // wherever a previous shove left off.
-            p1.pushDist = 0; p2.pushDist = 0;
-            return;
-        }
+        const p1Right = p1.x + p1._fw, p2Right = p2.x + p2._fw;
+        const overlap = Math.min(p1Right, p2Right) - Math.max(p1.x, p2.x);
+        if (overlap <= ALLOWED_OVERLAP) return;
 
         const leftF = p1.x < p2.x ? p1 : p2;
         const rightF = leftF === p1 ? p2 : p1;
-
-        // Step 1: soft push - each side gives ground slowly, capped, based
-        // on their own state (blocking barely budges, anything else creeps
-        // back up to its cap). This is the "feel" of getting pushed.
-        function give(f) {
-            const cap = f.blocking ? PUSH_BLOCK_MAX : PUSH_IDLE_MAX;
-            const speed = f.blocking ? PUSH_BLOCK_SPEED : PUSH_IDLE_SPEED;
-            if (f.pushDist === undefined) f.pushDist = 0;
-            const remaining = Math.max(0, cap - f.pushDist);
-            if (remaining <= 0) return 0; // already at the cap - "recognizes and stops" giving further ground
-            const step = Math.min(speed * dt, remaining);
-            f.pushDist += step;
-            return step;
-        }
-        leftF.x = Math.max(STAGE_MARGIN, leftF.x - give(leftF));
-        rightF.x = Math.min(SW - STAGE_MARGIN - rightF._fw, rightF.x + give(rightF));
-
-        // Step 2: hard wall - whatever overlap the soft push above didn't
-        // resolve (because one or both sides already hit their push cap)
-        // gets closed instantly. This is the actual "can't walk through"
-        // guarantee, always enforced regardless of push caps - once both
-        // are maxed out, this is the only thing left holding the line,
-        // which reads as "hit a wall and stopped" rather than a shove.
-        overlap = currentOverlap();
-        if (overlap > ALLOWED_OVERLAP) {
-            const half = (overlap - ALLOWED_OVERLAP) / 2;
-            leftF.x = Math.max(STAGE_MARGIN, leftF.x - half);
-            rightF.x = Math.min(SW - STAGE_MARGIN - rightF._fw, rightF.x + half);
-        }
+        const half = (overlap - ALLOWED_OVERLAP) / 2;
+        leftF.x = Math.max(STAGE_MARGIN, leftF.x - half);
+        rightF.x = Math.min(SW - STAGE_MARGIN - rightF._fw, rightF.x + half);
     }
 
     // Online-match equivalent of updateCPUInput below - same job (fill in
@@ -1037,6 +997,16 @@ window.FightGame = (function () {
             defender.takeDamage(dmg, heavy, isCounterHit);
             attacker.stop = heavy ? HS_HV : HS_LT;
             shake.hit(heavy ? 7.0 : 3.2);
+
+            // The only knockback left in the game - a single small shove,
+            // applied once, only when this hit actually landed on a
+            // blocking defender. No pushing from just standing close or
+            // walking into each other anymore (see resolveFighterCollision).
+            if (defender.blocking) {
+                const pushDir = defender.x < attacker.x ? -1 : 1;
+                defender.x = Math.max(STAGE_MARGIN, Math.min(SW - STAGE_MARGIN - defender._fw, defender.x + pushDir * BLOCK_HIT_NUDGE));
+            }
+
             fx.push({ x: hb.x + hb.w / 2, y: hb.y + hb.h / 2, l: heavy ? 9 : 6, ml: heavy ? 9 : 6, heavy });
             if (typeof playSfxRandom === 'function') {
                 if (defender.blocking) playSfxRandom(SFX_BLOCKS, 0.5);
@@ -1273,7 +1243,7 @@ window.FightGame = (function () {
                 updateHumanFighter(dt, p2, P2_BIND);
                 updateFighterCommon(dt, p1);
                 updateFighterCommon(dt, p2);
-                resolveFighterCollision(p1, p2, dt);
+                resolveFighterCollision(p1, p2);
 
                 resolveHit(p1, p2, shake, fx);
                 resolveHit(p2, p1, shake, fx);
