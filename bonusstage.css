@@ -117,8 +117,7 @@
 }
 
 #bonusStageCanvas,
-#fightGameCanvas,
-#mevSandwichCanvas {
+#fightGameCanvas {
     display: block;
     width: 100%;
     height: auto;
@@ -243,6 +242,88 @@
 .skullx-launcher-btn {
     background: linear-gradient(180deg, #6fc4b3 0%, #45746e 100%) !important;
     color: #0c1019 !important;
+}
+
+/* Genuine Undead / Forever Undead easter egg - same popup/launcher
+   mechanics as Conmen/Skull X above (see js/undead-egg.js), terminal
+   green palette to match the Undead site theme (.undead-mode in
+   style.css). Sits a bit further left than Skull X's so all three
+   don't overlap if they could theoretically all be visible at once. */
+#undeadEggPopup {
+    position: fixed;
+    right: 276px;
+    bottom: -14px;
+    z-index: 90;
+    cursor: pointer;
+    width: 110px;
+    opacity: 0;
+    transform: translateY(16px) scale(0.9);
+    transition: opacity 0.35s ease, transform 0.35s ease;
+    pointer-events: none;
+    filter: drop-shadow(0 8px 18px rgba(0,0,0,0.65)) drop-shadow(0 2px 6px rgba(0,0,0,0.5));
+}
+#undeadEggPopup.show {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    pointer-events: auto;
+}
+#undeadEggPopup img {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+#undeadEggPopup .undead-egg-tag {
+    position: absolute;
+    top: -10px;
+    right: -6px;
+    background: #0d1310;
+    color: #2ecc71;
+    border: 2px solid #1c6b41;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 800;
+    padding: 2px 7px;
+    white-space: nowrap;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.4), 0 0 8px rgba(46,204,113,0.35);
+}
+#undeadLauncherOverlay { font-family: 'Tahoma', 'Segoe UI', Geneva, Verdana, sans-serif; }
+#undeadLauncherOverlay.hidden { display: none !important; }
+.undead-titlebar {
+    background: linear-gradient(180deg, #1c6b41 0%, #0d1310 100%) !important;
+}
+.undead-launcher-bg {
+    background: #060907 !important;
+}
+.undead-launcher-bg .conmen-launcher-inner {
+    background: linear-gradient(160deg, #0a0f0b 0%, #0d1310 100%);
+}
+.undead-launcher-bg .conmen-launcher-inner h2 {
+    color: #2ecc71;
+    text-shadow: 0 0 10px rgba(46,204,113,0.5);
+}
+.undead-launcher-btn {
+    background: linear-gradient(180deg, #4ee08a 0%, #1c6b41 100%) !important;
+    color: #06170e !important;
+}
+
+/* Embedded game wrapper - hidden until openUndeadEmbed() builds the
+   iframe into it, then fills the same content area the intro screen
+   used so nothing jumps around on the swap. */
+.undead-embed-wrap {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.undead-embed-wrap.hidden { display: none !important; }
+.undead-embed-wrap iframe {
+    max-width: 100%;
+    max-height: 100%;
+    width: 800px;
+    height: 600px;
+    border: none;
+    box-shadow: 0 0 30px rgba(46,204,113,0.25);
 }
 
 /* Full-screen Win95 window - same bevel language as the Bonus Stage
