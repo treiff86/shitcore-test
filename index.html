@@ -1250,6 +1250,47 @@
         </div>
     </div>
 
+    <div id="undeadEggPopup" onclick="openUndeadLauncher()">
+        <span class="undead-egg-tag">psst...</span>
+        <img src="assets/undead-easteregg.webp" alt="">
+    </div>
+
+    <!-- Genuine Undead / Forever Undead easter egg: same full-screen
+         launcher pattern as Conmen/Skull X, except the "enter" button
+         doesn't link out - it swaps in a live embedded game right there
+         in the window instead (see openUndeadEmbed() in
+         js/undead-egg.js). -->
+    <div id="undeadLauncherOverlay" class="fixed inset-0 bg-black hidden z-[110]">
+        <div class="win95-window-full">
+            <div class="win95-titlebar undead-titlebar">
+                <span class="win95-title"><i class="fa-solid fa-skull-crossbones"></i> GENUINE_UNDEAD.EGG</span>
+                <div class="win95-controls">
+                    <button class="win95-btn" disabled title="Minimize (not implemented)">_</button>
+                    <button class="win95-btn" disabled title="Maximize (not implemented)"><i class="fa-regular fa-square"></i></button>
+                    <button class="win95-btn win95-close" onclick="closeUndeadLauncher()" title="Close">&times;</button>
+                </div>
+            </div>
+            <div class="win95-menubar">
+                <span>File</span><span>Edit</span><span>View</span><span>Help</span>
+            </div>
+            <div class="win95-content-full undead-launcher-bg">
+                <div id="undeadLauncherIntro" class="conmen-launcher-inner">
+                    <img src="assets/undead-easteregg.webp" alt="">
+                    <h2>...Snake?</h2>
+                    <p>The undead don't sleep, and neither does the mission. Some legends never stay buried - infiltrate the archive and see for yourself.</p>
+                    <button type="button" class="conmen-launcher-btn undead-launcher-btn" onclick="openUndeadEmbed()">
+                        <i class="fa-solid fa-play"></i> Infiltrate
+                    </button>
+                </div>
+                <div id="undeadEmbedWrap" class="undead-embed-wrap hidden"></div>
+            </div>
+            <div class="win95-statusbar">
+                <span class="win95-statusfield">Ready</span>
+                <span class="win95-statusfield">Genuine Undead / Forever Undead Exclusive</span>
+            </div>
+        </div>
+    </div>
+
     <!-- WIN modal -->
     <div id="winModal" class="fixed inset-0 bg-black/85 flex items-center justify-center z-50 hidden p-4">
         <div class="bg-[#0C0F16] border-2 border-emerald-500/60 neon-glow-green max-w-md w-full p-7 rounded-xl shadow-2xl text-center space-y-4">
@@ -1316,11 +1357,12 @@
 <script src="js/perks.js?v=3" defer></script>
 <script src="js/bonusstage.js?v=22" defer></script>
 <script src="js/fightgame.js?v=47" defer></script>
-<script src="js/mevsandwich.js?v=4" defer></script>
+<script src="js/mevsandwich.js?v=3" defer></script>
 <script src="js/conmen-egg.js?v=6" defer></script>
-<script src="js/skullx-egg.js?v=2" defer></script>
+<script src="js/skullx-egg.js?v=3" defer></script>
+<script src="js/undead-egg.js?v=1" defer></script>
 <script src="js/mcdonalds-egg.js?v=4" defer></script>
-<script src="js/web3.js?v=58" defer></script>
+<script src="js/web3.js?v=59" defer></script>
 <script src="js/wizardpopup.js?v=2" defer></script>
 <script src="js/win95desktop.js?v=5" defer></script>
 <script src="js/btcwallet.js?v=19" defer></script>
