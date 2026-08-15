@@ -80,14 +80,18 @@ const COSMETIC_THEMES = [
     {
         id: "genuineundead",
         label: "Genuine Undead",
-        cssClass: "undead-mode", // dark terminal-green "hacker" theme, matched to the reference mockup - previously "" on purpose (see old comment below), changed deliberately per Tim's request
+        cssClass: "undead-mode", // dark terminal-green "hacker" theme, matched to the reference mockup
         toastMsg: "☠️ Genuine Undead detected!",
-        // TEST Play preview only, on purpose - no collectionAddress/checkFn
-        // means real ownership detection (applyCosmeticThemes) can never
-        // match this for an actual player; it only ever shows up via the
-        // Theme Preview modal, which is itself TEST-Play-gated already.
-        // (This part is still true - only the cssClass changed, not the
-        // TEST-only reachability.)
+        checkFn: async () => {
+            if (typeof window.checkGenuineUndeadOwnership !== 'function') return false;
+            return await window.checkGenuineUndeadOwnership();
+        },
+        // No longer TEST-preview-only on purpose - real ownership check via
+        // GU Origins, Genuine Undead v3, or ForeverUndead (any one counts,
+        // per Tim's explicit call to unify them). GENUINE_UNDEAD_V3_CONTRACT
+        // and FOREVER_UNDEAD_CONTRACT in js/evmwallet.js are still
+        // placeholders (null) until the real contract addresses come in -
+        // only GU Origins can actually match a real holder until then.
     },
 ];
 
