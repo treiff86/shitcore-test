@@ -137,3 +137,106 @@ function renderEthWalletPickerButtons() {
             ${p.name}
         </button>`).join('');
 }
+/* ============================================================
+   EVM NFT OWNERSHIP CHECKING
+   ============================================================
+   Real on-chain balanceOf() checks for ERC-721 (and ERC-721A, same
+   ABI) collections - no third-party indexer, no API key, no CORS
+   worries like the Bitcoin/Ordiscan side had. balanceOf(address) is
+   part of the ERC-721 standard itself, so this works for any
+   compliant contract on any EVM chain, as long as we know which
+   chain to ask.
+
+   Two ways to actually make the call:
+   - Via the connected wallet's own provider (js/ethwallet.js) - works
+     for whatever chain the wallet is currently pointed at, which for
+     almost everyone connecting is Ethereum mainnet by default.
+   - Via a direct RPC fetch to a specific chain's public endpoint -
+     needed for ApeChain (ForeverUndead) specifically, since asking
+     the wallet to switch chains just to check a balance would throw
+     an unwanted network-switch prompt at people who may not even
+     hold anything there.
+   ============================================================ */
+
+const APECHAIN_RPC = 'https://rpc.apechain.com/http'; // public, free, chain ID 33139
+
+// Encodes balanceOf(address) call data - the standard ERC-721/ERC-20
+// selector (0x70a08231) is the same on every compliant contract, no
+// ABI file needed for a call this simple.
+function encodeBalanceOfCall(address) {
+    const cleanAddr = address.toLowerCase().replace('0x', '');
+    return '0x70a08231' + cleanAddr.padStart(64, '0');
+}
+
+function hexBalanceIsPositive(hexResult) {
+    if (!hexResult || hexResult === '0x') return false;
+    try {
+        return BigInt(hexResult) > 0n;
+    } catch (_) {
+        return false;
+    }
+}
+
+// Checks balanceOf via the CONNECTED WALLET's own provider - whatever
+// chain it's currently pointed at (Ethereum mainnet for almost everyone
+// who hasn't manually switched).
+async function checkERC721BalanceViaWallet(contractAddress) {
+    if (typeof ethWalletProviderInfo === 'undefined' || !ethWalletProviderInfo || !ethWalletAddress) return false;
+    try {
+        const result = await ethWalletProviderInfo.provider.request({
+            method: 'eth_call',
+            params: [{ to: contractAddress, data: encodeBalanceOfCall(ethWalletAddress) }, 'latest'],
+        });
+        console.log(`[evmwallet] balanceOf via wallet provider for ${contractAddress}: ${result}`);
+        return hexBalanceIsPositive(result);
+    } catch (e) {
+        console.warn(`[evmwallet] balanceOf via wallet provider failed for ${contractAddress}:`, e);
+        return false;
+    }
+}
+
+// Checks balanceOf via a direct RPC fetch to a SPECIFIC chain, bypassing
+// whatever chain the connected wallet currently happens to be on. Used
+// for ApeChain (ForeverUndead) so checking doesn't trigger a chain-switch
+// prompt in the user's wallet.
+async function checkERC721BalanceViaRPC(contractAddress, rpcUrl) {
+    if (typeof ethWalletAddress === 'undefined' || !ethWalletAddress) return false;
+    try {
+        const res = await fetch(rpcUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                jsonrpc: '2.0', id: 1, method: 'eth_call',
+                params: [{ to: contractAddress, data: encodeBalanceOfCall(ethWalletAddress) }, 'latest'],
+            }),
+        });
+        const json = await res.json();
+        console.log(`[evmwallet] balanceOf via RPC (${rpcUrl}) for ${contractAddress}:`, json.result);
+        return hexBalanceIsPositive(json.result);
+    } catch (e) {
+        console.warn(`[evmwallet] balanceOf via RPC failed for ${contractAddress}:`, e);
+        return false;
+    }
+}
+
+// Confirmed real contract - the older "GU Origins" collection that
+// current-gen Genuine Undead migrated from. Tim confirmed Origins
+// holders who haven't migrated should still count.
+const GU_ORIGINS_CONTRACT = '0x209e639a0ec166ac7a1a4ba41968fa967db30221'; // Ethereum mainnet, confirmed via Etherscan/Rarible
+
+// NOT YET CONFIRMED - placeholders. The v3 deployer address Tim gave me
+// (0xa0734ed3ea5b48376fa0c5fa3e7c8086ab53f9ae, "GUv3_Deployer") is
+// DIFFERENT from Etherscan's on-record deployer for GU Origins, which
+// confirms a real, separate v3 contract exists - just couldn't pin down
+// its exact address via search. Same story for ForeverUndead on
+// ApeChain. Fill these in the moment Tim sends the real addresses (see
+// Details > Contract Address on the collection's OpenSea page).
+const GENUINE_UNDEAD_V3_CONTRACT = null; // TODO: Ethereum mainnet
+const FOREVER_UNDEAD_CONTRACT = null;    // TODO: ApeChain
+
+window.checkGenuineUndeadOwnership = async function () {
+    if (GENUINE_UNDEAD_V3_CONTRACT && await checkERC721BalanceViaWallet(GENUINE_UNDEAD_V3_CONTRACT)) return true;
+    if (await checkERC721BalanceViaWallet(GU_ORIGINS_CONTRACT)) return true;
+    if (FOREVER_UNDEAD_CONTRACT && await checkERC721BalanceViaRPC(FOREVER_UNDEAD_CONTRACT, APECHAIN_RPC)) return true;
+    return false;
+};
