@@ -154,6 +154,7 @@ function clearCosmeticThemes() {
 let ownedThemesList = [];
 let isConmenHolder = false; // real Conmen NFT ownership - separate from cosmetic theme choice, used to gate the Online Fight Club tab and the Conmen heat perks below
 let isSkullXHolder = false; // real Skull X ownership - same idea, gates the Skull X easter egg below
+let isUndeadHolder = false; // real Genuine Undead / Forever Undead ownership - same idea, gates the Undead easter egg below
 
 // showChoiceIfMultiple=false is used specifically for the master wallet's
 // TEST Play path, where Theme Preview is about to open right after and
@@ -186,6 +187,7 @@ async function applyCosmeticThemes(addr, showChoiceIfMultiple = true) {
     ownedThemesList = owned;
     isConmenHolder = owned.some((t) => t.id === "conmen");
     isSkullXHolder = owned.some((t) => t.id === "skullx");
+    isUndeadHolder = owned.some((t) => t.id === "genuineundead");
     updateOnlineLobbyAccess();
 
     const switchBtn = document.getElementById("themeSwitchBtn");
@@ -617,6 +619,7 @@ function disconnectWallet() {
     ownedThemesList = [];
     isConmenHolder = false;
     isSkullXHolder = false;
+    isUndeadHolder = false;
     isTestPlayMode = false;
     updateOnlineLobbyAccess();
     document.getElementById("themePreviewBtn")?.classList.add("hidden");
