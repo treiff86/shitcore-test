@@ -1128,6 +1128,33 @@
         </div>
     </div>
 
+    <!-- MEV Sandwich - growing/eating minigame. No launch button or
+         Level 3 gating wired up yet on purpose (game feel first, see
+         js/mevsandwich.js) - open via openMevSandwich() in the console
+         for now. -->
+    <div id="mevSandwichOverlay" class="fixed inset-0 bg-black/70 hidden items-center justify-center z-[100] p-4">
+        <div class="win95-window">
+            <div class="win95-titlebar">
+                <span class="win95-title"><i class="fa-solid fa-burger"></i> MEV_SANDWICH.EXE</span>
+                <div class="win95-controls">
+                    <button class="win95-btn" disabled title="Minimize (not implemented)">_</button>
+                    <button class="win95-btn" disabled title="Maximize (not implemented)"><i class="fa-regular fa-square"></i></button>
+                    <button class="win95-btn win95-close" onclick="closeMevSandwich()" title="Close">&times;</button>
+                </div>
+            </div>
+            <div class="win95-menubar">
+                <span>File</span><span>Edit</span><span>View</span><span>Help</span>
+            </div>
+            <div class="win95-content">
+                <canvas id="mevSandwichCanvas" width="960" height="540"></canvas>
+            </div>
+            <div class="win95-statusbar">
+                <span class="win95-statusfield">Ready</span>
+                <span class="win95-statusfield">Lvl 3+ - Not Wired Up Yet</span>
+            </div>
+        </div>
+    </div>
+
     <!-- Conmen easter egg: roaming clickable popup (Conmen-mode only, see js/conmen-egg.js) -->
     <div id="conmenEggPopup" onclick="openConmenLauncher()">
         <span class="conmen-egg-tag">psst...</span>
@@ -1268,6 +1295,7 @@
 <script src="js/perks.js?v=3" defer></script>
 <script src="js/bonusstage.js?v=22" defer></script>
 <script src="js/fightgame.js?v=43" defer></script>
+<script src="js/mevsandwich.js?v=1" defer></script>
 <script src="js/conmen-egg.js?v=6" defer></script>
 <script src="js/skullx-egg.js?v=2" defer></script>
 <script src="js/mcdonalds-egg.js?v=4" defer></script>
