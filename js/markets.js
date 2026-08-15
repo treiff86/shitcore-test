@@ -448,15 +448,47 @@ function renderChart() {
         // recolored to the theme's neon green instead of the default
         // blue. Painter-tip logic (lineRightEdge) stays intact either
         // way since that's a Mid Evils-only easter egg, unaffected here.
-        ctx.strokeStyle = undeadActive ? '#2ecc71' : '#3B82F6';
+        const lineColor = undeadActive ? '#2ecc71' : '#3B82F6';
+
+        // Build the line path's points once, reused for both the glow
+        // fill underneath and the stroke on top.
+        const points = [];
+        for (let i = 0; i < priceHistory.length; i++) {
+            const x = (lineRightEdge / (priceHistory.length - 1)) * i;
+            const y = canvas.height - ((priceHistory[i] - minVal) / range * canvas.height);
+            points.push([x, y]);
+        }
+
+        if (undeadActive && points.length > 1) {
+            // Glowing area fill - gradient from the line's own green at
+            // the top down to fully transparent, per Tim's request to
+            // fill "the bottom half... same color as the line... glowing".
+            ctx.save();
+            const fillGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            fillGrad.addColorStop(0, 'rgba(46,204,113,0.35)');
+            fillGrad.addColorStop(1, 'rgba(46,204,113,0)');
+            ctx.fillStyle = fillGrad;
+            ctx.beginPath();
+            ctx.moveTo(points[0][0], canvas.height);
+            for (const [x, y] of points) ctx.lineTo(x, y);
+            ctx.lineTo(points[points.length - 1][0], canvas.height);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+        }
+
+        ctx.save();
+        if (undeadActive) {
+            // Real glow on the line itself, not just the fill underneath.
+            ctx.shadowColor = '#2ecc71';
+            ctx.shadowBlur = 10;
+        }
+        ctx.strokeStyle = lineColor;
         ctx.lineWidth = 2.5;
         ctx.beginPath();
-        for (let i = 0; i < priceHistory.length; i++) {
-            let x = (lineRightEdge / (priceHistory.length - 1)) * i;
-            let y = canvas.height - ((priceHistory[i] - minVal) / range * canvas.height);
-            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-        }
+        points.forEach(([x, y], i) => { if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); });
         ctx.stroke();
+        ctx.restore();
     }
 
     // Dashed entry-price reference line for the active leveraged position
