@@ -196,15 +196,28 @@ window.MevSandwichGame = (function () {
         updateSnakeMovement(bot, dt, targetAngle, botSpeed);
     }
 
-    function checkSelfAndSnakeCollision(snake, otherSnake, skipNear) {
+    function checkSelfAndSnakeCollision(snake, otherSnake, skipSegments) {
+        // IMPORTANT: this must check against the same points that get
+        // DRAWN (bodyPointsFor), not the raw trail array. The raw trail
+        // is a dense breadcrumb (a new point every SEGMENT_SPACING=14px
+        // of travel) that curls back near the head after a completely
+        // normal turn - at max turn rate the head's turning circle is
+        // only ~50px across, so a handful of ordinary-looking turns used
+        // to trip "self collision" against trail crumbs that weren't
+        // anywhere near a visible body segment. Checking the actual
+        // rendered body points (spaced by segment size, one per segment)
+        // and skipping the first few segments closest to the neck fixes
+        // the false-positive "sandwiched yourself" reports.
         const headSize = segmentSizeFor(snake.segmentCount);
-        for (let i = skipNear; i < snake.trail.length; i++) {
-            if (Math.hypot(snake.head.x - snake.trail[i].x, snake.head.y - snake.trail[i].y) < headSize * 0.45) return true;
+        const threshold = headSize * 0.5;
+        const bodyPoints = bodyPointsFor(snake);
+        for (let i = skipSegments; i < bodyPoints.length; i++) {
+            if (Math.hypot(snake.head.x - bodyPoints[i].x, snake.head.y - bodyPoints[i].y) < threshold) return true;
         }
         if (otherSnake && otherSnake.alive) {
             const otherPoints = bodyPointsFor(otherSnake);
             for (const p of otherPoints) {
-                if (Math.hypot(snake.head.x - p.x, snake.head.y - p.y) < headSize * 0.45) return true;
+                if (Math.hypot(snake.head.x - p.x, snake.head.y - p.y) < threshold) return true;
             }
         }
         return false;
@@ -258,14 +271,14 @@ window.MevSandwichGame = (function () {
         }
 
         // Self-collision and snake-vs-snake collision
-        if (checkSelfAndSnakeCollision(g.player, g.bot, 10)) {
-            const hitOwnTail = checkSelfAndSnakeCollision(g.player, null, 10);
+        if (checkSelfAndSnakeCollision(g.player, g.bot, 3)) {
+            const hitOwnTail = checkSelfAndSnakeCollision(g.player, null, 3);
             g.phase = 'over';
             g.deathReason = hitOwnTail ? 'Sandwiched yourself. Ironic.' : 'Ran straight into a rival sandwich.';
             scatterFoodAt(g.player.head.x, g.player.head.y, g.player.segmentCount, g.food);
             return;
         }
-        if (g.bot.alive && checkSelfAndSnakeCollision(g.bot, g.player, 10)) {
+        if (g.bot.alive && checkSelfAndSnakeCollision(g.bot, g.player, 3)) {
             g.bot.alive = false;
             scatterFoodAt(g.bot.head.x, g.bot.head.y, g.bot.segmentCount, g.food);
         }
