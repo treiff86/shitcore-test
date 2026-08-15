@@ -235,10 +235,17 @@ window.checkSkullXOrigins = async function () {
     });
     if (hasKnownParent) return true;
 
-    // Secondary check: Ordiscan's own collection tagging, same proven
-    // method that confirmed Bitcoin Wizards (see checkOrdiscanCollection
-    // above) - kept as a backup in case the master parent number above
-    // doesn't cover every single gallery for some reason.
+    // Ordiscan's own parent_inscription_id data - the check that can
+    // actually work, since Ordiscan's inscriptions endpoint includes
+    // real parent data that Xverse's wallet API never provides at all.
+    if (await checkOrdiscanSkullXParent()) return true;
+
+    // Last resort: Ordiscan's collection tagging by slug - confirmed via
+    // direct testing that Ordiscan doesn't have Skull X registered under
+    // ANY slug for this wallet's actual holdings (only "dose" and
+    // "airhead" showed up, both unrelated), so this is unlikely to ever
+    // match for Skull X specifically, but it's what confirmed Bitcoin
+    // Wizards, so kept in case it's registered for some other wallet.
     for (const slug of SKULLX_GALLERY_SLUGS) {
         if (await checkOrdiscanCollection(slug)) return true;
     }
@@ -310,6 +317,23 @@ async function checkOrdiscanCollection(slug) {
     const slugsSeen = [...new Set(data.map(i => i.collection_slug).filter(Boolean))];
     console.log(`[btcwallet] Ordiscan collection check for "${slug}": ${data.length} inscriptions returned, collection_slug values actually present: ${JSON.stringify(slugsSeen)}`);
     return data.some(i => i.collection_slug === slug);
+}
+
+// Skull X specifically, checked via Ordiscan's real parent_inscription_id
+// field - a field Xverse's own wallet API never returns at all (confirmed
+// by direct testing), so this is the one place this check can actually
+// work. Same known parent numbers/ID as the (currently unused, since
+// Xverse can't supply this data) SKULLX_KNOWN_PARENT_NUMBERS above.
+async function checkOrdiscanSkullXParent() {
+    if (!btcWalletAddress) return false;
+    const data = await ordiscanFetch(`/address/${btcWalletAddress}/inscriptions`);
+    if (!Array.isArray(data)) {
+        console.log('[btcwallet] Ordiscan Skull X parent check: no usable data returned, treating as not owned');
+        return false;
+    }
+    const parentIdsSeen = [...new Set(data.map(i => i.parent_inscription_id).filter(Boolean))];
+    console.log(`[btcwallet] Ordiscan Skull X parent check: ${data.length} inscriptions returned, parent_inscription_id values actually present: ${JSON.stringify(parentIdsSeen)}`);
+    return data.some(i => i.parent_inscription_id === SKULLX_ORIGINS_PARENT_ID_CANDIDATE);
 }
 
 // Checks the connected BTC wallet's Rune balance for a real amount > 0 of
