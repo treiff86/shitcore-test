@@ -22,6 +22,12 @@
 .win95-window {
     background: #c0c0c0;
     width: min(980px, 96vw);
+    /* Was width-only before - on a shorter screen the window could still
+       run taller than the viewport (titlebar/menubar/canvas/statusbar
+       stacked up past the bottom edge) since nothing bounded the total
+       height. max-height + flex column layout lets .win95-content below
+       actually shrink to fit instead of just overflowing. */
+    max-height: 92vh;
     box-shadow:
         inset -1px -1px 0 #0a0a0a,
         inset 1px 1px 0 #dfdfdf,
@@ -29,6 +35,8 @@
         inset 2px 2px 0 #ffffff;
     padding: 3px;
     user-select: none;
+    display: flex;
+    flex-direction: column;
 }
 
 .win95-titlebar {
@@ -113,14 +121,29 @@
         inset -2px -2px 0 #dfdfdf;
     margin: 4px;
     padding: 2px;
-    line-height: 0; /* kill the canvas's inline-element gap */
+    /* flex + min-height:0 lets this actually shrink within the now
+       height-bounded .win95-window above, instead of forcing the window
+       to grow past the viewport to fit the canvas at full size. */
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 #bonusStageCanvas,
-#fightGameCanvas {
+#fightGameCanvas,
+#mevSandwichCanvas {
     display: block;
-    width: 100%;
+    /* Bounded by BOTH width and height now (was width-only), so the
+       canvas shrinks to whichever dimension is tighter and keeps its
+       960:540 aspect ratio either way - this is what actually keeps it
+       inside the window on a short/narrow screen instead of just the
+       width fitting while the height still pushed past the edges. */
+    width: auto;
     height: auto;
+    max-width: 100%;
+    max-height: 100%;
     aspect-ratio: 960 / 540;
     image-rendering: pixelated;
     background: #000;
