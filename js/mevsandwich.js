@@ -7,15 +7,18 @@
    project queued up for later):
 
    - Large circular WORLD, not a small fixed box - camera follows
-     the player's head, same "explore a big space" feel as the
-     real thing instead of a cramped static arena.
-   - A CPU bot snake to actually compete against - eats food, grows,
-     and running into ITS body ends your round too, same as running
-     into your own tail. Real stakes, not just solo dot-eating.
-   - Speed boost (hold Space) - faster, but continuously costs
-     length while held. Classic risk/reward.
-   - Food scatters along the death location when either snake dies,
-     not just a static respawn pool.
+     the player's head and zooms out as you grow, same "explore a big
+     space" feel as the real thing instead of a cramped static arena.
+   - FIVE CPU rival sandwiches to compete against - they eat, grow,
+     boost, dodge each other, take each other out, and respawn. Running
+     into any of their bodies ends your round, same as your own tail.
+   - Speed boost (hold Space OR left mouse) - faster, but continuously
+     costs BOTH length and cash while held. Classic risk/reward, with
+     the money drain making a long sprint an actual decision.
+   - Live leaderboard ranking every snake by size, so the competition
+     is visible moment to moment.
+   - Food scatters at the death location when any snake dies, so
+     hunting a big rival is worth the risk.
 
    Still exposes window.MevSandwichGame.start(canvas)/.stop() the
    same way as before. No Level 3 gating or launch button wiring
@@ -34,9 +37,30 @@ window.MevSandwichGame = (function () {
     const SEGMENT_SIZE_MAX = 40;
     const START_SEGMENTS = 5;
     const MIN_SEGMENTS = 4;          // boosting can't shrink you below this
-    const ROUND_SECONDS = 90;        // longer now that there's an actual world to explore and a bot to compete with
-    const FOOD_COUNT_TARGET = 260;   // way more bubbles on screen at once - was 70, felt sparse/empty on a big map
+    const ROUND_SECONDS = 90;        // longer now that there's an actual world to explore and bots to compete with
+    const FOOD_COUNT_TARGET = 380;   // even more bubbles on screen at once - was 260, and 70 before that
     const FOOD_RESPAWN_DELAY = 0.4;
+
+    // Boosting now costs CASH as well as length - holding it burns your
+    // take slowly, so a long boost is a real financial decision and not
+    // just free speed. Length cost (BOOST_DRAIN_INTERVAL above) is what
+    // still physically limits it; money is the thing you feel.
+    const BOOST_MONEY_PER_SEC = 4;
+
+    // Rival sandwiches. Multiple bots now instead of a single rival -
+    // they eat, grow, boost, and dodge each other, so the map stays
+    // genuinely contested for the whole round.
+    const BOT_COUNT = 5;
+    const BOT_RESPAWN_SECONDS = 3;
+    const BOT_NAMES = ['jaredfromsubway', 'flashb0t', 'mempool_mike', 'sandwichlord', 'rugpull_rick', 'blockbuilder', 'toxic_flow'];
+    const PLAYER_PALETTE = { hi: '#f6dfa0', mid: '#e6bd72', lo: '#a5763f' };
+    const BOT_PALETTES = [
+        { hi: '#e3b3c6', mid: '#c67a97', lo: '#7a3f56' }, // pink - the original rival's colors
+        { hi: '#b3c9e3', mid: '#7a9cc6', lo: '#3f5a7a' }, // blue
+        { hi: '#c6e3b3', mid: '#97c67a', lo: '#567a3f' }, // green
+        { hi: '#e0cbb0', mid: '#c2a077', lo: '#755735' }, // tan
+        { hi: '#d9b3e3', mid: '#b47ac6', lo: '#6b3f7a' }, // purple
+    ];
 
     // Camera zoom - real slither.io starts zoomed in close and slowly
     // pulls back as your snake grows, so a small snake always feels
@@ -61,7 +85,7 @@ window.MevSandwichGame = (function () {
     let rafId = null;
     let mouseX = SW / 2, mouseY = SH / 2;
     let boosting = false;
-    let onMouseMove, onKeyDown, onKeyUp;
+    let onMouseMove, onKeyDown, onKeyUp, onMouseDown, onMouseUp, onMouseLeave;
 
     function rand(min, max) { return min + Math.random() * (max - min); }
 
@@ -109,7 +133,7 @@ window.MevSandwichGame = (function () {
         }
     }
 
-    function newSnake(x, y, angle, segments) {
+    function newSnake(x, y, angle, segments, opts = {}) {
         const trail = [];
         for (let i = 0; i < segments * 3; i++) {
             trail.push({ x: x - Math.cos(angle) * i * (SEGMENT_SPACING / 3), y: y - Math.sin(angle) * i * (SEGMENT_SPACING / 3) });
@@ -117,31 +141,75 @@ window.MevSandwichGame = (function () {
         return {
             head: { x, y, angle }, trail, segmentCount: segments,
             alive: true, boostDrainT: 0,
+            // Per-snake identity/AI state. Bots each carry their own
+            // target + wander so they behave independently instead of
+            // all chasing one shared global target the way the single-bot
+            // version did.
+            name: opts.name ?? 'YOU',
+            palette: opts.palette ?? PLAYER_PALETTE,
+            isBot: opts.isBot ?? false,
+            targetFood: null,
+            wanderAngle: 0,
+            boostT: 0,          // seconds of boost this bot has left
+            boostCooldown: rand(1, 6),
+            respawnT: 0,
         };
     }
 
+    // Bots spawn scaled to how far into the round it is, so a bot that
+    // respawns at 0:20 remaining isn't a free meal next to snakes that
+    // have been growing the whole time.
+    function botStartSegments() {
+        // roundProgress is CLAMPED to 0..1 on purpose. Without the clamp,
+        // a timer outside the normal 0..ROUND_SECONDS range makes this
+        // return a NEGATIVE segment count, which propagates into
+        // segmentSizeFor() -> a negative ellipse radius -> a hard canvas
+        // exception that kills the whole render loop. Clamping here (and
+        // flooring the result at MIN_SEGMENTS) makes that unreachable
+        // regardless of what the timer is doing.
+        const raw = g ? 1 - (g.timer / ROUND_SECONDS) : 0;
+        const roundProgress = Math.max(0, Math.min(1, raw));
+        return Math.max(MIN_SEGMENTS, Math.round(START_SEGMENTS + rand(0, 6) + roundProgress * 14));
+    }
+
+    function spawnBot(index) {
+        const p = randomPointInWorld(500);
+        return newSnake(p.x, p.y, Math.random() * Math.PI * 2, botStartSegments(), {
+            name: BOT_NAMES[index % BOT_NAMES.length],
+            palette: BOT_PALETTES[index % BOT_PALETTES.length],
+            isBot: true,
+        });
+    }
+
     function segmentSizeFor(total) {
-        const growth = Math.min(1, (total - START_SEGMENTS) / 40);
+        // growth is floored at 0 as well as capped at 1 - a size below
+        // SEGMENT_SIZE_BASE would mean a negative radius downstream in
+        // drawSandwichSegment(), which canvas rejects by throwing and
+        // takes the entire animation loop down with it. Belt-and-braces
+        // alongside the clamp in botStartSegments().
+        const growth = Math.max(0, Math.min(1, (total - START_SEGMENTS) / 40));
         return SEGMENT_SIZE_BASE + (SEGMENT_SIZE_MAX - SEGMENT_SIZE_BASE) * growth;
     }
 
     let g;
 
     function newGame() {
-        return {
+        g = {
             phase: 'playing',
             player: newSnake(0, 400, -Math.PI / 2, START_SEGMENTS),
-            bot: newSnake(0, -400, Math.PI / 2, START_SEGMENTS),
-            botTargetFood: null,
-            botWanderAngle: 0,
+            bots: [],
             food: (() => { const f = []; for (let i = 0; i < FOOD_COUNT_TARGET; i++) f.push(spawnFood(f)); return f; })(),
             pendingSpawns: [],
             score: 0,
+            scoreDrainAccum: 0, // fractional cash burned by boosting, so the drain is smooth instead of jumping a whole dollar at a time
             timer: ROUND_SECONDS,
             deathReason: null,
             shakeT: 0,
             camera: { x: 0, y: 400 },
         };
+        // Assigned after g exists - botStartSegments() reads g.timer.
+        for (let i = 0; i < BOT_COUNT; i++) g.bots.push(spawnBot(i));
+        return g;
     }
 
     function bodyPointsFor(snake) {
@@ -177,39 +245,93 @@ window.MevSandwichGame = (function () {
         if (snake.trail.length > maxTrailLen) snake.trail.length = maxTrailLen;
     }
 
-    function updateBotAI(dt) {
-        const bot = g.bot;
-        if (!bot.alive) return;
-
-        // Simple, readable AI: head for the nearest food most of the
-        // time; occasionally just wander so it doesn't feel robotic;
-        // steer away from the world edge before it gets close enough
-        // to matter.
-        const distFromCenter = Math.hypot(bot.head.x, bot.head.y);
-        let targetAngle;
-        if (distFromCenter > WORLD_R * 0.85) {
-            targetAngle = Math.atan2(-bot.head.y, -bot.head.x); // steer back toward center
-        } else {
-            if (!g.botTargetFood || !g.food.includes(g.botTargetFood) || Math.random() < 0.01) {
-                let best = null, bestD = Infinity;
-                for (const f of g.food) {
-                    const d = Math.hypot(f.x - bot.head.x, f.y - bot.head.y);
-                    if (d < bestD) { bestD = d; best = f; }
+    // Is the point a bot is about to move into occupied by somebody
+    // else's body? Bots that ignore this just drive into each other and
+    // the map empties out within seconds, which kills the competition
+    // this whole system exists to create.
+    function dangerAhead(bot, allSnakes, lookaheadPx) {
+        const ax = bot.head.x + Math.cos(bot.head.angle) * lookaheadPx;
+        const ay = bot.head.y + Math.sin(bot.head.angle) * lookaheadPx;
+        const clearance = segmentSizeFor(bot.segmentCount) * 0.9;
+        for (const other of allSnakes) {
+            if (other === bot || !other.alive) continue;
+            for (const p of bodyPointsFor(other)) {
+                if (Math.hypot(ax - p.x, ay - p.y) < clearance + segmentSizeFor(other.segmentCount) * 0.5) {
+                    return { x: p.x, y: p.y };
                 }
-                g.botTargetFood = best;
-            }
-            if (g.botTargetFood) {
-                targetAngle = Math.atan2(g.botTargetFood.y - bot.head.y, g.botTargetFood.x - bot.head.x);
-            } else {
-                g.botWanderAngle += rand(-0.5, 0.5) * dt;
-                targetAngle = bot.head.angle + g.botWanderAngle * dt;
             }
         }
-        const botSpeed = HEAD_SPEED * 0.92; // very slightly slower than the player's base speed so it's beatable, not just competitive
+        return null;
+    }
+
+    function updateBotAI(bot, dt, allSnakes) {
+        if (!bot.alive) return;
+
+        // Priority order: don't leave the world, don't crash into
+        // anything, otherwise go eat. Each bot keeps its own target and
+        // wander state so five of them don't move as one blob.
+        const distFromCenter = Math.hypot(bot.head.x, bot.head.y);
+        let targetAngle;
+        let wantsBoost = false;
+
+        const threat = dangerAhead(bot, allSnakes, 70 + bot.segmentCount);
+        if (distFromCenter > WORLD_R * 0.85) {
+            targetAngle = Math.atan2(-bot.head.y, -bot.head.x); // steer back toward center
+        } else if (threat) {
+            // Veer perpendicular to the threat rather than directly away -
+            // turning a full 180 into your own body is how the old single
+            // bot used to kill itself trying to dodge.
+            const away = Math.atan2(bot.head.y - threat.y, bot.head.x - threat.x);
+            targetAngle = away + (Math.PI / 2) * (bot.wanderAngle >= 0 ? 1 : -1);
+        } else {
+            if (!bot.targetFood || !g.food.includes(bot.targetFood) || Math.random() < 0.01) {
+                // Slight preference for high-value food, not strictly
+                // nearest - makes different bots pick different targets
+                // and chase WHALEs like a real player would.
+                let best = null, bestScore = -Infinity;
+                for (const f of g.food) {
+                    const d = Math.hypot(f.x - bot.head.x, f.y - bot.head.y);
+                    if (d > 900) continue;
+                    const s = f.value * 60 - d;
+                    if (s > bestScore) { bestScore = s; best = f; }
+                }
+                bot.targetFood = best;
+            }
+            if (bot.targetFood) {
+                targetAngle = Math.atan2(bot.targetFood.y - bot.head.y, bot.targetFood.x - bot.head.x);
+                const d = Math.hypot(bot.targetFood.x - bot.head.x, bot.targetFood.y - bot.head.y);
+                wantsBoost = d > 320 && bot.targetFood.value >= 3; // sprint for the valuable stuff that's far away
+            } else {
+                bot.wanderAngle += rand(-0.5, 0.5) * dt;
+                targetAngle = bot.head.angle + bot.wanderAngle * dt;
+            }
+        }
+
+        // Bot boosting - same length cost the player pays, on a cooldown
+        // so they're not permanently sprinting.
+        bot.boostCooldown -= dt;
+        if (bot.boostT > 0) {
+            bot.boostT -= dt;
+        } else if (wantsBoost && bot.boostCooldown <= 0 && bot.segmentCount > MIN_SEGMENTS + 3) {
+            bot.boostT = rand(0.5, 1.4);
+            bot.boostCooldown = rand(3, 8);
+        }
+
+        let botSpeed = HEAD_SPEED * 0.92; // very slightly slower than the player's base speed so it's beatable, not just competitive
+        if (bot.boostT > 0 && bot.segmentCount > MIN_SEGMENTS) {
+            botSpeed = BOOST_SPEED * 0.92;
+            bot.boostDrainT -= dt;
+            if (bot.boostDrainT <= 0) {
+                bot.boostDrainT = BOOST_DRAIN_INTERVAL;
+                bot.segmentCount = Math.max(MIN_SEGMENTS, bot.segmentCount - 1);
+                scatterFoodAt(bot.trail[bot.trail.length - 1]?.x ?? bot.head.x,
+                    bot.trail[bot.trail.length - 1]?.y ?? bot.head.y, 1, g.food);
+            }
+        }
         updateSnakeMovement(bot, dt, targetAngle, botSpeed);
     }
 
-    function checkSelfAndSnakeCollision(snake, otherSnake, skipSegments) {
+    function checkSelfAndSnakeCollision(snake, others, skipSegments) {
         // IMPORTANT: this must check against the same points that get
         // DRAWN (bodyPointsFor), not the raw trail array. The raw trail
         // is a dense breadcrumb (a new point every SEGMENT_SPACING=14px
@@ -227,10 +349,15 @@ window.MevSandwichGame = (function () {
         for (let i = skipSegments; i < bodyPoints.length; i++) {
             if (Math.hypot(snake.head.x - bodyPoints[i].x, snake.head.y - bodyPoints[i].y) < threshold) return true;
         }
-        if (otherSnake && otherSnake.alive) {
-            const otherPoints = bodyPointsFor(otherSnake);
-            for (const p of otherPoints) {
-                if (Math.hypot(snake.head.x - p.x, snake.head.y - p.y) < threshold) return true;
+        // others may be a single snake, an array of them, or null - the
+        // array form is what supports the multiple rival sandwiches.
+        if (others) {
+            const list = Array.isArray(others) ? others : [others];
+            for (const other of list) {
+                if (!other || other === snake || !other.alive) continue;
+                for (const p of bodyPointsFor(other)) {
+                    if (Math.hypot(snake.head.x - p.x, snake.head.y - p.y) < threshold) return true;
+                }
             }
         }
         return false;
@@ -254,11 +381,24 @@ window.MevSandwichGame = (function () {
         g.timer -= dt;
         g.shakeT = Math.max(0, g.shakeT - dt);
 
-        // Player steering + boost
+        // Player steering + boost. `boosting` is set by EITHER the space
+        // bar or holding left mouse - see the listeners in start().
         const targetAngle = Math.atan2(mouseY - (SH / 2), mouseX - (SW / 2)); // relative to screen center, since the camera keeps the player centered
         let speed = HEAD_SPEED;
-        if (boosting && g.player.segmentCount > MIN_SEGMENTS) {
+        const canBoost = boosting && g.player.segmentCount > MIN_SEGMENTS;
+        if (canBoost) {
             speed = BOOST_SPEED;
+            // Cash cost - accumulated as a float and spent in whole
+            // dollars so the number ticks down smoothly rather than
+            // lurching. Floors at $0; going fast can bankrupt your take
+            // but never puts you in debt.
+            g.scoreDrainAccum += BOOST_MONEY_PER_SEC * dt;
+            if (g.scoreDrainAccum >= 1) {
+                const spend = Math.floor(g.scoreDrainAccum);
+                g.scoreDrainAccum -= spend;
+                g.score = Math.max(0, g.score - spend);
+            }
+            // Length cost (unchanged) - this is what physically limits boosting.
             g.player.boostDrainT -= dt;
             if (g.player.boostDrainT <= 0) {
                 g.player.boostDrainT = BOOST_DRAIN_INTERVAL;
@@ -266,9 +406,13 @@ window.MevSandwichGame = (function () {
                 scatterFoodAt(g.player.trail[g.player.trail.length - 1]?.x ?? g.player.head.x,
                     g.player.trail[g.player.trail.length - 1]?.y ?? g.player.head.y, 1, g.food);
             }
+        } else {
+            g.scoreDrainAccum = 0;
         }
         updateSnakeMovement(g.player, dt, targetAngle, speed);
-        updateBotAI(dt);
+
+        const allSnakes = [g.player, ...g.bots];
+        for (const bot of g.bots) updateBotAI(bot, dt, allSnakes);
 
         // Camera follows the player's head
         g.camera.x = g.player.head.x;
@@ -278,26 +422,29 @@ window.MevSandwichGame = (function () {
         if (Math.hypot(g.player.head.x, g.player.head.y) > WORLD_R) {
             g.phase = 'over'; g.deathReason = 'Drifted outside the mempool.'; return;
         }
-        if (g.bot.alive && Math.hypot(g.bot.head.x, g.bot.head.y) > WORLD_R + 50) {
-            g.bot.alive = false; // shouldn't really happen given the AI steers back, but a safety net
-            scatterFoodAt(g.bot.head.x, g.bot.head.y, g.bot.segmentCount, g.food);
+        for (const bot of g.bots) {
+            if (bot.alive && Math.hypot(bot.head.x, bot.head.y) > WORLD_R + 50) {
+                killBot(bot); // shouldn't really happen given the AI steers back, but a safety net
+            }
         }
 
-        // Self-collision and snake-vs-snake collision
-        if (checkSelfAndSnakeCollision(g.player, g.bot, 3)) {
+        // Player vs own tail and vs EVERY rival
+        if (checkSelfAndSnakeCollision(g.player, g.bots, 3)) {
             const hitOwnTail = checkSelfAndSnakeCollision(g.player, null, 3);
             g.phase = 'over';
             g.deathReason = hitOwnTail ? 'Sandwiched yourself. Ironic.' : 'Ran straight into a rival sandwich.';
             scatterFoodAt(g.player.head.x, g.player.head.y, g.player.segmentCount, g.food);
             return;
         }
-        if (g.bot.alive && checkSelfAndSnakeCollision(g.bot, g.player, 3)) {
-            g.bot.alive = false;
-            scatterFoodAt(g.bot.head.x, g.bot.head.y, g.bot.segmentCount, g.food);
+        // Each rival vs its own tail, the player, and the other rivals -
+        // so bots can genuinely take each other out and the field churns.
+        for (const bot of g.bots) {
+            if (!bot.alive) continue;
+            if (checkSelfAndSnakeCollision(bot, allSnakes, 3)) killBot(bot);
         }
 
         handleEating(g.player);
-        if (g.bot.alive) handleEating(g.bot);
+        for (const bot of g.bots) if (bot.alive) handleEating(bot);
 
         for (let i = g.pendingSpawns.length - 1; i >= 0; i--) {
             g.pendingSpawns[i] -= dt;
@@ -305,22 +452,29 @@ window.MevSandwichGame = (function () {
         }
         for (const f of g.food) f.bob += dt * 3;
 
-        // Bot respawns a little while after dying, rather than the round
-        // just permanently losing its rival - keeps the "something to
-        // compete against" feeling alive for the whole round.
-        if (!g.bot.alive) {
-            g._botRespawnT = (g._botRespawnT ?? 3) - dt;
-            if (g._botRespawnT <= 0) {
-                const p = randomPointInWorld(400);
-                g.bot = newSnake(p.x, p.y, Math.random() * Math.PI * 2, START_SEGMENTS);
-                g._botRespawnT = undefined;
-            }
+        // Dead rivals respawn after a beat rather than the round
+        // permanently losing them - keeps the map contested for the full
+        // 90 seconds instead of going quiet once you've outlasted them.
+        for (let i = 0; i < g.bots.length; i++) {
+            const bot = g.bots[i];
+            if (bot.alive) continue;
+            bot.respawnT -= dt;
+            if (bot.respawnT <= 0) g.bots[i] = spawnBot(i);
         }
 
         if (g.timer <= 0) { g.timer = 0; g.phase = 'over'; g.deathReason = null; }
     }
 
-    function drawSandwichSegment(x, y, angle, size, isHead, isBot) {
+    // A rival dying dumps its whole body back into the world as food -
+    // the same rule the player's death follows, which is what makes
+    // hunting a big bot worth the risk.
+    function killBot(bot) {
+        bot.alive = false;
+        bot.respawnT = BOT_RESPAWN_SECONDS;
+        scatterFoodAt(bot.head.x, bot.head.y, bot.segmentCount, g.food);
+    }
+
+    function drawSandwichSegment(x, y, angle, size, isHead, palette) {
         ctx.save();
         ctx.translate(x, y);
         ctx.rotate(angle);
@@ -331,12 +485,12 @@ window.MevSandwichGame = (function () {
         ctx.ellipse(2, 3, r, r * 0.82, 0, 0, Math.PI * 2);
         ctx.fill();
 
+        // Each snake carries its own palette now, so five rivals are
+        // visually distinguishable from each other and from you at a
+        // glance instead of every bot sharing one pink.
+        const pal = palette || PLAYER_PALETTE;
         const grad = ctx.createRadialGradient(-r * 0.35, -r * 0.35, r * 0.15, 0, 0, r);
-        if (isBot) {
-            grad.addColorStop(0, '#e3b3c6'); grad.addColorStop(0.55, '#c67a97'); grad.addColorStop(1, '#7a3f56');
-        } else {
-            grad.addColorStop(0, '#f6dfa0'); grad.addColorStop(0.55, '#e6bd72'); grad.addColorStop(1, '#a5763f');
-        }
+        grad.addColorStop(0, pal.hi); grad.addColorStop(0.55, pal.mid); grad.addColorStop(1, pal.lo);
         ctx.fillStyle = grad;
         ctx.beginPath();
         ctx.ellipse(0, 0, r, r * 0.82, 0, 0, Math.PI * 2);
@@ -479,20 +633,38 @@ window.MevSandwichGame = (function () {
             ctx.restore();
         }
 
-        function drawSnake(snake, isBot) {
-            if (!snake.alive && isBot) return;
+        function drawSnake(snake) {
+            if (!snake.alive) return;
             const bodyPoints = bodyPointsFor(snake);
             const size = segmentSizeFor(snake.segmentCount);
             for (let i = bodyPoints.length - 1; i >= 1; i--) {
                 const p = bodyPoints[i], prev = bodyPoints[i - 1] || snake.head;
                 if (Math.abs(p.x - camX) > viewHalfW + 60 || Math.abs(p.y - camY) > viewHalfH + 60) continue;
                 const ang = Math.atan2(prev.y - p.y, prev.x - p.x);
-                drawSandwichSegment(p.x, p.y, ang, size * (0.7 + 0.3 * (i / bodyPoints.length)), false, isBot);
+                drawSandwichSegment(p.x, p.y, ang, size * (0.7 + 0.3 * (i / bodyPoints.length)), false, snake.palette);
             }
-            drawSandwichSegment(snake.head.x, snake.head.y, snake.head.angle, size, true, isBot);
+            drawSandwichSegment(snake.head.x, snake.head.y, snake.head.angle, size, true, snake.palette);
+
+            // Rival name tag above the head, so you can tell who's who
+            // and see which one is the big threat. Scaled down by zoom so
+            // it stays readable at any camera distance.
+            if (snake.isBot && Math.abs(snake.head.x - camX) < viewHalfW && Math.abs(snake.head.y - camY) < viewHalfH) {
+                ctx.save();
+                ctx.translate(snake.head.x, snake.head.y - size * 0.9);
+                ctx.scale(1 / zoom, 1 / zoom);
+                ctx.font = "bold 11px 'JetBrains Mono', monospace";
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillStyle = 'rgba(0,0,0,0.55)';
+                const tw = ctx.measureText(snake.name).width;
+                ctx.fillRect(-tw / 2 - 4, -8, tw + 8, 15);
+                ctx.fillStyle = snake.palette.hi;
+                ctx.fillText(snake.name, 0, 0);
+                ctx.restore();
+            }
         }
-        drawSnake(g.bot, true);
-        drawSnake(g.player, false);
+        for (const bot of g.bots) drawSnake(bot);
+        drawSnake(g.player);
 
         ctx.restore();
 
@@ -509,7 +681,30 @@ window.MevSandwichGame = (function () {
             ctx.fillStyle = '#e0c34c';
             ctx.font = "14px 'JetBrains Mono', monospace";
             ctx.textAlign = 'right';
-            ctx.fillText('BOOSTING', SW - 16, 52);
+            ctx.fillText(`BOOSTING  -$${BOOST_MONEY_PER_SEC}/s`, SW - 16, 52);
+        }
+
+        // Live leaderboard - the whole point of having five rivals is
+        // seeing yourself climb (or fall) against them in real time.
+        {
+            const ranked = [g.player, ...g.bots.filter(b => b.alive)]
+                .sort((a, b) => b.segmentCount - a.segmentCount)
+                .slice(0, 6);
+            ctx.textAlign = 'left';
+            ctx.font = "11px 'JetBrains Mono', monospace";
+            let ly = 74;
+            ctx.fillStyle = 'rgba(127,168,139,0.75)';
+            ctx.fillText('BIGGEST SANDWICHES', 16, ly);
+            ly += 15;
+            for (let i = 0; i < ranked.length; i++) {
+                const s = ranked[i];
+                const isYou = s === g.player;
+                ctx.fillStyle = isYou ? '#2ecc71' : s.palette.mid;
+                ctx.fillText(`${i + 1}. ${isYou ? 'YOU' : s.name}`, 16, ly);
+                ctx.textAlign = 'left';
+                ctx.fillText(`${s.segmentCount}`, 165, ly);
+                ly += 14;
+            }
         }
 
         if (g.phase === 'over') {
@@ -552,11 +747,29 @@ window.MevSandwichGame = (function () {
         };
         onKeyDown = (ev) => {
             if (ev.key === 'Escape') { if (typeof window.closeMevSandwich === 'function') window.closeMevSandwich(); return; }
-            if (ev.key === 'Enter' && g.phase === 'over') { g = newGame(); return; }
+            if (ev.key === 'Enter' && g.phase === 'over') { newGame(); return; }
             if (ev.code === 'Space') { boosting = true; ev.preventDefault(); }
         };
         onKeyUp = (ev) => { if (ev.code === 'Space') boosting = false; };
+
+        // Left mouse held = boost, same as the space bar. Clicking after
+        // a round is over restarts it, matching what ENTER does, so you
+        // can replay without going back to the keyboard.
+        onMouseDown = (ev) => {
+            if (ev.button !== 0) return;
+            ev.preventDefault();
+            if (g.phase === 'over') { newGame(); return; }
+            boosting = true;
+        };
+        onMouseUp = (ev) => { if (ev.button === 0) boosting = false; };
+        // Releasing the button outside the canvas (or dragging off it)
+        // would otherwise leave boosting stuck on forever.
+        onMouseLeave = () => { boosting = false; };
+
         canvas.addEventListener('mousemove', onMouseMove);
+        canvas.addEventListener('mousedown', onMouseDown);
+        canvas.addEventListener('mouseleave', onMouseLeave);
+        window.addEventListener('mouseup', onMouseUp);
         window.addEventListener('keydown', onKeyDown);
         window.addEventListener('keyup', onKeyUp);
 
@@ -566,9 +779,13 @@ window.MevSandwichGame = (function () {
     function stop() {
         if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
         if (canvas && onMouseMove) canvas.removeEventListener('mousemove', onMouseMove);
+        if (canvas && onMouseDown) canvas.removeEventListener('mousedown', onMouseDown);
+        if (canvas && onMouseLeave) canvas.removeEventListener('mouseleave', onMouseLeave);
+        if (onMouseUp) window.removeEventListener('mouseup', onMouseUp);
         if (onKeyDown) window.removeEventListener('keydown', onKeyDown);
         if (onKeyUp) window.removeEventListener('keyup', onKeyUp);
-        onMouseMove = onKeyDown = onKeyUp = null;
+        onMouseMove = onKeyDown = onKeyUp = onMouseDown = onMouseUp = onMouseLeave = null;
+        boosting = false;
     }
 
     return { start, stop };
