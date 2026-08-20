@@ -53,6 +53,13 @@ window.MevSandwichGame = (function () {
     const BOT_COUNT = 5;
     const BOT_RESPAWN_SECONDS = 3;
     const BOT_NAMES = ['jaredfromsubway', 'flashb0t', 'mempool_mike', 'sandwichlord', 'rugpull_rick', 'blockbuilder', 'toxic_flow'];
+
+    // Ghosts = recorded runs by real players (js/mevghosts.js). Kept
+    // visually distinct from the CPU bots - washed-out spectral blue - so
+    // it's obvious which rivals were once actual people.
+    const GHOST_PALETTE = { hi: '#cfe6f5', mid: '#8fb8d0', lo: '#4a6a80' };
+    const GHOST_SAMPLE_HZ_LOCAL = (typeof MEV_GHOST_SAMPLE_HZ !== 'undefined') ? MEV_GHOST_SAMPLE_HZ : 8;
+    const MEV_GHOST_PER_ROUND_LOCAL = (typeof MEV_GHOST_PER_ROUND !== 'undefined') ? MEV_GHOST_PER_ROUND : 4;
     const PLAYER_PALETTE = { hi: '#f6dfa0', mid: '#e6bd72', lo: '#a5763f' };
     const BOT_PALETTES = [
         { hi: '#e3b3c6', mid: '#c67a97', lo: '#7a3f56' }, // pink - the original rival's colors
@@ -192,12 +199,89 @@ window.MevSandwichGame = (function () {
     }
 
     let g;
+    let _roundCounter = 0;
+
+    // Turns a recorded run (see js/mevghosts.js) into something the rest
+    // of the game can treat as just another snake. It has the same shape
+    // as a bot - head, trail, segmentCount, palette - so collision,
+    // drawing and the leaderboard all work on it unchanged. The only
+    // difference is that its head follows a recording instead of an AI.
+    function newGhostSnake(run) {
+        const first = run.samples[0];
+        const s = newSnake(first.x, first.y, first.a, Math.max(1, first.s), {
+            name: run.name,
+            palette: GHOST_PALETTE,
+            isBot: true,
+        });
+        s.isGhost = true;
+        s.samples = run.samples;
+        s.playT = 0;
+        return s;
+    }
+
+    function loadGhostsIntoRound() {
+        if (typeof pickMevGhostRuns !== 'function') return;
+        // The pool is normally already cached (fetched at page load), in
+        // which case this runs synchronously. If it isn't - first visit,
+        // slow network - the ghosts drop in when the fetch resolves. The
+        // roundId guard stops a late response from injecting ghosts into
+        // a round the player has already restarted out of.
+        const myRound = g.roundId;
+        const inject = () => {
+            if (!g || g.roundId !== myRound || g.phase !== 'playing') return;
+            try {
+                for (const run of pickMevGhostRuns(MEV_GHOST_PER_ROUND_LOCAL)) {
+                    g.ghosts.push(newGhostSnake(run));
+                }
+            } catch (e) {
+                console.warn('[mevsandwich] ghost load failed, continuing with bots only:', e);
+            }
+        };
+        if (typeof fetchMevGhostPool === 'function') {
+            fetchMevGhostPool().then(inject).catch(() => {});
+        } else {
+            inject();
+        }
+    }
+
+    // Advances a ghost along its recording, interpolating between the
+    // 8Hz samples so it moves as smoothly as a live snake. When the
+    // recording runs out, that player's run is simply over.
+    function updateGhost(ghost, dt) {
+        if (!ghost.alive) return;
+        ghost.playT += dt;
+        const idx = ghost.playT * GHOST_SAMPLE_HZ_LOCAL;
+        const i0 = Math.floor(idx);
+        if (i0 >= ghost.samples.length - 1) { ghost.alive = false; ghost.respawnT = BOT_RESPAWN_SECONDS; return; }
+        const f = idx - i0;
+        const a = ghost.samples[i0], b = ghost.samples[i0 + 1];
+        const nx = a.x + (b.x - a.x) * f;
+        const ny = a.y + (b.y - a.y) * f;
+        const dx = nx - ghost.head.x, dy = ny - ghost.head.y;
+        if (dx || dy) ghost.head.angle = Math.atan2(dy, dx);
+        ghost.head.x = nx;
+        ghost.head.y = ny;
+        ghost.segmentCount = Math.max(1, Math.round(a.s + (b.s - a.s) * f));
+
+        const last = ghost.trail[0];
+        if (!last || Math.hypot(nx - last.x, ny - last.y) >= SEGMENT_SPACING) {
+            ghost.trail.unshift({ x: nx, y: ny });
+        }
+        const maxTrailLen = Math.ceil(ghost.segmentCount * (SEGMENT_SIZE_MAX / SEGMENT_SPACING)) + 20;
+        if (ghost.trail.length > maxTrailLen) ghost.trail.length = maxTrailLen;
+    }
 
     function newGame() {
         g = {
             phase: 'playing',
             player: newSnake(0, 400, -Math.PI / 2, START_SEGMENTS),
             bots: [],
+            ghosts: [],
+            roundId: ++_roundCounter,
+            // Recording of THIS run, saved when the round ends.
+            rec: [],
+            recT: 0,
+            saved: false,
             food: (() => { const f = []; for (let i = 0; i < FOOD_COUNT_TARGET; i++) f.push(spawnFood(f)); return f; })(),
             pendingSpawns: [],
             score: 0,
@@ -209,6 +293,7 @@ window.MevSandwichGame = (function () {
         };
         // Assigned after g exists - botStartSegments() reads g.timer.
         for (let i = 0; i < BOT_COUNT; i++) g.bots.push(spawnBot(i));
+        loadGhostsIntoRound();
         return g;
     }
 
@@ -411,8 +496,22 @@ window.MevSandwichGame = (function () {
         }
         updateSnakeMovement(g.player, dt, targetAngle, speed);
 
-        const allSnakes = [g.player, ...g.bots];
+        for (const ghost of g.ghosts) updateGhost(ghost, dt);
+
+        // Ghosts are part of the world for every purpose: bots dodge them,
+        // bots can crash into them, and they can kill you.
+        const allSnakes = [g.player, ...g.bots, ...g.ghosts];
         for (const bot of g.bots) updateBotAI(bot, dt, allSnakes);
+
+        // Record this run for future players to race against. Sampled at
+        // a fixed rate rather than every frame so the stored path is the
+        // same size regardless of framerate.
+        g.recT += dt;
+        const recInterval = 1 / GHOST_SAMPLE_HZ_LOCAL;
+        while (g.recT >= recInterval) {
+            g.recT -= recInterval;
+            g.rec.push({ x: g.player.head.x, y: g.player.head.y, a: g.player.head.angle, s: g.player.segmentCount });
+        }
 
         // Camera follows the player's head
         g.camera.x = g.player.head.x;
@@ -420,7 +519,7 @@ window.MevSandwichGame = (function () {
 
         // Boundary check (circular world)
         if (Math.hypot(g.player.head.x, g.player.head.y) > WORLD_R) {
-            g.phase = 'over'; g.deathReason = 'Drifted outside the mempool.'; return;
+            g.phase = 'over'; g.deathReason = 'Drifted outside the mempool.'; endRound(); return;
         }
         for (const bot of g.bots) {
             if (bot.alive && Math.hypot(bot.head.x, bot.head.y) > WORLD_R + 50) {
@@ -428,12 +527,17 @@ window.MevSandwichGame = (function () {
             }
         }
 
-        // Player vs own tail and vs EVERY rival
-        if (checkSelfAndSnakeCollision(g.player, g.bots, 3)) {
+        // Player vs own tail and vs EVERY rival, live bot or recorded ghost
+        const rivals = [...g.bots, ...g.ghosts];
+        if (checkSelfAndSnakeCollision(g.player, rivals, 3)) {
             const hitOwnTail = checkSelfAndSnakeCollision(g.player, null, 3);
+            const ghostHit = !hitOwnTail && checkSelfAndSnakeCollision(g.player, g.ghosts, 3);
             g.phase = 'over';
-            g.deathReason = hitOwnTail ? 'Sandwiched yourself. Ironic.' : 'Ran straight into a rival sandwich.';
+            g.deathReason = hitOwnTail
+                ? 'Sandwiched yourself. Ironic.'
+                : (ghostHit ? "Crashed into someone else's run." : 'Ran straight into a rival sandwich.');
             scatterFoodAt(g.player.head.x, g.player.head.y, g.player.segmentCount, g.food);
+            endRound();
             return;
         }
         // Each rival vs its own tail, the player, and the other rivals -
@@ -441,6 +545,13 @@ window.MevSandwichGame = (function () {
         for (const bot of g.bots) {
             if (!bot.alive) continue;
             if (checkSelfAndSnakeCollision(bot, allSnakes, 3)) killBot(bot);
+        }
+        // A ghost that drives into somebody dies too - its recording just
+        // stops there. Keeps them from ploughing through the field
+        // untouchable while every live snake has to respect collisions.
+        for (const ghost of g.ghosts) {
+            if (!ghost.alive) continue;
+            if (checkSelfAndSnakeCollision(ghost, [g.player, ...g.bots], 3)) killBot(ghost);
         }
 
         handleEating(g.player);
@@ -462,7 +573,18 @@ window.MevSandwichGame = (function () {
             if (bot.respawnT <= 0) g.bots[i] = spawnBot(i);
         }
 
-        if (g.timer <= 0) { g.timer = 0; g.phase = 'over'; g.deathReason = null; }
+        if (g.timer <= 0) { g.timer = 0; g.phase = 'over'; g.deathReason = null; endRound(); }
+    }
+
+    // Called exactly once per round, however the round ended, to archive
+    // the run for future players. Guarded by g.saved because several
+    // different code paths can end a round.
+    function endRound() {
+        if (g.saved) return;
+        g.saved = true;
+        if (typeof saveMevGhostRun === 'function') {
+            saveMevGhostRun(g.score, g.player.segmentCount, g.rec);
+        }
     }
 
     // A rival dying dumps its whole body back into the world as food -
@@ -663,6 +785,13 @@ window.MevSandwichGame = (function () {
                 ctx.restore();
             }
         }
+        // Ghosts render first (underneath) and semi-transparent, so a
+        // recorded run reads as a spectral replay rather than something
+        // solid you'd mistake for a live rival.
+        ctx.save();
+        ctx.globalAlpha = 0.55;
+        for (const ghost of g.ghosts) drawSnake(ghost);
+        ctx.restore();
         for (const bot of g.bots) drawSnake(bot);
         drawSnake(g.player);
 
@@ -687,7 +816,7 @@ window.MevSandwichGame = (function () {
         // Live leaderboard - the whole point of having five rivals is
         // seeing yourself climb (or fall) against them in real time.
         {
-            const ranked = [g.player, ...g.bots.filter(b => b.alive)]
+            const ranked = [g.player, ...g.bots.filter(b => b.alive), ...g.ghosts.filter(gh => gh.alive)]
                 .sort((a, b) => b.segmentCount - a.segmentCount)
                 .slice(0, 6);
             ctx.textAlign = 'left';
@@ -701,8 +830,16 @@ window.MevSandwichGame = (function () {
                 const isYou = s === g.player;
                 ctx.fillStyle = isYou ? '#2ecc71' : s.palette.mid;
                 ctx.fillText(`${i + 1}. ${isYou ? 'YOU' : s.name}`, 16, ly);
-                ctx.textAlign = 'left';
-                ctx.fillText(`${s.segmentCount}`, 165, ly);
+                // "rec" marks a recorded run by a real player, so those are
+                // distinguishable from the CPU rivals at a glance - the
+                // whole point of the ghost system is knowing a human set
+                // that line, not the AI.
+                if (s.isGhost) {
+                    ctx.fillStyle = 'rgba(143,184,208,0.65)';
+                    ctx.fillText('rec', 140, ly);
+                }
+                ctx.fillStyle = isYou ? '#2ecc71' : s.palette.mid;
+                ctx.fillText(`${s.segmentCount}`, 172, ly);
                 ly += 14;
             }
         }
