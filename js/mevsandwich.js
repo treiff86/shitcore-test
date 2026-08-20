@@ -24,7 +24,7 @@
 
 window.MevSandwichGame = (function () {
     const SW = 960, SH = 540;
-    const WORLD_R = 2400;            // world is a circle, radius from center - cross it and you die, same as real slither.io's boundary
+    const WORLD_R = 1600;            // world is a circle, radius from center - cross it and you die, same as real slither.io's boundary. Shrunk from 2400 - combined with the higher food count below, the map reads as dense/busy instead of empty, closer to real slither.io.
     const HEAD_SPEED = 220;          // px/sec, normal
     const BOOST_SPEED = 380;         // px/sec, while boosting
     const BOOST_DRAIN_INTERVAL = 0.35; // seconds per segment lost while boosting
@@ -35,8 +35,21 @@ window.MevSandwichGame = (function () {
     const START_SEGMENTS = 5;
     const MIN_SEGMENTS = 4;          // boosting can't shrink you below this
     const ROUND_SECONDS = 90;        // longer now that there's an actual world to explore and a bot to compete with
-    const FOOD_COUNT_TARGET = 70;    // spread across the much bigger world now
+    const FOOD_COUNT_TARGET = 260;   // way more bubbles on screen at once - was 70, felt sparse/empty on a big map
     const FOOD_RESPAWN_DELAY = 0.4;
+
+    // Camera zoom - real slither.io starts zoomed in close and slowly
+    // pulls back as your snake grows, so a small snake always feels
+    // "close" and a huge one still fits on screen. Tied to the same
+    // 40-segment growth curve segmentSizeFor() already uses, so the two
+    // stay in sync (you zoom out at the same rate your segments get
+    // visually bigger, not fighting each other).
+    const ZOOM_CLOSE = 1.65;   // at START_SEGMENTS
+    const ZOOM_FAR = 1.0;      // once fully grown
+    function currentZoom() {
+        const growth = Math.min(1, (g.player.segmentCount - START_SEGMENTS) / 40);
+        return ZOOM_CLOSE + (ZOOM_FAR - ZOOM_CLOSE) * growth;
+    }
 
     const TX_TYPES = [
         { label: '$', value: 1, r: 8, color: '#7fd68a', chance: 0.55 },
@@ -391,53 +404,68 @@ window.MevSandwichGame = (function () {
         _hexBgCanvas = off;
     }
 
-    function drawWorldBackground(camX, camY) {
+    function drawWorldBackground(camX, camY, zoom) {
+        // Now drawn INSIDE the camera transform set up in draw() (world
+        // coordinates map straight to screen via that transform), so the
+        // pattern - anchored at world (0,0) and repeating infinitely -
+        // scrolls correctly just by filling a world-space rect around the
+        // camera. None of the old manual screen-space offset math is
+        // needed anymore now that everything draws in world space.
         if (!_hexBgCanvas) buildHexBackground();
-        const tw = _hexBgCanvas.width, th = _hexBgCanvas.height;
         const pattern = ctx.createPattern(_hexBgCanvas, 'repeat');
-        ctx.save();
-        // Offset the pattern so it scrolls correctly with the camera -
-        // canvas patterns tile from (0,0) of the CANVAS by default, not
-        // from the world origin, so this corrects for that each frame.
-        const offX = ((-camX + SW / 2) % tw + tw) % tw;
-        const offY = ((-camY + SH / 2) % th + th) % th;
-        ctx.translate(offX - tw, offY - th);
         ctx.fillStyle = pattern;
-        ctx.fillRect(-offX + camX - SW / 2 - tw, -offY + camY - SH / 2 - th, SW + tw * 3, SH + th * 3);
-        ctx.restore();
+        const halfW = (SW / 2) / zoom + 80;
+        const halfH = (SH / 2) / zoom + 80;
+        ctx.fillRect(camX - halfW, camY - halfH, halfW * 2, halfH * 2);
     }
 
     function draw() {
         const shakeX = g.shakeT > 0 ? rand(-3, 3) : 0;
         const shakeY = g.shakeT > 0 ? rand(-3, 3) : 0;
         const camX = g.camera.x, camY = g.camera.y;
+        const zoom = currentZoom();
 
         ctx.fillStyle = '#0b0f16';
         ctx.fillRect(0, 0, SW, SH);
-        ctx.save();
-        ctx.translate(shakeX, shakeY);
-        drawWorldBackground(camX, camY);
 
-        function toScreen(wx, wy) { return [wx - camX + SW / 2, wy - camY + SH / 2]; }
+        // Camera transform: screen-center at the player, scaled by the
+        // current zoom, then shifted so world coordinates land exactly
+        // where they should. Everything drawn between here and the
+        // matching ctx.restore() below is specified in plain WORLD
+        // coordinates - the transform handles screen placement AND size
+        // (segments, food, line widths all scale with zoom automatically),
+        // replacing the old manual toScreen() conversions.
+        ctx.save();
+        ctx.translate(SW / 2 + shakeX, SH / 2 + shakeY);
+        ctx.scale(zoom, zoom);
+        ctx.translate(-camX, -camY);
+
+        drawWorldBackground(camX, camY, zoom);
 
         // World boundary - visible as a glowing ring so "the edge" reads
         // clearly as the actual danger it is, not an invisible wall.
-        const [bx, by] = toScreen(0, 0);
+        // Divided by zoom so the ring's screen thickness stays consistent
+        // regardless of how zoomed in/out the camera currently is.
         ctx.strokeStyle = '#2ecc71';
-        ctx.lineWidth = 4;
+        ctx.lineWidth = 4 / zoom;
         ctx.globalAlpha = 0.85;
         ctx.beginPath();
-        ctx.arc(bx, by, WORLD_R, 0, Math.PI * 2);
+        ctx.arc(0, 0, WORLD_R, 0, Math.PI * 2);
         ctx.stroke();
         ctx.globalAlpha = 1;
 
+        // Visible half-extents at the current zoom, with margin - used to
+        // cull food/segments that are off-screen instead of drawing
+        // everything in the (now much bigger) food pool every frame.
+        const viewHalfW = (SW / 2) / zoom + 60;
+        const viewHalfH = (SH / 2) / zoom + 60;
+
         // Food
         for (const f of g.food) {
-            const [sx, sy] = toScreen(f.x, f.y);
-            if (sx < -30 || sx > SW + 30 || sy < -30 || sy > SH + 30) continue; // cheap offscreen skip
+            if (Math.abs(f.x - camX) > viewHalfW || Math.abs(f.y - camY) > viewHalfH) continue;
             const bobY = Math.sin(f.bob) * 3;
             ctx.save();
-            ctx.translate(sx, sy + bobY);
+            ctx.translate(f.x, f.y + bobY);
             const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, f.r * 2.6);
             glow.addColorStop(0, f.color + 'aa'); glow.addColorStop(1, f.color + '00');
             ctx.fillStyle = glow;
@@ -457,13 +485,11 @@ window.MevSandwichGame = (function () {
             const size = segmentSizeFor(snake.segmentCount);
             for (let i = bodyPoints.length - 1; i >= 1; i--) {
                 const p = bodyPoints[i], prev = bodyPoints[i - 1] || snake.head;
-                const [sx, sy] = toScreen(p.x, p.y);
-                if (sx < -60 || sx > SW + 60 || sy < -60 || sy > SH + 60) continue;
+                if (Math.abs(p.x - camX) > viewHalfW + 60 || Math.abs(p.y - camY) > viewHalfH + 60) continue;
                 const ang = Math.atan2(prev.y - p.y, prev.x - p.x);
-                drawSandwichSegment(sx, sy, ang, size * (0.7 + 0.3 * (i / bodyPoints.length)), false, isBot);
+                drawSandwichSegment(p.x, p.y, ang, size * (0.7 + 0.3 * (i / bodyPoints.length)), false, isBot);
             }
-            const [hx, hy] = toScreen(snake.head.x, snake.head.y);
-            drawSandwichSegment(hx, hy, snake.head.angle, size, true, isBot);
+            drawSandwichSegment(snake.head.x, snake.head.y, snake.head.angle, size, true, isBot);
         }
         drawSnake(g.bot, true);
         drawSnake(g.player, false);
