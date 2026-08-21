@@ -140,7 +140,21 @@ window.MevSandwichGame = (function () {
         }
     }
 
+    // Hard cap on segment count. This loop runs `segments * 3` times, so an
+    // out-of-range value here is not a cosmetic bug - it locks up the tab.
+    // Ghost snakes are built from mev_ghosts rows, and ANY anonymous person
+    // can insert one of those via the public REST endpoint, so a hostile
+    // row claiming 2147483647 segments would otherwise make every other
+    // player's browser try to allocate ~6.4 billion objects and die.
+    // Clamped at this single choke point that every snake passes through,
+    // rather than trusting each caller to sanitise first.
+    const MAX_SEGMENTS_HARD = 600;
+
     function newSnake(x, y, angle, segments, opts = {}) {
+        segments = Math.min(MAX_SEGMENTS_HARD, Math.max(1, Number(segments) | 0)) || 1;
+        if (!Number.isFinite(x)) x = 0;
+        if (!Number.isFinite(y)) y = 0;
+        if (!Number.isFinite(angle)) angle = 0;
         const trail = [];
         for (let i = 0; i < segments * 3; i++) {
             trail.push({ x: x - Math.cos(angle) * i * (SEGMENT_SPACING / 3), y: y - Math.sin(angle) * i * (SEGMENT_SPACING / 3) });
