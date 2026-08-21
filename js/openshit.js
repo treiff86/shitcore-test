@@ -650,12 +650,20 @@ function nftShill() {
     const viralLikes = Math.floor(Math.random()*80000+20000);
     const viralRTs   = Math.floor(Math.random()*20000+5000);
 
+    // The collection name is typed by the player and this text goes through
+    // innerHTML below, so it must be escaped here. Every other post in this
+    // file routes through pushYPost(), which escapes centrally - this was
+    // the one path that bypassed it, so a name like
+    // `<img src=x onerror=alert(1)>` actually executed. Self-inflicted only
+    // (the name is never stored or shown to anyone else), but it is still
+    // script execution on a page that talks to wallets, so it gets closed.
+    const safeName = (typeof escapeHtml === 'function') ? escapeHtml(nftCollection.name) : String(nftCollection.name);
     const successPosts = [
-        `${nftCollection.name} is literally the most alpha collection I've seen this cycle. not financial advice. my bags are up 3x. not financial advice`,
-        `just discovered ${nftCollection.name} and I need everyone to look at this art RIGHT NOW. this is the one ser`,
-        `${nftCollection.name} has the strongest community I've seen since the last project I shilled. completely unbiased opinion`,
-        `my professional recommendation as a Y Social influencer: mint ${nftCollection.name} immediately. this is not financial advice (it is)`,
-        `${nftCollection.name} floor is going to be disgusting. in the best possible way. screenshot this post.`,
+        `${safeName} is literally the most alpha collection I've seen this cycle. not financial advice. my bags are up 3x. not financial advice`,
+        `just discovered ${safeName} and I need everyone to look at this art RIGHT NOW. this is the one ser`,
+        `${safeName} has the strongest community I've seen since the last project I shilled. completely unbiased opinion`,
+        `my professional recommendation as a Y Social influencer: mint ${safeName} immediately. this is not financial advice (it is)`,
+        `${safeName} floor is going to be disgusting. in the best possible way. screenshot this post.`,
     ];
     const postText = successPosts[Math.floor(Math.random()*successPosts.length)];
 
