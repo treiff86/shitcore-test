@@ -1,183 +1,96 @@
 /* ============================================================
-   NFT COLLECTION OWNERSHIP CHECK (Helius DAS API)
+   NFT COLLECTION OWNERSHIP CHECK (via the sol-lookup proxy)
    ============================================================
-   Loaded as a real ES module (type="module") for the same reason
-   as sns.js - reuses the same Helius key already set up there.
-
    window.checkCollectionOwnership(walletAddress, collectionAddress)
+   window.checkTokenHolding(walletAddress, mintAddress)
+   window.checkTraitOwnership(walletAddress, collectionAddress, traitType, traitValue)
    -> true/false, never throws.
 
    Checks against the collection's VERIFIED on-chain collection
    address (Metaplex Certified Collection) - not name/symbol
    matching, which anyone could fake with a copycat collection.
-   Get the real collection address from your mint's Candy
-   Machine / collection NFT once it exists - a marketplace page
-   (Magic Eden/Tensor) for the collection will also show it.
 
-   Fails CLOSED (returns false) on any error - the right default
-   for access gating, where a network hiccup should never
-   accidentally let someone through. For purely cosmetic checks
-   (not security-relevant) failing closed just means the cosmetic
-   doesn't show, which is a fine, low-stakes default either way.
+   SECURITY: the Helius API key is deliberately NOT in this file any
+   more. It used to sit here in plain sight, so anyone could lift it
+   from DevTools and spend the quota - and because these checks fail
+   CLOSED, an exhausted quota locks REAL holders out of their themes
+   and trait rewards.
+
+   These calls now go through the `sol-lookup` Supabase Edge Function,
+   which holds the key server-side. That function is NOT a general RPC
+   proxy: it accepts one of three fixed operations, validates both
+   addresses as base58, builds the Helius request itself, and returns
+   only a boolean. See supabase_sol_lookup.md.
+
+   Still fails CLOSED on any error - the right default for access
+   gating, where a network hiccup should never accidentally let someone
+   through.
    ============================================================ */
 
-const HELIUS_API_KEY = "9c094b2b-cfdb-4fb9-b7e5-78c46d88066c"; // same key as sns.js
-const HELIUS_URL = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}`;
+const SOL_LOOKUP_FUNCTION = "sol-lookup";
+
+// `sb` is declared with `let` in js/web3.js, so it sits in the temporal
+// dead zone until that script executes - and `typeof` on a TDZ binding
+// THROWS rather than returning "undefined". Hence the try/catch.
+function _solLookupClient() {
+    try {
+        return (typeof sb !== 'undefined' && sb) ? sb : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+// Single call path for all three checks. Returns true/false, never throws.
+async function _solLookup(payload, label) {
+    const client = _solLookupClient();
+    if (!client) {
+        console.warn(`[nftgate] Supabase client not ready - cannot reach sol-lookup (${label})`);
+        return false;
+    }
+    try {
+        const { data, error } = await client.functions.invoke(SOL_LOOKUP_FUNCTION, { body: payload });
+        if (error) {
+            // Likely causes: the HELIUS_API_KEY secret not being set on the
+            // function, the per-IP rate limit, or Helius itself being down.
+            // All fail closed, exactly as the old direct fetch did.
+            console.warn(`[nftgate] sol-lookup error (${label}):`, error.message || error);
+            return false;
+        }
+        if (data && data.error) {
+            console.warn(`[nftgate] sol-lookup rejected (${label}):`, data.error);
+            return false;
+        }
+        const owns = !!(data && data.owns);
+        console.log(`[nftgate] ${label} -> ${owns}${data && data.cached ? ' (server cache)' : ''}`);
+        return owns;
+    } catch (e) {
+        console.error(`[nftgate] sol-lookup threw (${label}):`, e);
+        return false;
+    }
+}
 
 window.checkCollectionOwnership = async function (walletAddressStr, collectionAddress) {
     if (!walletAddressStr || !collectionAddress) return false; // never "pass" against an unset/blank collection
-
-    try {
-        const res = await fetch(HELIUS_URL, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                jsonrpc: "2.0",
-                id: "collection-gate-check",
-                method: "searchAssets",
-                params: {
-                    ownerAddress: walletAddressStr,
-                    grouping: ["collection", collectionAddress],
-                    page: 1,
-                    limit: 1,
-                },
-            }),
-        });
-
-        if (!res.ok) {
-            console.warn(`[nftgate] Helius returned HTTP ${res.status} checking collection ${collectionAddress}`);
-            return false;
-        }
-
-        const data = await res.json();
-        if (data.error) {
-            console.warn("[nftgate] Helius API error:", data.error);
-            return false;
-        }
-
-        const count = data?.result?.total ?? (data?.result?.items?.length || 0);
-        console.log(`[nftgate] ${walletAddressStr.slice(0,4)}...${walletAddressStr.slice(-4)} owns ${count} asset(s) from collection ${collectionAddress.slice(0,4)}...${collectionAddress.slice(-4)}`);
-        return count > 0;
-    } catch (e) {
-        console.warn("[nftgate] ownership check failed:", e);
-        return false;
-    }
+    return await _solLookup(
+        { op: 'collection', wallet: walletAddressStr, target: collectionAddress },
+        `collection ${String(collectionAddress).slice(0, 4)}...${String(collectionAddress).slice(-4)}`,
+    );
 };
 
-/* ============================================================
-   TRAIT-LEVEL CHECK (for trait-gated rewards, e.g. TRAIT_REWARDS
-   in web3.js) - same collection-ownership check, but also pulls
-   each NFT's metadata attributes and looks for a specific
-   trait_type/value pair (standard Metaplex format, e.g.
-   {"trait_type": "Clothing", "value": "Caravaggio"}).
-
-   Scans every NFT the wallet holds from that collection (limit
-   1000 - more than enough for any one wallet), not just the
-   first one found, since the matching trait could be on any of
-   them. Fails CLOSED (false) on any error, same reasoning as
-   checkCollectionOwnership above - a network hiccup should never
-   accidentally grant a reward.
-
-   window.checkTraitOwnership(walletAddress, collectionAddress, traitType, traitValue)
-   -> true/false, never throws.
-   ============================================================ */
-/* ============================================================
-   SPL TOKEN HOLDER CHECK (Solana fungible tokens, e.g. $MIM)
-   ============================================================
-   Different from NFT collection ownership above - this checks a
-   regular Solana RPC method (getTokenAccountsByOwner) for ANY
-   balance > 0 of a given SPL token mint, rather than Helius's
-   NFT-specific DAS API. Same Helius endpoint works for both since
-   it's a full Solana RPC proxy, not just a DAS-only API.
-
-   window.checkTokenHolding(walletAddress, mintAddress) -> true/false,
-   never throws. Fails CLOSED on any error, same reasoning as the
-   NFT checks above.
-   ============================================================ */
 window.checkTokenHolding = async function (walletAddressStr, mintAddress) {
     if (!walletAddressStr || !mintAddress) return false;
-
-    try {
-        const res = await fetch(HELIUS_URL, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                jsonrpc: "2.0",
-                id: "token-gate-check",
-                method: "getTokenAccountsByOwner",
-                params: [
-                    walletAddressStr,
-                    { mint: mintAddress },
-                    { encoding: "jsonParsed" },
-                ],
-            }),
-        });
-
-        if (!res.ok) {
-            console.warn(`[nftgate] Helius returned HTTP ${res.status} checking token ${mintAddress}`);
-            return false;
-        }
-
-        const data = await res.json();
-        if (data.error) {
-            console.warn("[nftgate] Helius API error:", data.error);
-            return false;
-        }
-
-        const accounts = data?.result?.value || [];
-        const holds = accounts.some(acc => {
-            const amt = acc?.account?.data?.parsed?.info?.tokenAmount?.uiAmount;
-            return amt && amt > 0;
-        });
-        console.log(`[nftgate] ${walletAddressStr.slice(0,4)}...${walletAddressStr.slice(-4)} holds token ${mintAddress.slice(0,4)}...${mintAddress.slice(-4)} -> ${holds}`);
-        return holds;
-    } catch (e) {
-        console.warn("[nftgate] token holding check failed:", e);
-        return false;
-    }
+    return await _solLookup(
+        { op: 'token', wallet: walletAddressStr, target: mintAddress },
+        `token ${String(mintAddress).slice(0, 4)}...${String(mintAddress).slice(-4)}`,
+    );
 };
 
 window.checkTraitOwnership = async function (walletAddressStr, collectionAddress, traitType, traitValue) {
     if (!walletAddressStr || !collectionAddress || !traitType || !traitValue) return false;
-
-    try {
-        const res = await fetch(HELIUS_URL, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                jsonrpc: "2.0",
-                id: "trait-gate-check",
-                method: "searchAssets",
-                params: {
-                    ownerAddress: walletAddressStr,
-                    grouping: ["collection", collectionAddress],
-                    page: 1,
-                    limit: 1000,
-                },
-            }),
-        });
-
-        if (!res.ok) {
-            console.warn(`[nftgate] Helius returned HTTP ${res.status} checking trait ${traitType}:${traitValue}`);
-            return false;
-        }
-
-        const data = await res.json();
-        if (data.error) {
-            console.warn("[nftgate] Helius API error:", data.error);
-            return false;
-        }
-
-        const items = data?.result?.items || [];
-        const match = items.some(item =>
-            (item?.content?.metadata?.attributes || []).some(
-                a => a.trait_type === traitType && a.value === traitValue
-            )
-        );
-        console.log(`[nftgate] ${walletAddressStr.slice(0,4)}...${walletAddressStr.slice(-4)} trait ${traitType}:${traitValue} -> ${match}`);
-        return match;
-    } catch (e) {
-        console.warn("[nftgate] trait check failed:", e);
-        return false;
-    }
+    // The trait comparison happens server-side inside the function, so the
+    // browser only ever receives the yes/no - never the wallet's metadata.
+    return await _solLookup(
+        { op: 'trait', wallet: walletAddressStr, target: collectionAddress, traitType, traitValue },
+        `trait ${traitType}=${traitValue}`,
+    );
 };
