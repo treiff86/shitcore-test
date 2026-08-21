@@ -35,10 +35,21 @@
 import { Connection, PublicKey } from "https://esm.sh/@solana/web3.js@1.98.4";
 import { getAllDomains, performReverseLookup } from "https://esm.sh/@bonfida/spl-name-service@3.0.26";
 
-const HELIUS_API_KEY = "9c094b2b-cfdb-4fb9-b7e5-78c46d88066c"; // paste your free key from https://dashboard.helius.dev here
+/* SECURITY: the Helius key used to live here, and unlike js/nftgate.js
+   this file could NOT simply be put behind a proxy. The reason is
+   structural: it hands an RPC URL to @solana/web3.js and lets the Bonfida
+   library drive it, so it needs a GENERAL Solana RPC endpoint - and a
+   general RPC proxy open to the internet would be strictly worse than the
+   exposed key it replaced (same quota drain, but anonymous).
 
+   So Helius is dropped here instead. This file only resolves a cosmetic
+   ".sol" display name: it gates nothing, grants nothing, and failing just
+   means a wallet shows as "AbCd...WxYz". The public endpoints below were
+   already present as fallbacks and are fine for that.
+
+   Real ownership checks (themes, trait rewards) live in js/nftgate.js and
+   DO go through the key-protected sol-lookup proxy. */
 const RPC_ENDPOINTS = [
-    ...(HELIUS_API_KEY ? [`https://mainnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}`] : []),
     "https://rpc.ankr.com/solana",
     "https://solana-rpc.publicnode.com",
 ];
