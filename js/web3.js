@@ -752,6 +752,11 @@ async function offerCloudLoadIfExists() {
     // Always resume the cloud save automatically - no prompt. This wallet's
     // last session is the source of truth the moment it connects.
     state = { ...defaultState, ...data.game_state };
+    // Third money-duplication path: connecting a wallet mid-trade replaces
+    // `state` (and with it the cash balance) while the open position lives
+    // on in markets.js, so it could still be closed afterwards for a margin
+    // refund against the newly loaded balance.
+    if (typeof clearActiveTradeOnReset === "function") clearActiveTradeOnReset();
     saveGame();     // no-op now, harmless leftover call
     updateUI();
     showToast("☁️ Welcome back - resumed where you left off.", "success");
