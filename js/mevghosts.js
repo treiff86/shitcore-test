@@ -78,16 +78,40 @@ function fetchMevGhostPool() {
 // the player at t=0 and kill everyone instantly. Rotating around the
 // origin keeps each path inside the circular world while spreading the
 // ghosts out.
+// SECURITY: everything in `flat` came from a table that any anonymous
+// person can write to over the public REST endpoint, so it is hostile
+// input, not our own data. The writer's clamps in saveMevGhostRun() are
+// irrelevant here - an attacker never runs the writer. Every value is
+// re-validated on the way IN, because a bad one lands in a physics/render
+// loop on someone else's machine.
+const GHOST_MAX_COORD = 100000;   // world radius is 1600; anything beyond this is junk
+const GHOST_MAX_SEGMENTS = 600;   // must stay <= MAX_SEGMENTS_HARD in mevsandwich.js
+const GHOST_MAX_SAMPLES_READ = 2000;
+
+function _ghostNum(v, limit, fallback) {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return fallback;   // rejects NaN, Infinity, null, objects, strings
+    return Math.max(-limit, Math.min(limit, n));
+}
+
 function decodeMevGhostPath(flat, rotation) {
+    if (!Array.isArray(flat)) return [];
     const cos = Math.cos(rotation), sin = Math.sin(rotation);
     const out = [];
-    for (let i = 0; i + 3 < flat.length; i += 4) {
-        const x = flat[i], y = flat[i + 1];
+    // Bounded on the read side too - MEV_GHOST_MAX_SAMPLES only ever
+    // applied when writing, so a hand-crafted row could otherwise carry an
+    // arbitrarily long path and be decoded into millions of objects.
+    const end = Math.min(flat.length, GHOST_MAX_SAMPLES_READ * 4);
+    for (let i = 0; i + 3 < end; i += 4) {
+        const x = _ghostNum(flat[i], GHOST_MAX_COORD, 0);
+        const y = _ghostNum(flat[i + 1], GHOST_MAX_COORD, 0);
+        const a = _ghostNum(flat[i + 2], 100000, 0) / 100;
+        const s = Math.min(GHOST_MAX_SEGMENTS, Math.max(1, _ghostNum(flat[i + 3], GHOST_MAX_SEGMENTS, 1) | 0));
         out.push({
             x: x * cos - y * sin,
             y: x * sin + y * cos,
-            a: (flat[i + 2] / 100) + rotation,
-            s: Math.max(1, flat[i + 3] | 0),
+            a: a + rotation,
+            s,
         });
     }
     return out;
