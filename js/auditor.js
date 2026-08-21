@@ -373,6 +373,13 @@ function removeDrainButton() {
 }
 
 function drainAuditLiquidity() {
+    // This mints cash and was callable from the console with no guard at
+    // all, so `for(let i=0;i<10000;i++) drainAuditLiquidity()` minted tens
+    // of millions into cash AND lifetimeEarned. The drain is meant to be a
+    // one-shot reward for an unlocked-liquidity jackpot, so it is only
+    // valid while that button is actually on screen - which is exactly the
+    // state removeDrainButton() clears below.
+    if (!document.getElementById('auditDrainBtn')) return;
     const amount = Math.floor(JACKPOT_DRAIN_MIN + Math.random() * (JACKPOT_DRAIN_MAX - JACKPOT_DRAIN_MIN));
     addCash(amount);
     playSound('rug');
