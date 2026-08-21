@@ -25,8 +25,15 @@
    avoids.
    ============================================================ */
 
-import { Connection, PublicKey } from "https://esm.sh/@solana/web3.js@1";
-import { getAllDomains, performReverseLookup } from "https://esm.sh/@bonfida/spl-name-service@3";
+// Pinned to exact versions. These were floating on "@1" and "@3", which
+// meant esm.sh could inject brand-new third-party code into this page at
+// any time. This is the single most sensitive place in the app for that:
+// it runs on the page where wallets connect, so anything executing here can
+// reach window.solana and ask the user to sign. Exact pins mean these bytes
+// only change when we change them. (Versions below are what the old
+// floating ranges already resolved to, so behaviour is unchanged today.)
+import { Connection, PublicKey } from "https://esm.sh/@solana/web3.js@1.98.4";
+import { getAllDomains, performReverseLookup } from "https://esm.sh/@bonfida/spl-name-service@3.0.26";
 
 const HELIUS_API_KEY = "9c094b2b-cfdb-4fb9-b7e5-78c46d88066c"; // paste your free key from https://dashboard.helius.dev here
 
