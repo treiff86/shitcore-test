@@ -70,3 +70,16 @@ document.addEventListener('DOMContentLoaded', () => {
 function restartGame() {
     resetGame();
 }
+
+/* ---------------- Mempool Roulette (placeholder) ----------------
+   The Mempool tab is flagged "Soon" in the nav and its panel is still a
+   static mockup - nothing in the JS is wired to any of its IDs yet. But
+   index.html's button called placeMempoolBet(), which did not exist
+   anywhere, so clicking it threw a ReferenceError and did nothing
+   visible. This keeps the button honest until the feature is built. */
+function placeMempoolBet() {
+    if (typeof playSound === 'function') playSound('click');
+    if (typeof showToast === 'function') {
+        showToast("🎲 Mempool Roulette isn't live yet - it's still being built.", "info");
+    }
+}
