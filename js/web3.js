@@ -302,6 +302,16 @@ function closeThemeChoice() {
 let isTestPlayMode = false;
 
 function choosePlayMode(mode) {
+    // The master-wallet check used to live ONLY at the call site that opens
+    // the modal, never inside this function - so any player could type
+    // choosePlayMode('test') into the console and unlock the whole testing
+    // kit (debug menu, theme preview, +$4,200 test cash, every gated
+    // minigame). Re-checking here is what actually enforces it, since this
+    // is a global function anyone can call.
+    if (mode === "test" && walletAddress !== MASTER_WALLET) {
+        console.warn("[web3] TEST Play is master-wallet only.");
+        return;
+    }
     document.getElementById("playModeModal")?.classList.add("hidden");
     if (mode === "test") {
         isTestPlayMode = true;
