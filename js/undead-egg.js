@@ -91,7 +91,17 @@ function openUndeadEmbed() {
     const wrap = document.getElementById('undeadEmbedWrap');
     if (!wrap) return;
     if (intro) intro.classList.add('hidden');
-    wrap.innerHTML = `<iframe src="${UNDEAD_EGG_EMBED_SRC}" width="800" height="600" frameborder="0" allowfullscreen></iframe>`;
+    // SECURITY: sandboxed deliberately. With no sandbox attribute an
+    // embedded third-party frame may navigate the TOP-level window after a
+    // user gesture - so one click inside the embedded game could silently
+    // replace this page with a lookalike. That matters much more here than
+    // on an ordinary site, because this is a page people connect real
+    // wallets to, which makes a same-tab redirect high-value phishing.
+    // allow-scripts + allow-same-origin are what the game needs to run;
+    // top-navigation and popups are deliberately NOT granted.
+    wrap.innerHTML = `<iframe src="${UNDEAD_EGG_EMBED_SRC}" width="800" height="600" frameborder="0"` +
+        ` sandbox="allow-scripts allow-same-origin allow-pointer-lock"` +
+        ` referrerpolicy="no-referrer" allowfullscreen></iframe>`;
     wrap.classList.remove('hidden');
 }
 
