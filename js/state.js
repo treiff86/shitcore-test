@@ -108,6 +108,11 @@ async function resetGame() {
 // disconnecting) or touch localStorage (already unused, see loadGame()).
 function resetGameStateInMemory() {
     state = JSON.parse(JSON.stringify(defaultState));
+    // An open Markets position is NOT part of `state` - it lives in
+    // markets.js. Without clearing it here the trade outlived the reset and
+    // could still be closed for a margin refund on top of the fresh
+    // balance, duplicating money.
+    if (typeof clearActiveTradeOnReset === "function") clearActiveTradeOnReset();
     if (typeof updateUI === "function") updateUI();
 }
 
@@ -121,6 +126,10 @@ function resetGameStateInMemory() {
 async function refreshFundsToStart() {
     state.cash = 1000;
     state.ruggedSavings = 0;
+    // Same money-duplication fix as resetGameStateInMemory(): an open trade
+    // survives this reset otherwise, and closing it afterwards refunds its
+    // margin on top of the fresh $1,000.
+    if (typeof clearActiveTradeOnReset === "function") clearActiveTradeOnReset();
     checkProgressions(); // recalculates Degen Level to match the reset Rugged Savings
     playSound('click');
     if (typeof updateUI === "function") updateUI();
@@ -152,6 +161,20 @@ function maybeShowZeroBalanceModal() {
 }
 
 function closeZeroBalanceModalForBonusStage() {
+    // openBonusStage() refuses unless a Mid Evils or Conmen theme is active.
+    // For everyone else this used to hide the modal, reset the "already
+    // shown" flag, show an error toast - and then updateUI() immediately
+    // re-opened the modal with its alarm sound, over and over. A broke
+    // player with no NFT was stuck in that loop with only "Start Fresh" as
+    // a way out. Check availability BEFORE tearing the modal down.
+    const bonusStageAvailable = document.body.classList.contains('medieval-mode')
+        || document.body.classList.contains('conmen-mode');
+    if (!bonusStageAvailable) {
+        if (typeof showToast === 'function') {
+            showToast("Bonus Stage needs a Mid Evils or Conmen NFT. Try 'Start Fresh' instead.", "error");
+        }
+        return; // leave the modal up, and leave zeroBalanceModalShown TRUE so it can't re-alarm
+    }
     zeroBalanceModalShown = false; // could hit $0 again after playing - let it show again if so
     document.getElementById('zeroBalanceModal')?.classList.add('hidden');
     if (typeof openBonusStage === 'function') openBonusStage();
