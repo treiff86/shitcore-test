@@ -1345,35 +1345,41 @@
     <!-- ============================================================ -->
     <!-- SCRIPTS (ALL FIXED FOR ROOT DEPLOYMENT IN SHITCORE-TEST)     -->
     <!-- ============================================================ -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js" defer></script>
+<!-- Pinned to an exact version. This previously floated on "@2", meaning
+     the CDN could serve brand-new code into this page at any time without
+     warning. That matters more here than on an ordinary site: this is the
+     page where users connect real wallets, so anything executing in it can
+     reach window.solana / window.ethereum and prompt them to sign. An exact
+     pin means these bytes only change when we deliberately change them. -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.3/dist/umd/supabase.js" defer></script>
 <script src="js/audio.js?v=20" defer></script>
 <script src="js/state.js?v=15" defer></script>
 <script src="js/ui.js?v=7" defer></script>
 <script src="js/markets.js?v=21" defer></script>
-<script src="js/auditor.js" defer></script>
+<script src="js/auditor.js?v=1" defer></script>
 <script src="js/deployer.js?v=3" defer></script>
 <script src="js/volatility.js" defer></script>
 <script src="js/staking.js" defer></script>
 <script src="js/perks.js?v=3" defer></script>
 <script src="js/bonusstage.js?v=22" defer></script>
-<script src="js/fightgame.js?v=47" defer></script>
-<script src="js/mevghosts.js?v=1" defer></script>
-<script src="js/mevsandwich.js?v=7" defer></script>
+<script src="js/fightgame.js?v=48" defer></script>
+<script src="js/mevghosts.js?v=2" defer></script>
+<script src="js/mevsandwich.js?v=8" defer></script>
 <script src="js/conmen-egg.js?v=6" defer></script>
 <script src="js/skullx-egg.js?v=3" defer></script>
-<script src="js/undead-egg.js?v=1" defer></script>
+<script src="js/undead-egg.js?v=2" defer></script>
 <script src="js/mcdonalds-egg.js?v=4" defer></script>
-<script src="js/web3.js?v=59" defer></script>
+<script src="js/web3.js?v=60" defer></script>
 <script src="js/wizardpopup.js?v=2" defer></script>
 <script src="js/win95desktop.js?v=5" defer></script>
 <script src="js/btcwallet.js?v=19" defer></script>
 <script src="js/ethwallet.js?v=6" defer></script>
 <script src="js/onlinesync.js?v=1" defer></script>
 <script src="js/onlinelobby.js?v=6" defer></script>
-<script type="module" src="js/sns.js?v=5"></script>
+<script type="module" src="js/sns.js?v=6"></script>
 <script type="module" src="js/nftgate.js?v=3"></script>
 <script src="js/gate.js?v=2" defer></script>
 <script src="js/main.js?v=7" defer></script>
-<script src="js/openshit.js?v=3" defer></script>
+<script src="js/openshit.js?v=4" defer></script>
 </body>
 </html>
