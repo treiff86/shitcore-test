@@ -39,6 +39,10 @@ window.MevSandwichGame = (function () {
     const MIN_SEGMENTS = 4;          // boosting can't shrink you below this
     const ROUND_SECONDS = 90;        // longer now that there's an actual world to explore and bots to compete with
     const FOOD_COUNT_TARGET = 380;   // even more bubbles on screen at once - was 260, and 70 before that
+    // Hard ceiling enforced every frame. Headroom above the target so a
+    // big death scatter still reads as an explosion of food, but the array
+    // can no longer grow without bound over a round.
+    const FOOD_MAX = Math.round(FOOD_COUNT_TARGET * 1.6);
     const FOOD_RESPAWN_DELAY = 0.4;
 
     // Boosting now costs CASH as well as length - holding it burns your
@@ -123,11 +127,18 @@ window.MevSandwichGame = (function () {
         return { x, y, r: type.r, value: type.value, label: type.label, color: type.color, bob: Math.random() * Math.PI * 2 };
     }
 
-    function scatterFoodAt(x, y, segmentCount, foodArray) {
+    function scatterFoodAt(x, y, segmentCount, foodArray, minCount = 4) {
         // A snake dying scatters food along roughly where its body was,
         // not just a single point - reads much more like "this thing
         // exploded into food" than one dot appearing.
-        const count = Math.min(18, Math.max(4, Math.round(segmentCount * 0.4)));
+        //
+        // minCount matters: boost-drain calls this asking for ONE piece of
+        // food per tick, but the old hardcoded Math.max(4, ...) floor
+        // silently turned every single boost tick into FOUR. Over a round
+        // of heavy boosting that was a large part of why the food array
+        // ballooned from 380 to well over a thousand and the game got
+        // choppy near the end.
+        const count = Math.min(18, Math.max(minCount, Math.round(segmentCount * 0.4)));
         for (let i = 0; i < count; i++) {
             const a = Math.random() * Math.PI * 2;
             const d = rand(0, 70);
@@ -311,8 +322,32 @@ window.MevSandwichGame = (function () {
         return g;
     }
 
+    // PERFORMANCE: this walks the whole trail and allocates a fresh array
+    // every call, and it used to be called ~143 times per frame for only
+    // ~10 distinct snakes - once per collision check, once per bot
+    // danger-avoidance probe, once per draw. That was the single biggest
+    // source of both CPU time and garbage in the game, and the reason a
+    // busy round got choppy.
+    //
+    // The result only changes when the snake moves (trail grows) or its
+    // segment count changes, so it is cached against exactly those two
+    // things plus a per-frame token. Correctness note: the cache key
+    // includes trail.length and segmentCount specifically so that eating
+    // (which adds a segment) or moving (which adds a trail point)
+    // invalidates it immediately, rather than relying on the frame token
+    // alone.
+    let _bpFrameToken = 0;
+
     function bodyPointsFor(snake) {
         const total = snake.segmentCount;
+        const cache = snake._bpCache;
+        if (cache
+            && cache.token === _bpFrameToken
+            && cache.segs === total
+            && cache.len === snake.trail.length) {
+            return cache.points;
+        }
+
         const size = segmentSizeFor(total);
         const spacingPx = Math.max(6, size * 0.55);
         const points = [];
@@ -324,6 +359,8 @@ window.MevSandwichGame = (function () {
             }
             points.push(snake.trail[Math.min(idx, snake.trail.length - 1)]);
         }
+
+        snake._bpCache = { token: _bpFrameToken, segs: total, len: snake.trail.length, points };
         return points;
     }
 
@@ -424,7 +461,7 @@ window.MevSandwichGame = (function () {
                 bot.boostDrainT = BOOST_DRAIN_INTERVAL;
                 bot.segmentCount = Math.max(MIN_SEGMENTS, bot.segmentCount - 1);
                 scatterFoodAt(bot.trail[bot.trail.length - 1]?.x ?? bot.head.x,
-                    bot.trail[bot.trail.length - 1]?.y ?? bot.head.y, 1, g.food);
+                    bot.trail[bot.trail.length - 1]?.y ?? bot.head.y, 1, g.food, 1);
             }
         }
         updateSnakeMovement(bot, dt, targetAngle, botSpeed);
@@ -477,6 +514,21 @@ window.MevSandwichGame = (function () {
 
     function update(dt) {
         if (g.phase !== 'playing') return;
+
+        // PERFORMANCE: FOOD_COUNT_TARGET was only ever applied when the
+        // round STARTED, and nothing enforced it afterwards. Boost drain
+        // and death scatters kept pushing more in, so a busy round ended
+        // with thousands of items - and everything scales with that
+        // number, including a full scan of the array per snake per frame.
+        // That is the main reason the game got choppy near the end.
+        // Trimming from the FRONT drops the oldest food, which is the most
+        // likely to be far away and off-screen. Done FIRST thing in the
+        // frame rather than at the bottom, because several paths below
+        // (notably the player dying) return early and would skip it.
+        if (g.food.length > FOOD_MAX) {
+            g.food.splice(0, g.food.length - FOOD_MAX);
+        }
+
         g.timer -= dt;
         g.shakeT = Math.max(0, g.shakeT - dt);
 
@@ -503,7 +555,7 @@ window.MevSandwichGame = (function () {
                 g.player.boostDrainT = BOOST_DRAIN_INTERVAL;
                 g.player.segmentCount = Math.max(MIN_SEGMENTS, g.player.segmentCount - 1);
                 scatterFoodAt(g.player.trail[g.player.trail.length - 1]?.x ?? g.player.head.x,
-                    g.player.trail[g.player.trail.length - 1]?.y ?? g.player.head.y, 1, g.food);
+                    g.player.trail[g.player.trail.length - 1]?.y ?? g.player.head.y, 1, g.food, 1);
             }
         } else {
             g.scoreDrainAccum = 0;
@@ -575,6 +627,7 @@ window.MevSandwichGame = (function () {
             g.pendingSpawns[i] -= dt;
             if (g.pendingSpawns[i] <= 0) { g.pendingSpawns.splice(i, 1); g.food.push(spawnFood(g.food)); }
         }
+
         for (const f of g.food) f.bob += dt * 3;
 
         // Dead rivals respawn after a beat rather than the round
@@ -879,6 +932,10 @@ window.MevSandwichGame = (function () {
         if (!frame._last) frame._last = now;
         const dt = Math.min((now - frame._last) / 1000, 0.05);
         frame._last = now;
+        // New frame = every snake's cached body points are stale. update()
+        // and draw() then share one computation per snake instead of
+        // recomputing it for every collision check and every render pass.
+        _bpFrameToken++;
         update(dt);
         draw();
         rafId = requestAnimationFrame(frame);
