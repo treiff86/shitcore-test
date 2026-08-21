@@ -66,7 +66,13 @@ function buyPerk(id) {
     updateUI();
 }
 
-function renderLeaderboard() {
+// RENAMED from renderLeaderboard(). These are classic scripts sharing one
+// global scope, and js/web3.js defines a DIFFERENT renderLeaderboard() (the
+// cloud leaderboard) and loads later - so it silently won. Two things broke:
+// this Victim Hall of Fame never rendered at all, and updateUI()'s call to
+// renderLeaderboard() fired a Supabase query on EVERY ui refresh (dozens per
+// session) instead of doing this cheap local render.
+function renderVictimLeaderboard() {
     const container = document.getElementById('victimLeaderboard');
     if (!container) return;
 
