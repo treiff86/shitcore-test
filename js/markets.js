@@ -37,6 +37,21 @@ let blockNumber = 942012;
 // Gamification State Variables
 let activeTrade = null;
 
+// Called by every path that wipes or replaces the player's money (refresh
+// funds, wallet disconnect, cloud load). Without this an open trade survived
+// the reset and could still be closed afterwards, refunding its margin on
+// top of the fresh balance - real money duplication, which then persisted
+// into the cloud save. activeTrade lives in this file, so the reset paths in
+// state.js / web3.js need this hook to clear it.
+function clearActiveTradeOnReset() {
+    activeTrade = null;
+    // Put the PUMP/DUMP buttons back from "PANIC SELL", otherwise the UI
+    // still advertises a position that no longer exists.
+    if (typeof resetTradeButtonsUI === 'function') {
+        try { resetTradeButtonsUI(); } catch (e) { /* best-effort UI refresh */ }
+    }
+}
+
 // Leverage state
 const LEVERAGE_TIERS = [25, 50, 75, 100];
 const BUST_CHANCE_MAP = { 25: 0.13, 50: 0.25, 75: 0.38, 100: 0.50 };
