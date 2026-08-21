@@ -80,7 +80,10 @@ function updateUI() {
 
     // Call sub-module panels
     renderPerkShop();
-    renderLeaderboard();
+    // Was renderLeaderboard(), which resolved to web3.js's CLOUD leaderboard
+    // (a Supabase query) rather than the local Victim Hall of Fame this line
+    // was written for - see the rename note in js/perks.js.
+    renderVictimLeaderboard();
     updateDeployerUI();
 }
 
