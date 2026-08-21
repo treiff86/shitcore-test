@@ -617,8 +617,16 @@ window.FightGame = (function () {
             p2Key = p2Pool[Math.floor(Math.random() * p2Pool.length)];
         }
         window.fightClubOnlineFighters = null; // read once, same pattern as onlineNames below
-        const p1 = new Fighter(anims[p1Key], (currentArena && currentArena.p1X) || 180, 1);
-        const p2 = new Fighter(anims[p2Key], SW - 180 - 90, -1);
+        // SECURITY: in an online match these keys originate from the
+        // fight_rooms table, which any anonymous person can write to. An
+        // unrecognised key (or "__proto__"/"constructor") made anims[key]
+        // undefined, which threw on the first frame - and since the raf
+        // loop only re-arms at the BOTTOM of frame(), that single throw
+        // killed the opponent's game permanently on a frozen canvas.
+        // Anything not an own-property of the map falls back to default.
+        const safeAnimKey = (k) => (typeof k === 'string' && Object.prototype.hasOwnProperty.call(anims, k)) ? k : 'reiffer';
+        const p1 = new Fighter(anims[safeAnimKey(p1Key)], (currentArena && currentArena.p1X) || 180, 1);
+        const p2 = new Fighter(anims[safeAnimKey(p2Key)], SW - 180 - 90, -1);
         // Online Fight Club sets this right before calling openFightGame()
         // so the HUD shows real wallet names instead of "P1"/"P2" - your
         // own name on your side, the matched opponent's on the other.
@@ -1208,7 +1216,22 @@ window.FightGame = (function () {
         window.addEventListener('keyup', onKeyUp);
 
         let lastT = performance.now();
+        // Resilience: the raf loop re-arms itself only at the BOTTOM of
+        // frame(), so ANY exception mid-frame used to stop the game dead on
+        // a frozen canvas with no way back. That turned every render bug -
+        // including ones a remote player could trigger via fight_rooms -
+        // into a permanent denial of service. Wrapping the body means a bad
+        // frame is skipped and the next one still runs.
         function frame(now) {
+            try {
+                frameBody(now);
+            } catch (err) {
+                console.error('[fightgame] frame error (recovering, loop continues):', err);
+                rafId = requestAnimationFrame(frame);
+            }
+        }
+
+        function frameBody(now) {
             const dt = Math.min((now - lastT) / 1000, 0.05);
             lastT = now;
             const so = shake.off(); shake.update();
