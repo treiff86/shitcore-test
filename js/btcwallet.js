@@ -118,6 +118,10 @@ function onBitcoinWalletConnected() {
 function disconnectBitcoinWallet() {
     btcWalletAddress = null;
     btcWalletProvider = null;
+    // Drop cached Ordiscan answers on the way out. The cache key already
+    // includes the address, so this is about not holding one wallet's
+    // holdings in memory after the user has walked away from it.
+    if (typeof clearOrdiscanCache === 'function') clearOrdiscanCache();
     document.getElementById('btcWalletDisplay')?.classList.add('hidden');
     document.getElementById('btcWalletConnectBtn')?.classList.remove('hidden');
     document.getElementById('walletConnectBtn')?.classList.remove('hidden');
@@ -271,39 +275,124 @@ window.checkSkullXOrigins = async function () {
    ordiscan.com.
    ============================================================ */
 
-const ORDISCAN_API_KEY = "abe0d88c-74bd-4828-8f8b-ed7b66efafd7";
-const ORDISCAN_BASE = "https://api.ordiscan.com/v1";
+/* SECURITY: the Ordiscan API key is deliberately NOT here any more.
+   Ordiscan authenticates with a Bearer token - a secret-style credential -
+   and offers no domain/referrer allowlist, so a key shipped to the browser
+   is simply a public key: anyone could read it from DevTools and spend the
+   1,000/month quota, which would lock real holders out of their themes
+   because every ownership check fails closed.
+
+   These lookups now go through the `btc-lookup` Supabase Edge Function,
+   which holds the key server-side, only ever calls two fixed Ordiscan
+   endpoints, validates the address, caches results across all visitors,
+   and rate-limits per IP. See supabase_btc_lookup.md. */
+const BTC_LOOKUP_FUNCTION = "btc-lookup";
+
+/* ---------------- Ordiscan request cache ----------------
+   Ordiscan's free tier is 1,000 requests/MONTH, and a single wallet
+   connect used to spend up to five of them - four of which were the
+   byte-identical /inscriptions request, fired once by the Skull X parent
+   check, once per Skull X gallery slug, and once by Bitcoin Wizards.
+
+   Caching at this one choke point collapses all of those into a single
+   real request, so a connect now costs 2 (/inscriptions + /runes)
+   instead of 5. Every caller keeps working unchanged.
+
+   Keyed by address, so connecting a different wallet never sees the
+   previous wallet's answers. Failures are cached only briefly, so a
+   transient network blip can't lock a genuine holder out of their theme
+   for the full window. */
+const ORDISCAN_CACHE_TTL_MS = 5 * 60 * 1000;  // successful lookups
+const ORDISCAN_FAIL_TTL_MS = 20 * 1000;       // failures - short, just enough to stop hammering
+const _ordiscanCache = new Map();             // key -> { at, value, ok }
+const _ordiscanInflight = new Map();          // key -> Promise, so parallel callers share one request
+
+function clearOrdiscanCache() {
+    _ordiscanCache.clear();
+    _ordiscanInflight.clear();
+}
 
 async function ordiscanFetch(path) {
-    console.log(`[btcwallet] Ordiscan request starting: ${path}`);
+    const key = `${btcWalletAddress || 'none'}::${path}`;
+
+    const hit = _ordiscanCache.get(key);
+    if (hit) {
+        const ttl = hit.ok ? ORDISCAN_CACHE_TTL_MS : ORDISCAN_FAIL_TTL_MS;
+        if (Date.now() - hit.at < ttl) {
+            console.log(`[btcwallet] Ordiscan cache hit for ${path} - no request sent`);
+            return hit.value;
+        }
+    }
+
+    // A request for this exact path is already in flight - reuse it
+    // rather than firing a second identical one.
+    if (_ordiscanInflight.has(key)) {
+        console.log(`[btcwallet] Ordiscan request already in flight for ${path} - reusing it`);
+        return _ordiscanInflight.get(key);
+    }
+
+    const inflight = _ordiscanFetchUncached(path)
+        .then((value) => {
+            _ordiscanCache.set(key, { at: Date.now(), value, ok: value !== null });
+            return value;
+        })
+        .finally(() => { _ordiscanInflight.delete(key); });
+
+    _ordiscanInflight.set(key, inflight);
+    return inflight;
+}
+
+// `sb` is declared with `let` in js/web3.js. A `let` binding is in the
+// temporal dead zone until that script runs, and `typeof` on a TDZ binding
+// THROWS rather than returning "undefined" - so the usual typeof guard is
+// not safe here.
+function _btcSupabaseClient() {
     try {
-        const res = await fetch(`${ORDISCAN_BASE}${path}`, {
-            headers: { Authorization: `Bearer ${ORDISCAN_API_KEY}` },
+        return (typeof sb !== 'undefined' && sb) ? sb : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+// Goes through the btc-lookup Edge Function instead of calling Ordiscan
+// directly, so the API key stays server-side. `endpoint` is a short name
+// ('inscriptions' | 'runes'), not a URL path - the function will only ever
+// call those two, and builds the real Ordiscan URL itself.
+async function _ordiscanFetchUncached(endpoint) {
+    const client = _btcSupabaseClient();
+    if (!client) {
+        console.warn('[btcwallet] Supabase client not ready - cannot reach the btc-lookup proxy');
+        return null;
+    }
+    if (!btcWalletAddress) return null;
+
+    console.log(`[btcwallet] btc-lookup request starting: ${endpoint}`);
+    try {
+        const { data, error } = await client.functions.invoke(BTC_LOOKUP_FUNCTION, {
+            body: { address: btcWalletAddress, endpoint },
         });
-        console.log(`[btcwallet] Ordiscan responded: HTTP ${res.status} for ${path}`);
-        if (!res.ok) {
-            console.warn(`[btcwallet] Ordiscan returned HTTP ${res.status} for ${path}`);
+        if (error) {
+            // Most likely causes, in order: the ORDISCAN_API_KEY secret
+            // isn't set on the function yet, the per-IP rate limit kicked
+            // in, or Ordiscan itself is down. All fail closed (treated as
+            // "doesn't own it") rather than throwing.
+            console.warn(`[btcwallet] btc-lookup returned an error for ${endpoint}:`, error.message || error);
             return null;
         }
-        const json = await res.json();
-        // Ordiscan wraps every list response in a {data: [...]} envelope
-        // rather than returning the array directly - unwrap it here, once,
-        // so every caller can just treat the result as the array it
-        // actually wants. This was THE bug: every check below was doing
-        // Array.isArray() on the whole {data: [...]} object, which is
-        // always false, so every single check silently bailed out before
-        // ever looking at a single real item - regardless of whether the
-        // wallet actually held the thing being checked for.
-        const unwrapped = Array.isArray(json?.data) ? json.data : json;
-        console.log(`[btcwallet] Ordiscan response for ${path} - ${Array.isArray(unwrapped) ? unwrapped.length + ' items' : 'not an array'}:`, JSON.stringify(unwrapped).slice(0, 2000));
-        return unwrapped;
+        if (data && data.error) {
+            console.warn(`[btcwallet] btc-lookup rejected ${endpoint}:`, data.error);
+            return null;
+        }
+        // The function already unwraps Ordiscan's {data: [...]} envelope,
+        // so this is the plain array callers expect. (Unwrapping used to
+        // be THE bug here: every check ran Array.isArray() against the
+        // whole envelope object, which is always false, so every check
+        // silently bailed out before looking at a single real item.)
+        const payload = data ? data.data : null;
+        console.log(`[btcwallet] btc-lookup ${endpoint} -> ${Array.isArray(payload) ? payload.length + ' items' : 'not an array'}${data && data.cached ? ' (served from server cache)' : ''}`);
+        return payload;
     } catch (e) {
-        // If this fires with a generic "Failed to fetch" / TypeError and
-        // no HTTP status ever logged above, that's the signature of a
-        // CORS block or network-level failure - the request never
-        // actually reached Ordiscan's server at all, browser blocked it
-        // client-side before it could.
-        console.error(`[btcwallet] Ordiscan request FAILED before getting any HTTP response for ${path} (likely CORS or network-level, not an API error):`, e);
+        console.error(`[btcwallet] btc-lookup request threw for ${endpoint}:`, e);
         return null;
     }
 }
@@ -315,7 +404,7 @@ async function ordiscanFetch(path) {
 // under this exact slug.
 async function checkOrdiscanCollection(slug) {
     if (!btcWalletAddress) return false;
-    const data = await ordiscanFetch(`/address/${btcWalletAddress}/inscriptions`);
+    const data = await ordiscanFetch('inscriptions');
     if (!Array.isArray(data)) {
         console.log(`[btcwallet] Ordiscan collection check for "${slug}": no usable data returned, treating as not owned`);
         return false;
@@ -332,7 +421,7 @@ async function checkOrdiscanCollection(slug) {
 // Xverse can't supply this data) SKULLX_KNOWN_PARENT_NUMBERS above.
 async function checkOrdiscanSkullXParent() {
     if (!btcWalletAddress) return false;
-    const data = await ordiscanFetch(`/address/${btcWalletAddress}/inscriptions`);
+    const data = await ordiscanFetch('inscriptions');
     if (!Array.isArray(data)) {
         console.log('[btcwallet] Ordiscan Skull X parent check: no usable data returned, treating as not owned');
         return false;
@@ -352,7 +441,7 @@ async function checkOrdiscanSkullXParent() {
 // the given rune (name WITHOUT the bullet spacers, e.g. "MAGICINTERNETMONEY").
 async function checkOrdiscanRune(runeName) {
     if (!btcWalletAddress) return false;
-    const data = await ordiscanFetch(`/address/${btcWalletAddress}/runes`);
+    const data = await ordiscanFetch('runes');
     if (!Array.isArray(data)) {
         console.log(`[btcwallet] Ordiscan rune check for "${runeName}": no usable data returned, treating as not owned`);
         return false;
