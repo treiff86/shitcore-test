@@ -97,6 +97,46 @@ window.MevSandwichGame = (function () {
     let mouseX = SW / 2, mouseY = SH / 2;
     let boosting = false;
     let onMouseMove, onKeyDown, onKeyUp, onMouseDown, onMouseUp, onMouseLeave;
+    let onTouchStart, onTouchMove, onTouchEnd;
+
+    /* ---------------- TOUCH / MOBILE SUPPORT ----------------
+       Before this the codebase had exactly zero touch handlers anywhere,
+       so on a phone the canvas rendered fine and then did nothing at all -
+       no steering, no boost, no way to replay. Since most links shared on
+       social get opened on a phone, that was the biggest hole in the game.
+
+       The scheme is what slither.io players already expect:
+         - drag one finger  -> steer toward it
+         - second finger    -> boost (same cash cost as SPACE / left mouse)
+         - tap when dead    -> replay
+
+       `usingTouch` only flips on once a REAL touch arrives, rather than
+       sniffing the user agent or `ontouchstart`. Plenty of laptops report
+       touch support while the person is actually using a mouse, and many
+       tablets do both - so the on-screen prompt follows what the player
+       last actually did rather than what their hardware claims. */
+    let usingTouch = false;
+
+    // Shared by mouse and touch. The deadzone matters: steering is
+    // atan2(pointer - screen centre), and the player is drawn AT the
+    // centre - so a pointer landing exactly there gives atan2(0, 0) === 0
+    // and snaps the snake hard right. Inside the deadzone we keep the
+    // previous heading instead, which is what "I put my finger on my own
+    // sandwich" should do. 14px is far smaller than any deliberate steer
+    // but comfortably larger than the jitter of a fingertip held still.
+    const POINTER_DEADZONE = 14;
+
+    function setPointerFromClient(clientX, clientY) {
+        if (!canvas) return;
+        const rect = canvas.getBoundingClientRect();
+        if (!rect.width || !rect.height) return; // canvas not laid out yet
+        const x = (clientX - rect.left) * (SW / rect.width);
+        const y = (clientY - rect.top) * (SH / rect.height);
+        const dx = x - SW / 2, dy = y - SH / 2;
+        if ((dx * dx + dy * dy) < POINTER_DEADZONE * POINTER_DEADZONE) return; // hold last heading
+        mouseX = x;
+        mouseY = y;
+    }
 
     function rand(min, max) { return min + Math.random() * (max - min); }
 
@@ -880,6 +920,25 @@ window.MevSandwichGame = (function () {
             ctx.fillText(`BOOSTING  -$${BOOST_MONEY_PER_SEC}/s`, SW - 16, 52);
         }
 
+        // Touch players get one short prompt at the start of a round. The
+        // two-finger boost is genuinely undiscoverable otherwise - there is
+        // no keyboard to hint at it and nothing on screen to press - so
+        // without this most phone players would never find it at all. It
+        // fades out over the first 6 seconds and only ever appears once
+        // touch has actually been used, so it never shows on desktop.
+        if (usingTouch && g.phase === 'playing') {
+            const elapsed = ROUND_SECONDS - g.timer;
+            if (elapsed < 6) {
+                ctx.save();
+                ctx.globalAlpha = Math.min(1, (6 - elapsed) / 1.5);
+                ctx.fillStyle = '#7fa88b';
+                ctx.font = "13px 'JetBrains Mono', monospace";
+                ctx.textAlign = 'center';
+                ctx.fillText('Drag to steer  -  second finger to boost', SW / 2, SH - 18);
+                ctx.restore();
+            }
+        }
+
         // Live leaderboard - the whole point of having five rivals is
         // seeing yourself climb (or fall) against them in real time.
         {
@@ -924,7 +983,10 @@ window.MevSandwichGame = (function () {
             if (g.deathReason) ctx.fillText(g.deathReason, SW / 2, SH / 2 + 30);
             ctx.fillStyle = '#7fa88b';
             ctx.font = "14px 'JetBrains Mono', monospace";
-            ctx.fillText('ENTER = Replay    ESC = Quit', SW / 2, SH / 2 + 66);
+            // Telling a phone player to press ENTER is useless - there is
+            // no keyboard on screen. Follows whatever they last actually
+            // used, so a tablet with both attached always reads correctly.
+            ctx.fillText(usingTouch ? 'TAP = Replay' : 'ENTER = Replay    ESC = Quit', SW / 2, SH / 2 + 66);
         }
     }
 
@@ -948,10 +1010,11 @@ window.MevSandwichGame = (function () {
         frame._last = null;
         boosting = false;
 
+        usingTouch = false;
+
         onMouseMove = (ev) => {
-            const rect = canvas.getBoundingClientRect();
-            mouseX = (ev.clientX - rect.left) * (SW / rect.width);
-            mouseY = (ev.clientY - rect.top) * (SH / rect.height);
+            usingTouch = false; // a real mouse move means they're back on a pointer
+            setPointerFromClient(ev.clientX, ev.clientY);
         };
         onKeyDown = (ev) => {
             if (ev.key === 'Escape') { if (typeof window.closeMevSandwich === 'function') window.closeMevSandwich(); return; }
@@ -974,12 +1037,56 @@ window.MevSandwichGame = (function () {
         // would otherwise leave boosting stuck on forever.
         onMouseLeave = () => { boosting = false; };
 
+        /* Touch. Every handler calls preventDefault() so the page doesn't
+           scroll, rubber-band or pinch-zoom while a finger is dragging the
+           snake around - and they are registered with { passive: false },
+           without which modern browsers IGNORE preventDefault on touch
+           events entirely and the page scrolls anyway. The CSS rule
+           `#mevSandwichCanvas { touch-action: none }` in bonusstage.css is
+           the other half of that: it stops the browser claiming the
+           gesture before JavaScript ever sees it. Both are needed. */
+        onTouchStart = (ev) => {
+            usingTouch = true;
+            ev.preventDefault();
+            if (g.phase === 'over') { newGame(); return; } // tap to replay
+            const t = ev.touches[0];
+            if (t) setPointerFromClient(t.clientX, t.clientY);
+            // Second finger down = boost, the standard mobile gesture for
+            // this genre. It can't be "press and hold" here, because
+            // holding is already how you steer.
+            boosting = ev.touches.length >= 2;
+        };
+        onTouchMove = (ev) => {
+            usingTouch = true;
+            ev.preventDefault();
+            // touches[0] is the steering finger; a second finger only ever
+            // toggles boost, so it must not fight for the heading.
+            const t = ev.touches[0];
+            if (t) setPointerFromClient(t.clientX, t.clientY);
+            boosting = ev.touches.length >= 2;
+        };
+        // Covers touchend AND touchcancel. touchcancel is the one that
+        // actually bites in practice: an incoming call, the notification
+        // shade, or the browser deciding mid-drag that it owns the gesture
+        // all fire it, and without this the boost would stay stuck on and
+        // silently drain their cash for the rest of the round.
+        onTouchEnd = (ev) => {
+            ev.preventDefault();
+            boosting = ev.touches.length >= 2;
+            const t = ev.touches[0];
+            if (t) setPointerFromClient(t.clientX, t.clientY); // keep steering with whichever finger is left
+        };
+
         canvas.addEventListener('mousemove', onMouseMove);
         canvas.addEventListener('mousedown', onMouseDown);
         canvas.addEventListener('mouseleave', onMouseLeave);
         window.addEventListener('mouseup', onMouseUp);
         window.addEventListener('keydown', onKeyDown);
         window.addEventListener('keyup', onKeyUp);
+        canvas.addEventListener('touchstart', onTouchStart, { passive: false });
+        canvas.addEventListener('touchmove', onTouchMove, { passive: false });
+        canvas.addEventListener('touchend', onTouchEnd, { passive: false });
+        canvas.addEventListener('touchcancel', onTouchEnd, { passive: false });
 
         rafId = requestAnimationFrame(frame);
     }
@@ -992,7 +1099,17 @@ window.MevSandwichGame = (function () {
         if (onMouseUp) window.removeEventListener('mouseup', onMouseUp);
         if (onKeyDown) window.removeEventListener('keydown', onKeyDown);
         if (onKeyUp) window.removeEventListener('keyup', onKeyUp);
+        // The options object must match the one used to add these, or the
+        // browser treats it as a different listener and never removes it -
+        // which is exactly how the Win95 windows started leaking handlers.
+        if (canvas && onTouchStart) canvas.removeEventListener('touchstart', onTouchStart, { passive: false });
+        if (canvas && onTouchMove) canvas.removeEventListener('touchmove', onTouchMove, { passive: false });
+        if (canvas && onTouchEnd) {
+            canvas.removeEventListener('touchend', onTouchEnd, { passive: false });
+            canvas.removeEventListener('touchcancel', onTouchEnd, { passive: false });
+        }
         onMouseMove = onKeyDown = onKeyUp = onMouseDown = onMouseUp = onMouseLeave = null;
+        onTouchStart = onTouchMove = onTouchEnd = null;
         boosting = false;
     }
 
