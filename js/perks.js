@@ -72,9 +72,32 @@ function buyPerk(id) {
 // this Victim Hall of Fame never rendered at all, and updateUI()'s call to
 // renderLeaderboard() fired a Supabase query on EVERY ui refresh (dozens per
 // session) instead of doing this cheap local render.
+//
+// PERFORMANCE: this used to rebuild the entire list as innerHTML on every
+// single call, and updateUI() calls it constantly (~47 call sites plus the
+// main setInterval loop). Tearing down and recreating every row several
+// times a second is pure waste, because the list only actually changes
+// when a rug gets pulled or a save loads.
+//
+// The signature below is what makes skipping safe. It is deliberately NOT
+// just the array length: unshift() puts the newest rug at index 0, so
+// including the head entry means a change is caught even in the (contrived)
+// case where one is added and one trimmed in the same tick. `_victimLbEl` is
+// checked too, so if anything ever swaps the container element out - a
+// theme switch, a re-render of the panel - the next call rebuilds instead
+// of trusting a signature that describes a DOM node no longer on the page.
+let _victimLbSig = null;
+let _victimLbEl = null;
+
 function renderVictimLeaderboard() {
     const container = document.getElementById('victimLeaderboard');
     if (!container) return;
+
+    const head = state.victimLeaderboard[0];
+    const sig = state.victimLeaderboard.length + '|' + (head ? head.name + ' ' + head.ticker + ' ' + head.cash : '');
+    if (container === _victimLbEl && sig === _victimLbSig) return; // nothing changed - leave the DOM alone
+    _victimLbEl = container;
+    _victimLbSig = sig;
 
     if (state.victimLeaderboard.length === 0) {
         container.innerHTML = `<div class="text-gray-500 italic text-[11px]">No rugs pulled yet. Get to work.</div>`;
