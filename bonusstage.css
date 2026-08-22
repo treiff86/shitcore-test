@@ -150,6 +150,31 @@
     cursor: crosshair;
 }
 
+/* MOBILE INPUT - deliberately scoped to the ONE canvas that currently has
+   touch handlers, not to all three above.
+
+   `touch-action: none` is the other half of the touch support in
+   js/mevsandwich.js. preventDefault() in the handlers alone is NOT enough:
+   the browser can decide it owns a gesture and start scrolling or
+   pinch-zooming before it dispatches anything to JavaScript. Both halves
+   are required, which is why they carry matching comments.
+
+   The fight game and bonus stage canvases are left out on purpose. Turning
+   this on for a canvas that ignores touch would just swallow the gesture -
+   dragging would neither scroll the page nor do anything in the game. They
+   get this line at the same time they get their handlers. */
+#mevSandwichCanvas {
+    -ms-touch-action: none;
+    touch-action: none;
+
+    /* Stops the iOS long-press "save image" callout and the blue selection
+       flash when a finger rests on the canvas mid-game. */
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
 .win95-statusbar {
     display: flex;
     justify-content: space-between;
