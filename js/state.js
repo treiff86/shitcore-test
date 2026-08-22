@@ -49,6 +49,34 @@ const LAMBO_TIERS = [
     { name: "Real SVJ Roadster (Victory)", cost: 1000000 }
 ];
 
+/* ---------------- Victim Hall of Fame size cap ----------------
+   state.victimLeaderboard used to grow forever: every rug pull did an
+   unshift() and nothing ever trimmed it. Three separate problems came out
+   of that, all of which got WORSE the longer someone played:
+
+     1. renderVictimLeaderboard() rebuilds the whole list as innerHTML, and
+        it runs from updateUI() - which fires from ~47 call sites plus the
+        main setInterval loop. At 300 rugs that is 300 DOM nodes torn down
+        and recreated several times a second, forever.
+     2. saveToCloud() upserts the entire `state` object, so the whole array
+        was written to Supabase on every save and pulled back down on every
+        load.
+     3. Nothing on screen could show more than a screenful of it anyway.
+
+   Capped at the 50 most recent, which is how the panel already read
+   visually (newest first) - it just stops accumulating invisible history
+   behind them. Trimming runs at every point the array can arrive or grow,
+   so an existing bloated cloud save gets repaired the first time it loads
+   instead of staying huge forever. */
+const VICTIM_LEADERBOARD_MAX = 50;
+
+function trimVictimLeaderboard() {
+    if (!state || !Array.isArray(state.victimLeaderboard)) return;
+    if (state.victimLeaderboard.length > VICTIM_LEADERBOARD_MAX) {
+        state.victimLeaderboard.length = VICTIM_LEADERBOARD_MAX;
+    }
+}
+
 // Deliberately NOT restoring from localStorage anymore - without a
 // connected wallet, every fresh page load starts clean at $1,000. Kept as
 // a function (rather than deleted outright) in case a local-only save mode
@@ -59,6 +87,7 @@ function loadGame() {
         if (saved) {
             const parsed = JSON.parse(saved);
             state = { ...defaultState, ...parsed };
+            trimVictimLeaderboard();
             return true;
         }
     } catch (e) {
