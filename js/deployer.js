@@ -452,10 +452,15 @@ function pullTheRug() {
     state.cash += stolenCash;
     state.lifetimeEarned += stolenCash;
 
-    // Record entry to leaderboard
+    // Record entry to leaderboard. The trim keeps this array from growing
+    // without bound over a long session - see VICTIM_LEADERBOARD_MAX in
+    // js/state.js for why that mattered so much (it was re-rendered as
+    // innerHTML on every single updateUI(), and shipped to Supabase in
+    // full on every save).
     state.victimLeaderboard.unshift({
         name: t.name, ticker: t.ticker, cash: stolenCash, suckers: Math.floor(t.suckers)
     });
+    if (typeof trimVictimLeaderboard === 'function') trimVictimLeaderboard();
 
     state.globalHeat = Math.min(100, state.globalHeat + applyCaymanDiscount(Math.floor(t.toxicity / 4)));
     state.activeToken = null;
