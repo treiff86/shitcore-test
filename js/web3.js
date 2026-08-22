@@ -752,6 +752,12 @@ async function offerCloudLoadIfExists() {
     // Always resume the cloud save automatically - no prompt. This wallet's
     // last session is the source of truth the moment it connects.
     state = { ...defaultState, ...data.game_state };
+    // Repairs a save that accumulated an unbounded Victim Hall of Fame
+    // before the cap existed - see VICTIM_LEADERBOARD_MAX in js/state.js.
+    // Deliberately before the updateUI() below, so the first render after
+    // loading is already the trimmed list, and the next saveToCloud()
+    // writes the smaller array back to Supabase.
+    if (typeof trimVictimLeaderboard === "function") trimVictimLeaderboard();
     // Third money-duplication path: connecting a wallet mid-trade replaces
     // `state` (and with it the cash balance) while the open position lives
     // on in markets.js, so it could still be closed afterwards for a margin
