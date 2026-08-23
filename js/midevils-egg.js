@@ -6,9 +6,12 @@
    of the character appears in the bottom-right corner at random
    intervals, stays for exactly 2 seconds, then disappears again if
    nobody clicks it. Clicking it opens a full-screen Win95-style
-   launcher pointing at the Mid Evils marketplace listing - the same
-   link-out shape Conmen and Skull X use, rather than the embedded
-   game Genuine Undead's launcher swaps in.
+   launcher which, like Genuine Undead's, swaps in a live embedded
+   game rather than linking out the way Conmen and Skull X do. The
+   iframe is built only once the button is actually clicked, so it
+   isn't loading or running in the background for anyone who never
+   goes in - and it's torn down again on close so it doesn't keep
+   playing audio behind the page.
 
    Note the class name: the Mid Evils theme's cssClass in web3.js is
    "medieval-mode", NOT "midevils-mode". Everything here checks the
@@ -23,6 +26,7 @@
 const MIDEVILS_EGG_VISIBLE_MS = 2000;          // matches all three existing eggs
 const MIDEVILS_EGG_MIN_GAP_MS = 3 * 60 * 1000; // 3 min
 const MIDEVILS_EGG_MAX_GAP_MS = 7 * 60 * 1000; // 7 min
+const MIDEVILS_EGG_EMBED_SRC = 'https://classicjoy.games/embed?slug=wwf-no-mercy';
 
 let _midevilsEggHideTimeout = null;
 
@@ -67,6 +71,7 @@ function openMidEvilsLauncher() {
     if (!isRealHolder && !isMaster) return;
     clearTimeout(_midevilsEggHideTimeout);
     _midevilsEggHide();
+    _midevilsEggResetLauncherView(); // always open on the intro, never on a stale iframe
     const overlay = document.getElementById('midevilsLauncherOverlay');
     if (overlay) {
         overlay.classList.remove('hidden');
@@ -81,12 +86,47 @@ function testMidEvilsEgg() {
     _midevilsEggShow();
 }
 
+// Swaps the intro (character + blurb + button) out for the live embedded
+// game - built fresh each time rather than left in the DOM permanently,
+// so it isn't sitting there loading and running in the background for
+// anyone who never actually clicks in.
+function openMidEvilsEmbed() {
+    const intro = document.getElementById('midevilsLauncherIntro');
+    const wrap = document.getElementById('midevilsEmbedWrap');
+    if (!wrap) return;
+    if (intro) intro.classList.add('hidden');
+    // SECURITY: sandboxed deliberately, same as the Undead embed. With no
+    // sandbox attribute an embedded third-party frame may navigate the
+    // TOP-level window after a user gesture - so one click inside the
+    // embedded game could silently replace this page with a lookalike.
+    // That matters far more here than on an ordinary site, because this is
+    // a page people connect real wallets to, which makes a same-tab
+    // redirect high-value phishing. allow-scripts + allow-same-origin are
+    // what the game needs to run; top-navigation and popups are
+    // deliberately NOT granted.
+    wrap.innerHTML = `<iframe src="${MIDEVILS_EGG_EMBED_SRC}" width="800" height="600" frameborder="0"` +
+        ` sandbox="allow-scripts allow-same-origin allow-pointer-lock"` +
+        ` referrerpolicy="no-referrer" allowfullscreen></iframe>`;
+    wrap.classList.remove('hidden');
+}
+
+function _midevilsEggResetLauncherView() {
+    const intro = document.getElementById('midevilsLauncherIntro');
+    const wrap = document.getElementById('midevilsEmbedWrap');
+    // Emptying innerHTML destroys the iframe, which is what actually stops
+    // the game running (and its audio playing) once the window is closed -
+    // just hiding it would leave it going behind the page.
+    if (wrap) { wrap.classList.add('hidden'); wrap.innerHTML = ''; }
+    if (intro) intro.classList.remove('hidden');
+}
+
 function closeMidEvilsLauncher() {
     const overlay = document.getElementById('midevilsLauncherOverlay');
     if (overlay) {
         overlay.classList.add('hidden');
         overlay.classList.remove('flex');
     }
+    _midevilsEggResetLauncherView();
 }
 
 document.addEventListener('DOMContentLoaded', () => {
