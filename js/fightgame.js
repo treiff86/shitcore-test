@@ -249,20 +249,114 @@ window.FightGame = (function () {
     const ARENA_CONFIG = {
         'assets/fight_game/bg_wizard.webp': {
             ground: 500,          // floor is lower in this art than the default 430
-            p1X: 205,             // stands just in front of the cauldron instead of on top of it
-            platform: { x1: 585, x2: 890, topY: 405 }, // the table on the right - jump up to stand on it
+            p1X: 350,             // clear of the cauldron. At the old 205 P1 spawned standing INSIDE it, which is only survivable while the cauldron is scenery - now that it is solid he has to start beside it.
+            platforms: [
+                { x1: 585, x2: 890, topY: 405 }, // the table on the right - jump up to stand on it
+                // The cauldron. It read as a painted-on background object
+                // before: fighters walked straight through it and P1 even
+                // spawned standing inside it. Measured off the art at
+                // canvas scale by sampling the bowl's colour - the rim
+                // tops out at y=428-431 across its width, so 430. `solid`
+                // additionally stops you walking THROUGH the side of it,
+                // which is what makes it read as a real object rather than
+                // a decal you can stand on.
+                { x1: 185, x2: 335, topY: 430, solid: true },
+            ],
         },
         'assets/fight_game/bg_skullx.webp': {
             ground: 480,           // throne-room art - estimated from the rug/floor line, no platform (no obvious ledge like some other arenas have) - nudge this if feet look off once it's live
         },
         'assets/fight_game/bg_undead.webp': {
-            ground: 481,           // measured directly from the source art (desk base meets floor at source y=712, scaled to the 960x540 canvas) - was 460, a guess made before this background had ever actually been seen live
-            platform: { x1: 528, x2: 715, topY: 335 }, // the green filing cabinets on the right - measured the same way
+            // Was 481, which left both fighters visibly hovering: at that
+            // height their feet sit level with the BASE of the reception
+            // desk - i.e. at the desk's depth, not on the foreground floor
+            // the camera is actually looking at. Moved down onto the pale
+            // floor tiles in front of it.
+            ground: 502,
+            platforms: [
+                { x1: 528, x2: 715, topY: 335 }, // the green filing cabinets on the right
+                // The near corner of the reception desk - the bit Tim
+                // pointed at. Sampling the wood across the counter gives a
+                // top surface running y=392 at x=300 up to y=372 at x=450:
+                // it is drawn in perspective, so it is not flat. Rather
+                // than fake a flat platform across the whole desk (which
+                // would leave you visibly sunk into it at one end), this
+                // covers only the near half, where the surface stays
+                // within a few pixels of 379. x2 stops at the corner so
+                // you can run off the end and drop to the floor.
+                { x1: 280, x2: 470, topY: 379 },
+            ],
         },
     };
     let currentArena = null; // set fresh each time loadArenaBackground() runs
 
     function arenaGroundY() { return (currentArena && currentArena.ground) || GROUND; }
+
+    // How far BELOW a platform's surface a falling fighter can still be
+    // caught by it. Without a tolerance a fast fall can step clean past a
+    // ledge between two frames and land on the floor instead.
+    const LAND_TOLERANCE = 26;
+
+    // Arenas used to allow exactly ONE jumpable platform. This returns a
+    // list either way, so a legacy `platform:` entry still works and any
+    // arena can now carry as many surfaces as its art has ledges.
+    function arenaPlatforms() {
+        if (!currentArena) return [];
+        if (Array.isArray(currentArena.platforms)) return currentArena.platforms;
+        if (currentArena.platform) return [currentArena.platform];
+        return [];
+    }
+
+    // The surface a fighter at horizontal centre `cx` and height `y` would
+    // land on. Picks the HIGHEST platform still at or below them, so
+    // stacked ledges resolve the way a player expects: you land on the
+    // table rather than the floor beneath it, and jumping up from the floor
+    // never teleports you onto a ledge you are currently underneath.
+    function surfaceBelow(cx, y) {
+        let landY = arenaGroundY() - P_H;
+        let onPlatform = false;
+        for (const pl of arenaPlatforms()) {
+            if (cx <= pl.x1 || cx >= pl.x2) continue;
+            const platY = pl.topY - P_H;
+            if (platY <= landY && y <= platY + LAND_TOLERANCE) { landY = platY; onPlatform = true; }
+        }
+        return { landY, onPlatform };
+    }
+
+    // Is there still a surface under this fighter's feet at `cx`, given
+    // they are standing at `y`? Used when walking, to decide whether they
+    // just stepped off the end of a ledge.
+    function stillSupportedAt(cx, y) {
+        for (const pl of arenaPlatforms()) {
+            if (cx > pl.x1 && cx < pl.x2 && Math.abs((pl.topY - P_H) - y) < 2) return true;
+        }
+        return false;
+    }
+
+    // Side collision for platforms marked `solid`. Only those block
+    // horizontal movement; the desk, table and filing cabinets stay
+    // walk-through on purpose, because the fighters pass in FRONT of those
+    // in the art and stopping dead at thin air would look broken.
+    //
+    // Written so it can never trap anyone: it only refuses movement that
+    // takes a fighter FURTHER INTO an obstacle they were previously
+    // outside of. Anyone who somehow ends up inside one - a knockback, an
+    // arena swap, a future edit to these numbers - can always simply walk
+    // back out.
+    function blockSolidSides(f, prevCx) {
+        const cx = f.x + f._fw / 2;
+        const feetY = f.y + P_H;
+        for (const pl of arenaPlatforms()) {
+            if (!pl.solid) continue;
+            // Standing on top of it, or clearing it in the air? Not a wall.
+            if (feetY <= pl.topY + 2) continue;
+            if (cx <= pl.x1 || cx >= pl.x2) continue;   // outside: nothing to do
+            if (prevCx > pl.x1 && prevCx < pl.x2) continue; // already inside: let them leave
+            const edge = prevCx <= pl.x1 ? pl.x1 : pl.x2;
+            f.x = edge - f._fw / 2;
+            f.vx = 0;
+        }
+    }
 
     // ---------------------------------------------------------------
     // ASSET LOADING
@@ -355,6 +449,35 @@ window.FightGame = (function () {
             anims[state] = await loadStrip(path, count, outH);
         }
         anims.idle = (anims.idle && anims.idle.length) ? anims.idle : (anims.walk.length ? [anims.walk[0]] : []);
+
+        /* FOOT ALIGNMENT - why everyone looked like they were hovering.
+
+           Sprites are bottom-anchored: the frame's bottom edge is placed on
+           the arena's ground line. That only puts FEET on the ground if the
+           art has no transparent margin below them, and most of this set
+           does. Measured from the source strips:
+
+             reiffer  9px of empty space under the shoes (of a 300px frame,
+                      and his legacy strips get scaled UP by 1.255, so it
+                      lands as ~8px on screen)
+             undead   26px of 835 -> ~7px on screen
+             wizard   10px of 951 -> ~2px
+             conmen    3px of 668 -> ~1px
+             skullx    0px        -> already correct
+
+           So Reiffer floated about 8px on every single stage and Skull X
+           didn't float at all, which is exactly the inconsistency that made
+           it read as a bug rather than a style.
+
+           This measures the character's own walk strip once at load and
+           shifts that character down by the gap. Deliberately measured from
+           ONE reference pose and applied to all of their states: per-frame
+           correction would be wrong, because a jump or a crouch is SUPPOSED
+           to have the feet higher in the frame, and auto-flattening those
+           would destroy the animation. */
+        anims._footPad = measureFootPad(anims.walk && anims.walk.length ? anims.walk[0] : anims.idle[0]);
+        console.log(`[fightgame] ${key}: foot gap ${anims._footPad}px - sprite shifted down by that much so the feet meet the floor`);
+
         // PLACEHOLDERS for anything not defined above in FIGHTER_ANIM_FILES -
         // replace the corresponding FIGHTER_ANIM_FILES entry with a real
         // loadStrip() source once that art exists, and these no-ops itself.
@@ -365,6 +488,27 @@ window.FightGame = (function () {
         if (!anims.crouch_punch || !anims.crouch_punch.length) anims.crouch_punch = anims.punch_lo;
         if (!anims.crouch_kick || !anims.crouch_kick.length) anims.crouch_kick = anims.kick_lo;
         return anims;
+    }
+
+    // Transparent rows below the lowest opaque pixel of a rendered frame.
+    // Returns 0 for anything unreadable rather than guessing, so a failure
+    // here can only ever mean "no correction applied", never a wrong one.
+    function measureFootPad(frameCanvas) {
+        if (!frameCanvas || !frameCanvas.width || !frameCanvas.height) return 0;
+        try {
+            const c = frameCanvas.getContext('2d');
+            const w = frameCanvas.width, h = frameCanvas.height;
+            const data = c.getImageData(0, 0, w, h).data;
+            for (let y = h - 1; y >= 0; y--) {
+                const row = y * w * 4;
+                for (let x = 0; x < w; x++) {
+                    if (data[row + x * 4 + 3] > 8) return h - 1 - y; // alpha > 8 = a real pixel
+                }
+            }
+        } catch (e) {
+            console.warn('[fightgame] could not measure foot padding, leaving it uncorrected:', e);
+        }
+        return 0;
     }
 
     let lastArenaBg = null; // tracks the previous match's background so the next one never repeats it
@@ -565,7 +709,12 @@ window.FightGame = (function () {
             // jump-punch) need a taller canvas to avoid cropping the head or
             // limbs. Anchoring by the bottom keeps feet/ground-contact in the
             // same place regardless of a given frame's actual height.
-            const sy = Math.round(this.y + P_H - img.height + so[1]);
+            // `_footPad` closes the gap between the bottom of the frame and
+            // the bottom of the actual artwork - see the FOOT ALIGNMENT
+            // note in loadFighterAnims(). Without it a character whose art
+            // has empty space under the shoes hovers above every floor in
+            // the game by exactly that many pixels.
+            const sy = Math.round(this.y + P_H - img.height + so[1] + (this.anims._footPad || 0));
             if (this.facing === -1) {
                 ctx.save();
                 ctx.translate(sx + this._fw, sy);
@@ -671,16 +820,15 @@ window.FightGame = (function () {
             f.heliT = Math.max(0, f.heliT - dt);
             if (f.heliT <= 0) { f.state = 'jump'; f.fr = 0; f.atkT = 0; f.canW = false; }
         }
-        // Which surface is below: the table platform (only while
-        // falling and horizontally over it) or the regular floor.
-        const plat = currentArena && currentArena.platform;
+        // Which surface is below: any platform this arena defines (only
+        // while falling and horizontally over it) or the regular floor.
+        // `f.y - f.vy * dt` is where they were BEFORE this frame's step -
+        // using it means a fighter who was above a ledge last frame still
+        // lands on it even if one frame of gravity carried them past it.
         const cx = f.x + f._fw / 2;
-        let landY = arenaGroundY() - P_H;
-        let landOnPlatform = false;
-        if (plat && f.vy >= 0 && cx > plat.x1 && cx < plat.x2) {
-            const platY = plat.topY - P_H;
-            if (platY <= landY) { landY = platY; landOnPlatform = true; }
-        }
+        const prevY = f.y - f.vy * dt;
+        const { landY, onPlatform: landOnPlatform } =
+            f.vy >= 0 ? surfaceBelow(cx, prevY) : { landY: arenaGroundY() - P_H, onPlatform: false };
         if (f.y >= landY) {
             f.y = landY; f.vy = 0; f.grounded = true; f.heliT = 0; f.onPlatform = landOnPlatform;
             if (f.state === 'jump_kick') { f.state = 'idle'; f.fr = 0; }
@@ -882,14 +1030,17 @@ window.FightGame = (function () {
                 if (keys[bind.left]) { f.vx = -P_SPD; f.facing = -1; }
                 else if (keys[bind.right]) { f.vx = P_SPD; f.facing = 1; }
             }
+            const _prevCx = f.x + f._fw / 2;
             f.x = Math.max(STAGE_MARGIN, Math.min(SW - STAGE_MARGIN - f._fw, f.x + f.vx));
+            blockSolidSides(f, _prevCx);
 
-            // Walked off the edge of the table - start falling to the
-            // real floor instead of staying suspended at platform height.
+            // Walked off the edge of a ledge - start falling to whatever is
+            // below instead of staying suspended in mid-air. Checks every
+            // platform now, not just one, so stepping from the cauldron rim
+            // straight onto another surface is handled too.
             if (f.grounded && f.onPlatform) {
-                const plat = currentArena && currentArena.platform;
                 const cx = f.x + f._fw / 2;
-                if (!plat || cx <= plat.x1 || cx >= plat.x2) {
+                if (!stillSupportedAt(cx, f.y)) {
                     f.grounded = false; f.onPlatform = false; f.vy = 0;
                 }
             }
