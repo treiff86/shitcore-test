@@ -1575,6 +1575,7 @@ window.FightGame = (function () {
         onKeyUp = (ev) => { keys[normKey(ev.key)] = false; };
         window.addEventListener('keydown', onKeyDown);
         window.addEventListener('keyup', onKeyUp);
+        bindFightTouchPad(P1_BIND);
 
         let lastT = performance.now();
         // Resilience: the raf loop re-arms itself only at the BOTTOM of
@@ -1749,11 +1750,100 @@ window.FightGame = (function () {
         rafId = requestAnimationFrame(frame);
     }
 
+    /* ---------------- TOUCH CONTROLS ----------------
+       The fight game needs seven inputs - left, right, jump, crouch,
+       punch, kick, block - and there is no sensible gesture for seven
+       things at once, so mobile gets real on-screen buttons instead of
+       the swipe-and-drag approach MEV Sandwich uses.
+
+       These press the SAME keys the keyboard does. Each button carries a
+       data-fight-key naming a P1_BIND entry, and pressing it sets
+       keys[...] and justPressed[...] exactly as onKeyDown would. There is
+       no second input path for the game logic to know about, so touch and
+       keyboard can never drift apart - and a Bluetooth keyboard on a
+       tablet keeps working alongside the buttons. */
+
+    let _ftButtons = [];       // { el, onDown, onUp } for teardown
+    let _ftRevealHandler = null;
+
+    function _ftPress(bindKey, on) {
+        if (!bindKey) return;
+        if (on) {
+            // Match the keyboard exactly: justPressed is a rising edge only,
+            // so holding a button can't machine-gun a move that is meant to
+            // need a fresh press.
+            if (!keys[bindKey]) justPressed[bindKey] = true;
+            keys[bindKey] = true;
+        } else {
+            keys[bindKey] = false;
+        }
+    }
+
+    function bindFightTouchPad(bind) {
+        unbindFightTouchPad();
+        const pad = document.getElementById('fightTouchPad');
+        if (!pad) return;
+
+        pad.querySelectorAll('[data-fight-key]').forEach((el) => {
+            const bindKey = bind[el.getAttribute('data-fight-key')];
+            const onDown = (ev) => {
+                ev.preventDefault();   // no scroll, no zoom, no synthetic click
+                ev.stopPropagation();
+                el.classList.add('ft-on');
+                _ftPress(bindKey, true);
+            };
+            // touchend AND touchcancel: an incoming call or the browser
+            // reclaiming the gesture fires cancel, and without it the button
+            // would stay held down for the rest of the match.
+            const onUp = (ev) => {
+                ev.preventDefault();
+                el.classList.remove('ft-on');
+                _ftPress(bindKey, false);
+            };
+            el.addEventListener('touchstart', onDown, { passive: false });
+            el.addEventListener('touchend', onUp, { passive: false });
+            el.addEventListener('touchcancel', onUp, { passive: false });
+            _ftButtons.push({ el, onDown, onUp });
+        });
+
+        // Reveal on the first REAL touch rather than sniffing the user agent
+        // or 'ontouchstart' - plenty of laptops report touch support while
+        // the person is using a mouse, and showing them a d-pad would be
+        // nonsense. Once shown it stays for the session.
+        if (pad.classList.contains('hidden')) {
+            _ftRevealHandler = () => {
+                pad.classList.remove('hidden');
+                window.removeEventListener('touchstart', _ftRevealHandler, true);
+                _ftRevealHandler = null;
+            };
+            window.addEventListener('touchstart', _ftRevealHandler, true);
+        }
+    }
+
+    function unbindFightTouchPad() {
+        _ftButtons.forEach(({ el, onDown, onUp }) => {
+            // The options object has to match the one used to add these, or
+            // the browser treats it as a different listener and never
+            // removes it - the exact bug that leaked handlers in the Win95
+            // desktop for months.
+            el.removeEventListener('touchstart', onDown, { passive: false });
+            el.removeEventListener('touchend', onUp, { passive: false });
+            el.removeEventListener('touchcancel', onUp, { passive: false });
+            el.classList.remove('ft-on');
+        });
+        _ftButtons = [];
+        if (_ftRevealHandler) {
+            window.removeEventListener('touchstart', _ftRevealHandler, true);
+            _ftRevealHandler = null;
+        }
+    }
+
     function stop() {
         if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
         if (onKeyDown) window.removeEventListener('keydown', onKeyDown);
         if (onKeyUp) window.removeEventListener('keyup', onKeyUp);
         onKeyDown = onKeyUp = null;
+        unbindFightTouchPad();
         keys = {}; justPressed = {};
         if (typeof stopFightMusic === 'function') stopFightMusic();
     }
