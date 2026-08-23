@@ -103,13 +103,37 @@ function openUndeadEmbed() {
         ` sandbox="allow-scripts allow-same-origin allow-pointer-lock"` +
         ` referrerpolicy="no-referrer" allowfullscreen></iframe>`;
     wrap.classList.remove('hidden');
+
+    // The site's own theme music kept playing straight over the embedded
+    // game, so you heard both at once. Same handoff the Bonus Stage and
+    // Fight Club already use - pause here, resume on close.
+    //
+    // Done at the point the GAME opens rather than when the launcher
+    // window opens: the launcher's intro screen is just artwork and a
+    // button, and killing the music for that would be an odd silence for
+    // anyone who reads it and backs out.
+    if (typeof pauseMainThemeForBonusStage === 'function') {
+        pauseMainThemeForBonusStage();
+        _undeadEggPausedSiteMusic = true;
+    }
 }
+
+// Tracks whether THIS egg actually paused the music, so closing a launcher
+// nobody entered can't resume music the player had deliberately muted.
+// pauseMainThemeForBonusStage() records the was-it-playing flag globally,
+// and it would otherwise still hold a stale value from some earlier
+// mini-game.
+let _undeadEggPausedSiteMusic = false;
 
 function _undeadEggResetLauncherView() {
     const intro = document.getElementById('undeadLauncherIntro');
     const wrap = document.getElementById('undeadEmbedWrap');
     if (wrap) { wrap.classList.add('hidden'); wrap.innerHTML = ''; } // tear down the iframe so it isn't still running (and doesn't keep any audio playing) once closed
     if (intro) intro.classList.remove('hidden');
+    if (_undeadEggPausedSiteMusic) {
+        _undeadEggPausedSiteMusic = false;
+        if (typeof resumeMainThemeAfterBonusStage === 'function') resumeMainThemeAfterBonusStage();
+    }
 }
 
 function closeUndeadLauncher() {
