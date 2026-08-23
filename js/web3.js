@@ -998,9 +998,31 @@ function pickRandomSkullXOrdinal() {
     return SKULLX_ORDINAL_IMAGES[Math.floor(Math.random() * SKULLX_ORDINAL_IMAGES.length)];
 }
 
+// Which character the player fights as. Every collection now gets its own.
+//
+// This used to read window.activePreviewThemeId for Skull X and Genuine
+// Undead - and that variable is ONLY ever set by previewTheme(), the
+// master-wallet TEST Play tool. The real-ownership path (applyTheme) never
+// touches it. So both collections had complete sprite sets that looked
+// correct in testing, while every genuine holder silently fought as
+// Reiffer. Conmen and MIM Wizard were unaffected because they matched on a
+// body class, which real holders actually get.
+//
+// Every theme is matched on its body class first now, with the preview id
+// kept as a fallback. Theme Preview applies the class too, so the class
+// check already covers it - the id lines are belt and braces.
+//
+// The class names deliberately don't all match their theme ids: Mid Evils'
+// class is "medieval-mode", and MIM Wizard's is "win95-mode" (added by the
+// Win95 desktop, since that theme has no cosmetic class of its own).
 function getActiveFighterKey() {
-    if (document.body.classList.contains('win95-mode')) return 'wizard';
-    if (document.body.classList.contains('conmen-mode')) return 'conmen';
+    const c = document.body.classList;
+    if (c.contains('win95-mode')) return 'wizard';
+    if (c.contains('conmen-mode')) return 'conmen';
+    if (c.contains('skullx-mode')) return 'skullx';
+    if (c.contains('undead-mode')) return 'undead';
+    // Mid Evils fights as Reiffer, the default - it needs no branch here,
+    // it just falls through to the return below.
     if (window.activePreviewThemeId === 'genuineundead') return 'undead';
     if (window.activePreviewThemeId === 'skullx') return 'skullx';
     return 'reiffer';
