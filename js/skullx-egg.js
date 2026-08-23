@@ -74,16 +74,24 @@ function testSkullXEgg() {
     _skullxEggShow();
 }
 
-// Single debug-menu "Easter Egg" button now covers all three eggs - fires
+// Single debug-menu "Easter Egg" button now covers all FOUR eggs - fires
 // whichever one matches the currently active theme instead of needing a
 // separate button per theme. Defaults to Conmen's for every other theme
 // (including no theme at all), same as the button did before Skull X's
 // egg existed.
+//
+// Mid Evils' theme class is `medieval-mode`, NOT `midevils-mode`: the
+// theme id in web3.js is "midevils" but its cssClass has always been
+// `medieval-mode`. Checking for the wrong one here would silently fall
+// through to Conmen's egg while on the Mid Evils theme - which is exactly
+// the kind of bug that looks like "the button is broken".
 function testThemeEasterEgg() {
     if (document.body.classList.contains('skullx-mode') && typeof testSkullXEgg === 'function') {
         testSkullXEgg();
     } else if (document.body.classList.contains('undead-mode') && typeof testUndeadEgg === 'function') {
         testUndeadEgg();
+    } else if (document.body.classList.contains('medieval-mode') && typeof testMidEvilsEgg === 'function') {
+        testMidEvilsEgg();
     } else if (typeof testConmenEgg === 'function') {
         testConmenEgg();
     }
