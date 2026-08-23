@@ -101,6 +101,17 @@ function pauseMainThemeForBonusStage() {
 }
 function resumeMainThemeAfterBonusStage() {
     if (!bgMusicEl) bgMusicEl = document.getElementById('bgMusicEl');
+
+    // Release the mini-game music element as the game closes. Without this
+    // it kept pointing at whatever the LAST mini-game was using - and for
+    // Fight Club that element is bgMusicEl, the SITE's own music player.
+    // A mini-game music button pressed afterwards would then pause the
+    // site's theme while leaving bgMusicMuted false, so the site's audio
+    // toggle showed "on" with nothing playing and needed two presses to
+    // recover. Clearing it here means a button can only ever control a
+    // mini-game that is actually open and actually playing something.
+    setActiveMiniGameMusicEl(null);
+
     if (bgMusicWasPlayingBeforeBonusStage && bgMusicEl) {
         // Fight Game may have swapped bgMusicEl's src to a battle track
         // for a different arena than the site's actual active theme (see
@@ -371,6 +382,10 @@ function isMiniGameSfxMuted() { return miniGameSfxMuted; }
 
 function toggleMiniGameMusic() {
     miniGameMusicMuted = !miniGameMusicMuted;
+    // Guarded on purpose: a mini-game with no music of its own leaves this
+    // null, and acting on a stale element is how this button used to reach
+    // out and pause the site's theme instead. See the note in
+    // resumeMainThemeAfterBonusStage().
     if (activeMiniGameMusicEl) {
         if (miniGameMusicMuted) activeMiniGameMusicEl.pause();
         else activeMiniGameMusicEl.play().catch(() => {});
