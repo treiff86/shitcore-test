@@ -247,13 +247,48 @@ function applyTheme(theme) {
     if (theme.id === "mimwizard" && typeof enterWin95Desktop === "function") {
         enterWin95Desktop();
     }
-    if (theme.id === "midevils" || theme.id === "conmen" || theme.id === "mimwizard") {
+    // Every theme that HAS a music track gets the audio button and the
+    // auto-start. This used to list only midevils/conmen/mimwizard, which
+    // meant Skull X and Genuine Undead had tracks sitting in the repo
+    // (assets/skullx-theme.mp3 and assets/undead-theme.mp3, both wired
+    // into THEME_MUSIC_TRACKS in js/audio.js and both perfectly playable)
+    // that nothing ever asked to play - and no audio button to start them
+    // by hand either, so those two themes were completely silent.
+    //
+    // Derived from THEME_MUSIC_TRACKS rather than hardcoded a second time,
+    // so adding a track to that map is now the ONLY thing needed to give a
+    // future theme music. That's what went wrong here: the track was added
+    // in one place and the gate was never updated to match.
+    if (themeHasMusic(theme)) {
         // Deliberately NOT unlocking bonusStageBtn here - the persistent
         // "Play mini game" header button is TEST Play only now. Every real
         // player (and LIVE Play) only reaches the mini-game through the
         // McDonald's popup easter egg (see js/mcdonalds-egg.js).
         document.getElementById("audioToggleBtn")?.classList.remove("hidden");
         if (typeof autoStartThemeMusicIfMuted === 'function') autoStartThemeMusicIfMuted();
+    }
+}
+
+// Does this theme have a music track? Answered by asking js/audio.js's
+// THEME_MUSIC_TRACKS map directly instead of keeping a duplicate list of
+// theme ids in sync by hand.
+//
+// The mimwizard special case is real, not a workaround: its cssClass is
+// empty, and its music is keyed off "win95-mode" - the class the Win95
+// desktop adds to <body> - rather than a cosmetic theme class of its own.
+function themeHasMusic(theme) {
+    if (!theme) return false;
+    if (theme.id === "mimwizard") return true; // keyed on win95-mode, applied by enterWin95Desktop()
+    if (!theme.cssClass) return false;
+    try {
+        return typeof THEME_MUSIC_TRACKS !== 'undefined'
+            && Object.prototype.hasOwnProperty.call(THEME_MUSIC_TRACKS, theme.cssClass);
+    } catch (e) {
+        // THEME_MUSIC_TRACKS is a top-level `const` in js/audio.js, so it
+        // lives in the temporal dead zone until that script runs - and
+        // `typeof` on a TDZ binding THROWS rather than returning
+        // "undefined". Same gotcha as the `sb` checks elsewhere.
+        return false;
     }
 }
 
@@ -860,10 +895,11 @@ function previewTheme(themeId) {
     if (theme.id === "mimwizard" && typeof enterWin95Desktop === "function") {
         enterWin95Desktop();
     }
-    if (theme.id === "midevils" || theme.id === "conmen" || theme.id === "mimwizard") {
+    if (themeHasMusic(theme)) {
         // Same auto-start as the real-ownership path in applyTheme() -
         // TEST Play previewing a theme should get music starting too,
-        // not just genuine holders.
+        // not just genuine holders. Shares themeHasMusic() with that path
+        // on purpose, so the two can't drift apart again.
         document.getElementById("audioToggleBtn")?.classList.remove("hidden");
         if (typeof autoStartThemeMusicIfMuted === 'function') autoStartThemeMusicIfMuted();
     }
