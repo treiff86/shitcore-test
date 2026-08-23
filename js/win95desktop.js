@@ -176,6 +176,7 @@ function exitWin95Desktop() {
     if (typeof window.WizardPopups !== 'undefined') window.WizardPopups.stop();
     clearInterval(window._win95ClockInterval);
     window.removeEventListener('resize', positionWin95Desktop);
+    unbindWin95DragListeners(); // the drag pair goes with it - see makeWin95Draggable
 
     returnWin95Panels();
     document.getElementById('win95Desktop')?.remove();
@@ -187,27 +188,73 @@ function bringWin95ToFront(win) {
     win.style.zIndex = win95TopZ;
 }
 
+/* ---------------- WINDOW DRAGGING ----------------
+   THE LEAK THIS REPLACES
+
+   makeWin95Draggable() ran once per window and added its OWN pair of
+   window-level 'mousemove' and 'mouseup' listeners every time, with
+   nothing ever removing them. exitWin95Desktop() cleaned up only the
+   'resize' handler. Since the desktop can be entered, left and re-entered
+   any number of times in a session - and each entry builds a fresh set of
+   windows - the count only ever climbed.
+
+   Two costs. Every one of those handlers ran on every mouse movement
+   anywhere on the page, forever. And each closed over a window element
+   that had since been removed from the DOM, keeping those dead elements
+   in memory along with everything inside them.
+
+   THE FIX
+
+   One shared mousemove/mouseup pair for the whole desktop, installed once,
+   acting on whichever window is currently being dragged. The per-window
+   state moves out of the closure into a plain variable, so there is
+   nothing left to accumulate - and both listeners come off in
+   exitWin95Desktop() alongside the resize one. */
+
+let _win95Drag = null;        // { win, startX, startY, startLeft, startTop } while dragging
+let _win95DragBound = false;  // are the two shared listeners currently installed?
+
+function _win95OnDragMove(e) {
+    if (!_win95Drag) return;
+    const d = _win95Drag;
+    d.win.style.left = `${Math.max(0, d.startLeft + (e.clientX - d.startX))}px`;
+    d.win.style.top = `${Math.max(0, d.startTop + (e.clientY - d.startY))}px`;
+}
+function _win95OnDragEnd() { _win95Drag = null; }
+
+function bindWin95DragListeners() {
+    if (_win95DragBound) return;   // idempotent - every window calls this
+    window.addEventListener('mousemove', _win95OnDragMove);
+    window.addEventListener('mouseup', _win95OnDragEnd);
+    _win95DragBound = true;
+}
+function unbindWin95DragListeners() {
+    if (!_win95DragBound) return;
+    window.removeEventListener('mousemove', _win95OnDragMove);
+    window.removeEventListener('mouseup', _win95OnDragEnd);
+    _win95DragBound = false;
+    _win95Drag = null; // never leave a torn-down window referenced
+}
+
 function makeWin95Draggable(win, handle) {
     // handle is the whole window now (not just the titlebar) so you can
     // grab and drag from anywhere on the box - but real controls inside
     // it (buttons, inputs, links, canvases like the fight game/charts)
     // still need to work normally instead of starting a drag.
     const INTERACTIVE = 'button, input, select, textarea, a, [onclick], .win95-titlebar-btn, canvas';
-    let dragging = false, startX = 0, startY = 0, startLeft = 0, startTop = 0;
+    // This mousedown is the only per-window listener, and it dies with the
+    // element it is attached to. The window-level pair is shared.
     handle.addEventListener('mousedown', (e) => {
         if (e.target.closest(INTERACTIVE)) return;
-        dragging = true;
-        startX = e.clientX; startY = e.clientY;
-        startLeft = win.offsetLeft; startTop = win.offsetTop;
+        _win95Drag = {
+            win,
+            startX: e.clientX, startY: e.clientY,
+            startLeft: win.offsetLeft, startTop: win.offsetTop,
+        };
         bringWin95ToFront(win);
         e.preventDefault();
     });
-    window.addEventListener('mousemove', (e) => {
-        if (!dragging) return;
-        win.style.left = `${Math.max(0, startLeft + (e.clientX - startX))}px`;
-        win.style.top = `${Math.max(0, startTop + (e.clientY - startY))}px`;
-    });
-    window.addEventListener('mouseup', () => { dragging = false; });
+    bindWin95DragListeners();
 }
 
 function updateWin95Clock() {
