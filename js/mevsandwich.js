@@ -539,15 +539,45 @@ window.MevSandwichGame = (function () {
         return false;
     }
 
+    /* ---------------- SOUND ----------------
+       This game shipped completely silent while its Win95 titlebar carried
+       a working SFX button, so that button did nothing at all. Rather than
+       delete the control, the game now actually makes noise.
+
+       Everything here goes through playMiniGameSound(), which uses the
+       SYNTHESIZED tones already in js/audio.js - no new audio files,
+       nothing extra for anyone to download, and it already honours the SFX
+       mute button. Only the PLAYER makes sound: five bots eating
+       off-screen would be a constant rattle for events you can't see.
+
+       Eating is deliberately throttled. With 380 food items and a boosting
+       snake you can swallow several in a single frame, and one tone per
+       pellet turns into a buzz - so it plays at most one bite sound every
+       EAT_SOUND_MIN_GAP seconds however many you actually took in. */
+    const EAT_SOUND_MIN_GAP = 0.09;
+    let _lastEatSoundAt = -99;
+
+    function mevSound(type) {
+        if (typeof playMiniGameSound === 'function') playMiniGameSound(type);
+    }
+
     function handleEating(snake) {
         const headSize = segmentSizeFor(snake.segmentCount);
+        let playerAte = false;
         for (let i = g.food.length - 1; i >= 0; i--) {
             const f = g.food[i];
             if (Math.hypot(snake.head.x - f.x, snake.head.y - f.y) < headSize / 2 + f.r) {
-                if (snake === g.player) { g.score += f.value; g.shakeT = 0.08; }
+                if (snake === g.player) { g.score += f.value; g.shakeT = 0.08; playerAte = true; }
                 snake.segmentCount += 1;
                 g.food.splice(i, 1);
                 g.pendingSpawns.push(FOOD_RESPAWN_DELAY);
+            }
+        }
+        if (playerAte) {
+            const t = ROUND_SECONDS - g.timer; // seconds elapsed this round
+            if (t - _lastEatSoundAt >= EAT_SOUND_MIN_GAP) {
+                _lastEatSoundAt = t;
+                mevSound('buy'); // the existing short "money in" blip
             }
         }
     }
@@ -625,7 +655,9 @@ window.MevSandwichGame = (function () {
 
         // Boundary check (circular world)
         if (Math.hypot(g.player.head.x, g.player.head.y) > WORLD_R) {
-            g.phase = 'over'; g.deathReason = 'Drifted outside the mempool.'; endRound(); return;
+            g.phase = 'over'; g.deathReason = 'Drifted outside the mempool.';
+            mevSound('liquidated');
+            endRound(); return;
         }
         for (const bot of g.bots) {
             if (bot.alive && Math.hypot(bot.head.x, bot.head.y) > WORLD_R + 50) {
@@ -642,6 +674,7 @@ window.MevSandwichGame = (function () {
             g.deathReason = hitOwnTail
                 ? 'Sandwiched yourself. Ironic.'
                 : (ghostHit ? "Crashed into someone else's run." : 'Ran straight into a rival sandwich.');
+            mevSound('liquidated');
             scatterFoodAt(g.player.head.x, g.player.head.y, g.player.segmentCount, g.food);
             endRound();
             return;
