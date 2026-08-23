@@ -425,6 +425,26 @@
     color: #1a1208 !important;
 }
 
+/* Embedded game wrapper - hidden until openMidEvilsEmbed() builds the
+   iframe into it, then fills the same content area the intro screen used
+   so nothing jumps around on the swap. Mirrors .undead-embed-wrap. */
+.midevils-embed-wrap {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.midevils-embed-wrap.hidden { display: none !important; }
+.midevils-embed-wrap iframe {
+    max-width: 100%;
+    max-height: 100%;
+    width: 800px;
+    height: 600px;
+    border: none;
+    box-shadow: 0 0 30px rgba(198,40,40,0.25);
+}
+
 /* Embedded game wrapper - hidden until openUndeadEmbed() builds the
    iframe into it, then fills the same content area the intro screen
    used so nothing jumps around on the swap. */
