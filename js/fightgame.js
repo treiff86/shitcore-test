@@ -857,7 +857,10 @@ window.FightGame = (function () {
     // ---------------------------------------------------------------
     // GAME STATE
     // ---------------------------------------------------------------
-    let assetsPromise = null;
+    // Per-character cache of loaded animation sets. Was a single promise
+    // holding all five; now each character is fetched at most once per
+    // session, the first time somebody actually fights as or against them.
+    const fighterAnimCache = Object.create(null);
     let rafId = null;
     let keys = {};
     let justPressed = {}; // set true on a genuine new keydown, cleared every frame - forces mashing instead of holding
@@ -874,33 +877,62 @@ window.FightGame = (function () {
         return k;
     }
 
-    function newGame(anims, bg) {
-        // Online matches already know both fighters - decided at
-        // room-creation/join time so both sides agree before the match
-        // even starts (see onlinelobby.js) - rather than P2 being a random
-        // CPU pick. Local/solo matches keep the old behavior: P1 matches
-        // your real active theme (getActiveFighterKey, shared with the
-        // online path so Conmen/Wizard/etc. show correctly everywhere),
-        // P2 random from the rest.
+    const FIGHTER_KEYS = ['reiffer', 'conmen', 'wizard', 'undead', 'skullx'];
+    const isRealFighter = (k) => typeof k === 'string' && FIGHTER_KEYS.indexOf(k) !== -1;
+
+    /* Decides who is fighting, BEFORE any art is downloaded.
+       This used to happen inside newGame() - after all five characters had
+       already been loaded - which is why all five were loaded in the first
+       place. Choosing first means only the two in the match get fetched.
+
+       SECURITY: in an online match these keys come from the fight_rooms
+       table, which any anonymous person can write to. An unrecognised key
+       (or "__proto__" / "constructor") used to make anims[key] undefined,
+       which threw on the first frame - and since the rAF loop only re-arms
+       at the BOTTOM of frame(), that single throw killed the opponent's
+       game permanently on a frozen canvas. Validating against an
+       allow-list here means a hostile key can no longer even reach the
+       loader, let alone the game. */
+    function pickFighterKeys() {
         const online = window.fightClubOnlineActive && window.fightClubOnlineFighters;
-        const p1Key = online ? window.fightClubOnlineFighters.p1
+        let p1Key = online ? window.fightClubOnlineFighters.p1
             : (typeof getActiveFighterKey === 'function' ? getActiveFighterKey() : 'reiffer');
-        let p2Key;
-        if (online) {
-            p2Key = window.fightClubOnlineFighters.p2;
-        } else {
-            const p2Pool = ['reiffer', 'conmen', 'wizard', 'undead', 'skullx'].filter(k => k !== p1Key);
-            p2Key = p2Pool[Math.floor(Math.random() * p2Pool.length)];
+        let p2Key = online ? window.fightClubOnlineFighters.p2 : null;
+        window.fightClubOnlineFighters = null; // read once, same as onlineNames
+
+        if (!isRealFighter(p1Key)) p1Key = 'reiffer';
+        if (!isRealFighter(p2Key)) {
+            // Local/solo: P1 matches the active theme, P2 is a random pick
+            // from the rest - unchanged behaviour, just decided earlier.
+            const pool = FIGHTER_KEYS.filter(k => k !== p1Key);
+            p2Key = pool[Math.floor(Math.random() * pool.length)];
         }
-        window.fightClubOnlineFighters = null; // read once, same pattern as onlineNames below
-        // SECURITY: in an online match these keys originate from the
-        // fight_rooms table, which any anonymous person can write to. An
-        // unrecognised key (or "__proto__"/"constructor") made anims[key]
-        // undefined, which threw on the first frame - and since the raf
-        // loop only re-arms at the BOTTOM of frame(), that single throw
-        // killed the opponent's game permanently on a frozen canvas.
-        // Anything not an own-property of the map falls back to default.
-        const safeAnimKey = (k) => (typeof k === 'string' && Object.prototype.hasOwnProperty.call(anims, k)) ? k : 'reiffer';
+        return { p1Key, p2Key };
+    }
+
+    function loadFighterCached(key) {
+        if (!fighterAnimCache[key]) fighterAnimCache[key] = loadFighterAnims(key);
+        return fighterAnimCache[key];
+    }
+
+    // Returns { key: anims } for just the fighters in this match. Handles
+    // both sides picking the same character (possible in an online match)
+    // without loading them twice.
+    async function loadFightersFor(a, b) {
+        const keys = (a === b) ? [a] : [a, b];
+        const loaded = await Promise.all(keys.map(loadFighterCached));
+        const map = {};
+        keys.forEach((k, i) => { map[k] = loaded[i]; });
+        return map;
+    }
+
+    function newGame(anims, bg, p1Key, p2Key) {
+        // Both keys were validated in pickFighterKeys() before the art
+        // loaded, so by here they are real fighter names AND present in
+        // `anims`. This fallback is belt and braces, not the validation.
+        const safeAnimKey = (k) => (typeof k === 'string' && Object.prototype.hasOwnProperty.call(anims, k))
+            ? k
+            : Object.keys(anims)[0];
         const p1 = new Fighter(anims[safeAnimKey(p1Key)], (currentArena && currentArena.p1X) || 180, 1);
         const p2 = new Fighter(anims[safeAnimKey(p2Key)], SW - 180 - 90, -1);
         // Online Fight Club sets this right before calling openFightGame()
@@ -1505,20 +1537,18 @@ window.FightGame = (function () {
         const ctx = canvas.getContext('2d');
         canvas.width = SW; canvas.height = SH;
 
-        if (!assetsPromise) {
-            assetsPromise = Promise.all([
-                loadFighterAnims('reiffer'),
-                loadFighterAnims('conmen'),
-                loadFighterAnims('wizard'),
-                loadFighterAnims('undead'),
-                loadFighterAnims('skullx'),
-            ]);
-        }
-        const [reifferAnims, conmenAnims, wizardAnims, undeadAnims, skullxAnims] = await assetsPromise;
+        // Only the two fighters actually in this match get loaded. Every
+        // match used to download all five - 3.8MB of sprite strips for two
+        // characters' worth of fighting, with the other ~2.3MB decoded,
+        // rescaled and held in memory unused. The cache below means a
+        // character already loaded this session costs nothing, so the
+        // saving is on first load, where it matters most - a phone on
+        // mobile data opening the fight game for the first time.
+        const { p1Key, p2Key } = pickFighterKeys();
+        const anims = await loadFightersFor(p1Key, p2Key);
         const bg = await loadArenaBackground(window.fightClubOnlineActive ? window.fightClubOnlineArena : null); // always fresh - depends on whichever theme is active right now, not cached
-        const anims = { reiffer: reifferAnims, conmen: conmenAnims, wizard: wizardAnims, undead: undeadAnims, skullx: skullxAnims };
 
-        let g = newGame(anims, bg);
+        let g = newGame(anims, bg, p1Key, p2Key);
         if (typeof playSfxFile === 'function') playSfxFile('assets/sfx/fight/fight.mp3', 0.7);
         const shake = new Shake();
         const fx = [];
