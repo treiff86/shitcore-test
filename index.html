@@ -39,7 +39,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Local styles (FIXED PATH) -->
     <link rel="stylesheet" href="style.css?v=53">
-    <link rel="stylesheet" href="bonusstage.css?v=14">
+    <link rel="stylesheet" href="bonusstage.css?v=15">
 </head>
 <body class="overflow-x-hidden min-h-screen flex flex-col justify-between">
     <!-- Hand-drawn wobble filter for the chart canvas in Mid Evils mode -
@@ -1137,8 +1137,27 @@
             <div class="win95-menubar">
                 <span>File</span><span>Edit</span><span>View</span><span>Help</span>
             </div>
-            <div class="win95-content">
+            <div class="win95-content fight-content">
                 <canvas id="fightGameCanvas" width="960" height="540"></canvas>
+                <!-- On-screen controls for touch devices. Stays hidden until a
+                     real touch happens (see bindFightTouchPad in
+                     js/fightgame.js), so desktop players never see it.
+                     data-fight-key maps straight onto P1_BIND, so these press
+                     exactly the same keys the keyboard does - no parallel
+                     input path to keep in sync. -->
+                <div id="fightTouchPad" class="fight-touch hidden">
+                    <div class="ft-dpad">
+                        <button type="button" class="ft-btn ft-up" data-fight-key="jump" aria-label="Jump">&#9650;</button>
+                        <button type="button" class="ft-btn ft-left" data-fight-key="left" aria-label="Move left">&#9664;</button>
+                        <button type="button" class="ft-btn ft-right" data-fight-key="right" aria-label="Move right">&#9654;</button>
+                        <button type="button" class="ft-btn ft-down" data-fight-key="crouch" aria-label="Crouch">&#9660;</button>
+                    </div>
+                    <div class="ft-actions">
+                        <button type="button" class="ft-btn ft-act ft-block" data-fight-key="block" aria-label="Block">BLK</button>
+                        <button type="button" class="ft-btn ft-act ft-kick" data-fight-key="kick" aria-label="Kick">KICK</button>
+                        <button type="button" class="ft-btn ft-act ft-punch" data-fight-key="punch" aria-label="Punch">PUNCH</button>
+                    </div>
+                </div>
             </div>
             <div class="win95-statusbar">
                 <span class="win95-statusfield">Ready</span>
@@ -1400,7 +1419,7 @@
 <script src="js/staking.js" defer></script>
 <script src="js/perks.js?v=5" defer></script>
 <script src="js/bonusstage.js?v=22" defer></script>
-<script src="js/fightgame.js?v=52" defer></script>
+<script src="js/fightgame.js?v=53" defer></script>
 <script src="js/mevghosts.js?v=2" defer></script>
 <script src="js/mevsandwich.js?v=11" defer></script>
 <script src="js/conmen-egg.js?v=6" defer></script>
