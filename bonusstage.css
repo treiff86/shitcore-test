@@ -159,20 +159,136 @@
    pinch-zooming before it dispatches anything to JavaScript. Both halves
    are required, which is why they carry matching comments.
 
-   The fight game and bonus stage canvases are left out on purpose. Turning
-   this on for a canvas that ignores touch would just swallow the gesture -
-   dragging would neither scroll the page nor do anything in the game. They
-   get this line at the same time they get their handlers. */
-#mevSandwichCanvas {
+   The bonus stage canvas is still left out on purpose. Turning this on for
+   a canvas that ignores touch would just swallow the gesture - dragging
+   would neither scroll the page nor do anything in the game. It gets this
+   line at the same time it gets its handlers. */
+#mevSandwichCanvas,
+#fightGameCanvas,
+#fightTouchPad,
+#fightTouchPad .ft-btn {
     -ms-touch-action: none;
     touch-action: none;
 
     /* Stops the iOS long-press "save image" callout and the blue selection
-       flash when a finger rests on the canvas mid-game. */
+       flash when a finger rests on the canvas or holds a button down. */
     -webkit-touch-callout: none;
     -webkit-user-select: none;
     user-select: none;
     -webkit-tap-highlight-color: transparent;
+}
+
+/* ---------------- FIGHT GAME TOUCH CONTROLS ----------------
+   A d-pad and three action buttons, wired to the same P1_BIND keys the
+   keyboard uses (see bindFightTouchPad in js/fightgame.js).
+
+   LAYOUT, and why it changes with the screen:
+
+   In portrait, a 960x540 canvas shrinks to roughly 370x208 on a phone and
+   the Win95 window has a great deal of vertical space left over. Putting
+   the controls BELOW the canvas there costs nothing and leaves the fight
+   completely unobstructed - much better than covering a third of an
+   already-small picture.
+
+   In landscape the canvas grows to fill the height and there is no spare
+   room underneath, so the controls move on top of the canvas's bottom
+   corners, semi-transparent, the way an emulator overlay works. */
+.fight-content {
+    position: relative;   /* the overlay in landscape positions against this */
+    display: flex;
+    flex-direction: column;
+}
+
+.fight-touch {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 6px 4px;
+    flex-shrink: 0;
+}
+.fight-touch.hidden { display: none !important; }
+
+.ft-dpad {
+    display: grid;
+    grid-template-columns: repeat(3, 46px);
+    grid-template-rows: repeat(3, 46px);
+    gap: 3px;
+}
+.ft-up { grid-area: 1 / 2; }
+.ft-left { grid-area: 2 / 1; }
+.ft-right { grid-area: 2 / 3; }
+.ft-down { grid-area: 3 / 2; }
+
+.ft-actions { display: flex; align-items: center; gap: 8px; }
+
+.ft-btn {
+    /* Same raised bevel as the Win95 buttons elsewhere, so the controls
+       look like part of the machine rather than bolted on. Arrow glyphs are
+       plain Unicode, not icon-font characters - a control that renders a
+       blank face when an external font fails to load is not a control. */
+    font-size: 20px;
+    line-height: 1;
+    background: linear-gradient(180deg, #dfdfdf 0%, #b8b8b8 100%);
+    border: none;
+    box-shadow:
+        inset 1px 1px 0 #ffffff,
+        inset -1px -1px 0 #4a4a4a,
+        inset 2px 2px 0 #dfdfdf,
+        inset -2px -2px 0 #808080;
+    color: #1a1a1a;
+    font-family: 'Tahoma', 'Segoe UI', sans-serif;
+    font-weight: 700;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    cursor: pointer;
+}
+/* Pressed state comes from a class the JS toggles, not :active - a finger
+   that slides off a held button must still read as pressed, and :active
+   does not survive that. */
+.ft-btn.ft-on {
+    background: linear-gradient(180deg, #9a9a9a 0%, #b8b8b8 100%);
+    box-shadow:
+        inset 1px 1px 0 #4a4a4a,
+        inset -1px -1px 0 #ffffff,
+        inset 2px 2px 0 #808080,
+        inset -2px -2px 0 #dfdfdf;
+}
+.ft-act {
+    width: 62px; height: 62px;
+    border-radius: 50%;
+    font-size: 11px;
+    letter-spacing: 0.03em;
+}
+.ft-punch { background: linear-gradient(180deg, #e8b3b3 0%, #c06a6a 100%); }
+.ft-kick  { background: linear-gradient(180deg, #e8d0a8 0%, #c09a5a 100%); }
+.ft-block { background: linear-gradient(180deg, #b3c6e8 0%, #6a86c0 100%); width: 52px; height: 52px; }
+
+/* Landscape on a phone: no room below the canvas, so float the controls
+   over its bottom corners instead. */
+@media (orientation: landscape) and (max-height: 560px) {
+    .fight-touch {
+        position: absolute;
+        left: 0; right: 0; bottom: 0;
+        /* align-items:flex-end pins both clusters to the bottom edge rather
+           than centring them in whatever height the row ends up with, so
+           they sit in the canvas's corners instead of floating mid-screen. */
+        align-items: flex-end;
+        padding: 0 10px 8px;
+        pointer-events: none;   /* the gaps between buttons stay click-through */
+    }
+    /* Smaller in landscape - the canvas is doing the work and the buttons
+       are borrowing its space, so they take as little of it as possible. */
+    .fight-touch .ft-dpad { grid-template-columns: repeat(3, 40px); grid-template-rows: repeat(3, 40px); }
+    .fight-touch .ft-act { width: 54px; height: 54px; font-size: 10px; }
+    .fight-touch .ft-block { width: 46px; height: 46px; }
+    .fight-touch .ft-dpad,
+    .fight-touch .ft-actions { pointer-events: auto; }
+    .fight-touch .ft-btn { opacity: 0.72; }
+    .fight-touch .ft-btn.ft-on { opacity: 0.95; }
 }
 
 .win95-statusbar {
