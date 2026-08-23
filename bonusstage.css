@@ -354,6 +354,77 @@
     color: #06170e !important;
 }
 
+/* Mid Evils easter egg - same popup/launcher mechanics as the three
+   above (see js/midevils-egg.js), blackletter-red-on-dark-wood palette
+   to match the Mid Evils site theme (.medieval-mode in style.css).
+   Fourth in the row, so it sits another 126px left of Undead's and none
+   of the four overlap if they were ever visible at once.
+
+   NOTE: .medieval-mode carries an animated `filter` (medieval-flicker),
+   and any non-none filter on an ancestor becomes the containing block
+   for position:fixed descendants. That is exactly why the DOMContentLoaded
+   handler in js/midevils-egg.js reparents this element to <html> - these
+   coordinates are only correct because of that. */
+#midevilsEggPopup {
+    position: fixed;
+    right: 402px;
+    bottom: -14px;
+    z-index: 90;
+    cursor: pointer;
+    width: 110px;
+    opacity: 0;
+    transform: translateY(16px) scale(0.9);
+    transition: opacity 0.35s ease, transform 0.35s ease;
+    pointer-events: none;
+    filter: drop-shadow(0 8px 18px rgba(0,0,0,0.65)) drop-shadow(0 2px 6px rgba(0,0,0,0.5));
+}
+#midevilsEggPopup.show {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    pointer-events: auto;
+}
+#midevilsEggPopup img {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+#midevilsEggPopup .midevils-egg-tag {
+    position: absolute;
+    top: -10px;
+    right: -6px;
+    background: #1a1208;
+    color: #e04a4a;
+    border: 2px solid #7a2420;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 800;
+    padding: 2px 7px;
+    white-space: nowrap;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.5), 0 0 8px rgba(198,40,40,0.35);
+}
+/* The launcher window deliberately keeps the Win95 Tahoma face rather
+   than inheriting the theme's blackletter - the joke is a 90s desktop
+   window, and MedievalSharp in a titlebar just reads as broken. */
+#midevilsLauncherOverlay { font-family: 'Tahoma', 'Segoe UI', Geneva, Verdana, sans-serif; }
+#midevilsLauncherOverlay.hidden { display: none !important; }
+.midevils-titlebar {
+    background: linear-gradient(180deg, #7a2420 0%, #1a1208 100%) !important;
+}
+.midevils-launcher-bg {
+    background: #0f0a04 !important;
+}
+.midevils-launcher-bg .conmen-launcher-inner {
+    background: linear-gradient(160deg, #1a1208 0%, #0f0a04 100%);
+}
+.midevils-launcher-bg .conmen-launcher-inner h2 {
+    color: #e04a4a;
+    text-shadow: 0 0 10px rgba(198,40,40,0.45);
+}
+.midevils-launcher-btn {
+    background: linear-gradient(180deg, #d4a24c 0%, #7a2420 100%) !important;
+    color: #1a1208 !important;
+}
+
 /* Embedded game wrapper - hidden until openUndeadEmbed() builds the
    iframe into it, then fills the same content area the intro screen
    used so nothing jumps around on the swap. */
