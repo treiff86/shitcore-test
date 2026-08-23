@@ -39,7 +39,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Local styles (FIXED PATH) -->
     <link rel="stylesheet" href="style.css?v=53">
-    <link rel="stylesheet" href="bonusstage.css?v=13">
+    <link rel="stylesheet" href="bonusstage.css?v=14">
 </head>
 <body class="overflow-x-hidden min-h-screen flex flex-col justify-between">
     <!-- Hand-drawn wobble filter for the chart canvas in Mid Evils mode -
@@ -1313,14 +1313,15 @@
                 <span>File</span><span>Edit</span><span>View</span><span>Help</span>
             </div>
             <div class="win95-content-full midevils-launcher-bg">
-                <div class="conmen-launcher-inner">
+                <div id="midevilsLauncherIntro" class="conmen-launcher-inner">
                     <img src="assets/midevils-easteregg.webp" alt="">
-                    <h2>Ye Have Smelt what the Rock cooketh.</h2>
-                    <p>Six hundred years dead and still better dressed than you. The old court does not take visitors - but it does whoop ass. Approach the arena and play your respects.</p>
-                    <a class="conmen-launcher-btn midevils-launcher-btn" href="<iframe src="https://classicjoy.games/embed?slug=wwf-no-mercy" width="800" height="600" frameborder="0" allowfullscreen></iframe>" target="_blank" rel="noopener noreferrer">
-                        <i class="fa-solid fa-arrow-up-right-from-square"></i> Enter the ARENA
-                    </a>
+                    <h2>Ye Have Disturbed the Crypt.</h2>
+                    <p>Six hundred years dead and still throwing hands. The old court settled everything in the ring, and the ring is still standing. Climb the turnbuckle and settle yours.</p>
+                    <button type="button" class="conmen-launcher-btn midevils-launcher-btn" onclick="openMidEvilsEmbed()">
+                        <i class="fa-solid fa-play"></i> Enter the Ring
+                    </button>
                 </div>
+                <div id="midevilsEmbedWrap" class="midevils-embed-wrap hidden"></div>
             </div>
             <div class="win95-statusbar">
                 <span class="win95-statusfield">Ready</span>
@@ -1406,7 +1407,7 @@
 <script src="js/conmen-egg.js?v=6" defer></script>
 <script src="js/skullx-egg.js?v=4" defer></script>
 <script src="js/undead-egg.js?v=2" defer></script>
-<script src="js/midevils-egg.js?v=1" defer></script>
+<script src="js/midevils-egg.js?v=2" defer></script>
 <script src="js/mcdonalds-egg.js?v=4" defer></script>
 <script src="js/web3.js?v=63" defer></script>
 <script src="js/wizardpopup.js?v=2" defer></script>
