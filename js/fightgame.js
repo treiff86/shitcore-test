@@ -263,6 +263,23 @@ window.FightGame = (function () {
                 { x1: 185, x2: 335, topY: 430, solid: true },
             ],
         },
+        'assets/fight_game/bg_market.webp': {
+            // The Mid Evils arena. It had no entry at all, so it fell back
+            // to the default GROUND = 430 - which put both fighters' feet
+            // level with the market stalls in the middle distance, roughly
+            // 40px above the dirt, visibly hovering. The dirt in front of
+            // the stalls is flat from y=424 all the way down past y=500;
+            // 470 sits them on it, just behind the foreground fence.
+            ground: 470,
+            platforms: [
+                // The long trestle table. Measured off the art by drawing
+                // candidate lines over a render and picking the one that
+                // sat on the plank's top edge: the surface is at y=378 and
+                // the legs meet the dirt around y=440. x stops just inside
+                // the ends so you can run off either side and drop.
+                { x1: 535, x2: 845, topY: 378 },
+            ],
+        },
         'assets/fight_game/bg_skullx.webp': {
             ground: 480,           // throne-room art - estimated from the rug/floor line, no platform (no obvious ledge like some other arenas have) - nudge this if feet look off once it's live
         },
@@ -551,7 +568,9 @@ window.FightGame = (function () {
             this.vx = 0; this.vy = 0; this.facing = facing;
             this.grounded = true;
             this.onPlatform = false;
-            this.pushDist = 0; // how far the collision push has shoved this fighter since the last time they weren't overlapping - see resolveFighterCollision()
+            this._prevX = x;   // position at the start of this frame - resolveFighterCollision() uses it to tell who walked into whom
+            this.kbChain = 0;  // nudges taken in the current flurry; at KB_MAX_CHAIN they plant
+            this.kbResetT = 0; // seconds left before kbChain clears (see tickKnockbackRecovery)
             this.crouching = false;
             this.hp = MAX_HP;
             this.state = 'idle'; this.fr = 0; this.frT = 0;
@@ -869,24 +888,58 @@ window.FightGame = (function () {
         jumpChance: 0.1,          // was 0.08 - slightly more willing to jump in
     };
 
-    // Keeps the two fighters from walking through each other. Only
-    // applies while BOTH are grounded, so jumping over your opponent
-    // still works fine - this just stops full sprite-overlap while both
-    // have feet on the floor. No continuous pushing anymore - per Tim's
-    // request, fighters no longer shove each other around just from
-    // standing close/walking into one another. The only knockback left
-    // in the game now is BLOCK_HIT_NUDGE below, a single small shove
-    // applied once, at the exact moment a hit actually lands on a
-    // blocking defender - not a per-frame proximity effect.
-    const BLOCK_HIT_NUDGE = 18; // px, one-time shove away from the attacker when a hit connects on a blocking defender
+    /* ---------------- BODY CONTACT AND KNOCKBACK ----------------
+       Two separate ideas that used to be tangled together:
+
+       1. WALKING INTO SOMEONE MOVES NOBODY. Previously, when the two
+          sprites overlapped too far, BOTH were shoved apart by half the
+          excess each. Hold forward against a standing opponent and every
+          frame pushed them a little further, so you could walk someone
+          across the whole stage. Now the correction is charged entirely
+          to whoever actually moved inward this frame: walk into a
+          stationary fighter and YOU stop, they don't budge. Walk into each
+          other and you each give back your own share.
+
+       2. THE ONLY WAY TO MOVE SOMEONE IS TO HIT THEM, and even that runs
+          out. Every landed hit nudges the defender back a little - less
+          when they block it - but only for the first KB_MAX_CHAIN hits of
+          a sequence. After that they plant, so a long combo can't walk
+          anybody into the corner. The counter resets once they've gone
+          KB_RESET_SECONDS without being hit, so it limits a single flurry
+          rather than the whole round. */
+
+    const KB_ON_HIT = 20;        // px, nudge when a clean hit lands
+    const KB_ON_BLOCK = 13;      // px, smaller nudge when they blocked it
+    const KB_MAX_CHAIN = 4;      // nudges in one flurry before they plant
+    const KB_RESET_SECONDS = 0.8; // untouched this long and the count clears
+
+    // Applies a knockback nudge to the defender, respecting the chain cap.
+    // Returns true if they actually moved, false if they've gone stiff.
+    function applyKnockback(defender, attacker, blocked) {
+        if (defender.kbChain >= KB_MAX_CHAIN) {
+            defender.kbResetT = KB_RESET_SECONDS; // still refresh the timer - the flurry is ongoing
+            return false;
+        }
+        defender.kbChain++;
+        defender.kbResetT = KB_RESET_SECONDS;
+        const dir = defender.x < attacker.x ? -1 : 1;
+        const dist = blocked ? KB_ON_BLOCK : KB_ON_HIT;
+        defender.x = Math.max(STAGE_MARGIN, Math.min(SW - STAGE_MARGIN - defender._fw, defender.x + dir * dist));
+        return true;
+    }
+
+    // Ticks the "have they been left alone long enough to recover" timer.
+    function tickKnockbackRecovery(f, dt) {
+        if (f.kbChain <= 0) return;
+        f.kbResetT -= dt;
+        if (f.kbResetT <= 0) { f.kbChain = 0; f.kbResetT = 0; }
+    }
 
     function resolveFighterCollision(p1, p2) {
-        if (!p1.grounded || !p2.grounded) return;
-        // Lets them stand close/overlapping a bit (like sprites clinching
-        // in most 2D fighters) instead of a hard wall the instant they
-        // touch - only closes the gap once they'd overlap by more than
-        // this, and even then just enough to stop true stacking, not a
-        // shove-apart effect.
+        if (!p1.grounded || !p2.grounded) return; // jumping over each other still works
+        // Sprites are allowed to clinch a fair way into each other, the way
+        // they do in most 2D fighters, rather than hitting a hard wall the
+        // moment they touch. Only true stacking gets corrected.
         const ALLOWED_OVERLAP = 45;
 
         const p1Right = p1.x + p1._fw, p2Right = p2.x + p2._fw;
@@ -895,9 +948,29 @@ window.FightGame = (function () {
 
         const leftF = p1.x < p2.x ? p1 : p2;
         const rightF = leftF === p1 ? p2 : p1;
-        const half = (overlap - ALLOWED_OVERLAP) / 2;
-        leftF.x = Math.max(STAGE_MARGIN, leftF.x - half);
-        rightF.x = Math.min(SW - STAGE_MARGIN - rightF._fw, rightF.x + half);
+        const need = overlap - ALLOWED_OVERLAP;
+
+        // How far each one moved TOWARD the other since the last frame.
+        // _prevX is stamped at the top of every fighter update.
+        const leftIn = Math.max(0, leftF.x - (leftF._prevX ?? leftF.x));
+        const rightIn = Math.max(0, (rightF._prevX ?? rightF.x) - rightF.x);
+        const totalIn = leftIn + rightIn;
+
+        if (totalIn <= 0.001) {
+            // Neither of them walked in - they ended up stacked some other
+            // way (a knockback, a landing, a spawn). Nothing to charge to
+            // either side, so split it and just un-stack them.
+            const half = need / 2;
+            leftF.x = Math.max(STAGE_MARGIN, leftF.x - half);
+            rightF.x = Math.min(SW - STAGE_MARGIN - rightF._fw, rightF.x + half);
+            return;
+        }
+
+        // Charge the correction to whoever closed the distance, in
+        // proportion. A fighter standing still contributes 0 and therefore
+        // does not move at all - which is the whole point.
+        leftF.x = Math.max(STAGE_MARGIN, leftF.x - need * (leftIn / totalIn));
+        rightF.x = Math.min(SW - STAGE_MARGIN - rightF._fw, rightF.x + need * (rightIn / totalIn));
     }
 
     // Online-match equivalent of updateCPUInput below - same job (fill in
@@ -1159,14 +1232,13 @@ window.FightGame = (function () {
             attacker.stop = heavy ? HS_HV : HS_LT;
             shake.hit(heavy ? 7.0 : 3.2);
 
-            // The only knockback left in the game - a single small shove,
-            // applied once, only when this hit actually landed on a
-            // blocking defender. No pushing from just standing close or
-            // walking into each other anymore (see resolveFighterCollision).
-            if (defender.blocking) {
-                const pushDir = defender.x < attacker.x ? -1 : 1;
-                defender.x = Math.max(STAGE_MARGIN, Math.min(SW - STAGE_MARGIN - defender._fw, defender.x + pushDir * BLOCK_HIT_NUDGE));
-            }
+            // The ONLY thing in the game that moves an opponent. A clean
+            // hit shoves further than a blocked one, and after
+            // KB_MAX_CHAIN nudges in one flurry they plant and stop
+            // sliding - so a long combo can't walk somebody into the
+            // corner. Walking into them does nothing at all (see
+            // resolveFighterCollision).
+            applyKnockback(defender, attacker, defender.blocking);
 
             fx.push({ x: hb.x + hb.w / 2, y: hb.y + hb.h / 2, l: heavy ? 9 : 6, ml: heavy ? 9 : 6, heavy });
             if (typeof playSfxRandom === 'function') {
@@ -1393,6 +1465,15 @@ window.FightGame = (function () {
             } else if (g.phase === 'playing') {
                 g.timer -= dt;
                 const p1 = g.p1, p2 = g.p2;
+
+                // Stamp where each fighter stood BEFORE anything moved them
+                // this frame. resolveFighterCollision() compares against
+                // this to work out who walked into whom, so that a fighter
+                // standing still is never displaced by one walking into
+                // them. Must happen before any movement code runs.
+                p1._prevX = p1.x; p2._prevX = p2.x;
+                tickKnockbackRecovery(p1, dt);
+                tickKnockbackRecovery(p2, dt);
 
                 updateHumanFighter(dt, p1, P1_BIND);
                 if (window.fightClubOnlineActive) {
