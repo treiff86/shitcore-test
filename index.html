@@ -39,7 +39,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Local styles (FIXED PATH) -->
     <link rel="stylesheet" href="style.css?v=53">
-    <link rel="stylesheet" href="bonusstage.css?v=12">
+    <link rel="stylesheet" href="bonusstage.css?v=13">
 </head>
 <body class="overflow-x-hidden min-h-screen flex flex-col justify-between">
     <!-- Hand-drawn wobble filter for the chart canvas in Mid Evils mode -
@@ -1291,6 +1291,44 @@
         </div>
     </div>
 
+    <div id="midevilsEggPopup" onclick="openMidEvilsLauncher()">
+        <span class="midevils-egg-tag">psst...</span>
+        <img src="assets/midevils-easteregg.webp" alt="">
+    </div>
+
+    <!-- Mid Evils easter egg: same full-screen launcher pattern as
+         Conmen/Skull X - a link-out, not Undead's embedded game -
+         pointing at the Mid Evils listing on Orbison. -->
+    <div id="midevilsLauncherOverlay" class="fixed inset-0 bg-black hidden z-[110]">
+        <div class="win95-window-full">
+            <div class="win95-titlebar midevils-titlebar">
+                <span class="win95-title"><i class="fa-solid fa-chess-rook"></i> MIDEVILS_EASTER.EGG</span>
+                <div class="win95-controls">
+                    <button class="win95-btn" disabled title="Minimize (not implemented)">_</button>
+                    <button class="win95-btn" disabled title="Maximize (not implemented)"><i class="fa-regular fa-square"></i></button>
+                    <button class="win95-btn win95-close" onclick="closeMidEvilsLauncher()" title="Close">&times;</button>
+                </div>
+            </div>
+            <div class="win95-menubar">
+                <span>File</span><span>Edit</span><span>View</span><span>Help</span>
+            </div>
+            <div class="win95-content-full midevils-launcher-bg">
+                <div class="conmen-launcher-inner">
+                    <img src="assets/midevils-easteregg.webp" alt="">
+                    <h2>Ye Have Disturbed the Crypt.</h2>
+                    <p>Six hundred years dead and still better dressed than you. The old court does not take visitors - but it does take offers. Approach the marketplace and pay your respects.</p>
+                    <a class="conmen-launcher-btn midevils-launcher-btn" href="https://www.orbisonsol.io/marketplace/midevils" target="_blank" rel="noopener noreferrer">
+                        <i class="fa-solid fa-arrow-up-right-from-square"></i> Enter the Marketplace
+                    </a>
+                </div>
+            </div>
+            <div class="win95-statusbar">
+                <span class="win95-statusfield">Ready</span>
+                <span class="win95-statusfield">Mid Evils Exclusive</span>
+            </div>
+        </div>
+    </div>
+
     <!-- WIN modal -->
     <div id="winModal" class="fixed inset-0 bg-black/85 flex items-center justify-center z-50 hidden p-4">
         <div class="bg-[#0C0F16] border-2 border-emerald-500/60 neon-glow-green max-w-md w-full p-7 rounded-xl shadow-2xl text-center space-y-4">
@@ -1366,10 +1404,11 @@
 <script src="js/mevghosts.js?v=2" defer></script>
 <script src="js/mevsandwich.js?v=10" defer></script>
 <script src="js/conmen-egg.js?v=6" defer></script>
-<script src="js/skullx-egg.js?v=3" defer></script>
+<script src="js/skullx-egg.js?v=4" defer></script>
 <script src="js/undead-egg.js?v=2" defer></script>
+<script src="js/midevils-egg.js?v=1" defer></script>
 <script src="js/mcdonalds-egg.js?v=4" defer></script>
-<script src="js/web3.js?v=62" defer></script>
+<script src="js/web3.js?v=63" defer></script>
 <script src="js/wizardpopup.js?v=2" defer></script>
 <script src="js/win95desktop.js?v=5" defer></script>
 <script src="js/btcwallet.js?v=20" defer></script>
