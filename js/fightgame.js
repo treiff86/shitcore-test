@@ -387,14 +387,157 @@ window.FightGame = (function () {
         });
     }
 
-    async function loadStrip(fullPath, frameCount, outH) {
+    /* ================= SPRITE SCALING =================
+       THE BUG THIS REPLACES
+
+       loadStrip() used to scale every strip so its FRAME height became
+       exactly P_H. But a frame is just canvas - each state was exported
+       with whatever padding suited it, so frame height says nothing about
+       how big the character is inside it. Two strips of the same fighter,
+       both forced to a 220px frame, render the character at completely
+       different sizes if one has more empty space around it.
+
+       Measured across the real art, that gave up to 49% swing in character
+       size between poses of the SAME fighter - Conmen's death pose a third
+       too small, Wizard's crouch nearly 40% too short, Reiffer's victory
+       13% too big. Five hand-tuned correction constants had accumulated to
+       paper over the worst cases, each a per-character, per-state fudge.
+
+       THE FIX
+
+       Scale by the ARTWORK, not the frame. Each strip is measured - the
+       union of every frame's opaque pixels - and scaled so that artwork is
+       the height the pose is meant to be. Padding stops mattering, and all
+       five correction constants are gone.
+
+       Poses that genuinely SHOULD differ in height are declared once, in
+       the open, in POSE_HEIGHT below - rather than smuggled in as
+       per-character corrections. */
+
+    // Target artwork height per pose, as a fraction of standing height.
+    // Anything unlisted stands full height. These are the only numbers in
+    // the sprite pipeline that are a judgement call rather than measured.
+    const POSE_HEIGHT = {
+        crouch: 0.70, crouch_punch: 0.70, crouch_kick: 0.70,
+        crouch_block: 0.70, crouch_hurt: 0.70,
+        // Checked against the art: every fighter's defeat frame is a
+        // STANDING stagger - clutching the chest, head snapped back, reeling
+        // - not a body on the floor. An early 0.55 here shrank them to dolls.
+        // 0.95 keeps them full-size while allowing for Undead's, which falls
+        // diagonally and so measures a little shorter than upright.
+        defeat: 0.95,
+    };
+    function poseHeightFactor(state) {
+        return Object.prototype.hasOwnProperty.call(POSE_HEIGHT, state) ? POSE_HEIGHT[state] : 1;
+    }
+
+    // Measures each frame's opaque box, then combines them two different
+    // ways because the two jobs want different answers:
+    //
+    //   SCALE comes from the MEDIAN frame height. Not per-frame, which
+    //   would scale a raised-foot walk frame back up to match the others
+    //   and reintroduce the bobbing this system exists to kill. And not the
+    //   union either: a victory animation that throws its arms up for one
+    //   frame has a much taller union, so scaling the whole strip to fit it
+    //   shrinks the character's BODY for the entire celebration - which is
+    //   precisely the "victory dance gets too small" problem. The median
+    //   ignores a single dramatic frame and describes the pose the
+    //   animation actually sits at.
+    //
+    //   FOOT POSITION comes from the UNION bottom, so the lowest point the
+    //   animation ever reaches is what rests on the floor and no frame ever
+    //   sinks through it.
+    // Measured on a DOWNSCALED copy, not the source. These strips are big -
+    // some are over a thousand pixels tall and ten frames wide - and
+    // scanning every one of them at full resolution added 2.6 seconds to
+    // the first fight's load. A bounded copy costs a few milliseconds and
+    // lands within a pixel or two once the result is scaled back, which is
+    // far below anything visible.
+    const MEASURE_MAX_H = 300;   // rows to scan; vertical precision is what matters here
+    const MEASURE_MAX_W = 1200;  // columns to scan
+
+    function measureStripArt(img, frameCount) {
+        const cellW = img.width / frameCount, cellH = img.height;
+        const s = Math.min(1, MEASURE_MAX_H / cellH, MEASURE_MAX_W / img.width);
+        const mw = Math.max(1, Math.round(img.width * s));
+        const mh = Math.max(1, Math.round(cellH * s));
+        const mCellW = mw / frameCount;
+
+        const c = document.createElement('canvas');
+        c.width = mw; c.height = mh;
+        const x = c.getContext('2d');
+        x.drawImage(img, 0, 0, img.width, cellH, 0, 0, mw, mh);
+        let data;
+        try { data = x.getImageData(0, 0, mw, mh).data; }
+        catch (e) { return null; } // unreadable - caller falls back rather than guessing
+
+        // Per-frame boxes.
+        const fTop = new Array(frameCount).fill(mh);
+        const fBot = new Array(frameCount).fill(-1);
+        let left = mw, right = -1, unionBottom = -1;
+        for (let yy = 0; yy < mh; yy++) {
+            const row = yy * mw * 4;
+            for (let xx = 0; xx < mw; xx++) {
+                // Threshold is low on purpose: downscaling softens the very
+                // edge of the artwork, and a high cut-off would eat a pixel
+                // or two off every measurement.
+                if (data[row + xx * 4 + 3] > 4) {
+                    const fi = Math.min(frameCount - 1, Math.floor(xx / mCellW));
+                    if (yy < fTop[fi]) fTop[fi] = yy;
+                    if (yy > fBot[fi]) fBot[fi] = yy;
+                    if (yy > unionBottom) unionBottom = yy;
+                    const inCell = xx % mCellW;
+                    if (inCell < left) left = inCell;
+                    if (inCell > right) right = inCell;
+                }
+            }
+        }
+        if (unionBottom < 0) return null;
+
+        const heights = [];
+        for (let i = 0; i < frameCount; i++) if (fBot[i] >= 0) heights.push(fBot[i] - fTop[i] + 1);
+        if (!heights.length) return null;
+        heights.sort((a, b) => a - b);
+        const median = heights[Math.floor(heights.length / 2)];
+
+        // Back to source pixels so every caller stays in source units.
+        const inv = 1 / s;
+        return {
+            bottom: unionBottom * inv,
+            left: left * inv,
+            right: right * inv,
+            artH: median * inv,                        // scale reference
+            artW: (right - left + 1) * inv,
+        };
+    }
+
+    // Copies a strip's measurements onto an array derived from it. Any
+    // frame list built by hand rather than returned by loadStrip() must go
+    // through this, or draw() falls back to defaults and the pose hovers.
+    function withStripMeta(target, source) {
+        if (source) {
+            target.footPad = source.footPad;
+            target.artW = source.artW;
+            target.artCx = source.artCx;
+        }
+        return target;
+    }
+
+    async function loadStrip(fullPath, frameCount, state) {
         let img;
         try { img = await loadImage(fullPath); }
         catch (e) { console.warn('[fightgame] missing sprite', fullPath, e); return []; }
         const cellW = img.width / frameCount;
         const cellH = img.height;
-        const scale = outH / cellH;
+
+        const art = measureStripArt(img, frameCount);
+        const targetArtH = P_H * poseHeightFactor(state);
+        // Falls back to the old frame-based scale ONLY if the artwork can't
+        // be measured at all, rather than silently guessing a wrong size.
+        const scale = art ? (targetArtH / art.artH) : (targetArtH / cellH);
+
         const outW = Math.max(1, Math.round(cellW * scale));
+        const outH = Math.max(1, Math.round(cellH * scale));
         const frames = [];
         for (let i = 0; i < frameCount; i++) {
             const c = document.createElement('canvas');
@@ -405,95 +548,61 @@ window.FightGame = (function () {
             ctx.drawImage(img, i * cellW, 0, cellW, cellH, 0, 0, outW, outH);
             frames.push(c);
         }
+        // Carried on the array so draw() can put this pose's feet on the
+        // ground and its body on the fighter's collision box, whatever
+        // padding this particular export happened to have.
+        frames.footPad = art ? Math.round((cellH - 1 - art.bottom) * scale) : 0;
+        frames.artW = art ? Math.round(art.artW * scale) : outW;
+        frames.artCx = art ? Math.round(((art.left + art.right) / 2) * scale) : outW / 2;
         return frames;
     }
-
-    // Only Reiffer's ORIGINAL sprites (walk/victory/punch_lo/kick_lo/hurt -
-    // not built by me, pre-existing) have the extra padding problem and
-    // need the size boost. Everything I built this session for him
-    // (block, defeat, jump, crouch, jump_punch, jump_kick, crouch_kick,
-    // crouch_punch) was already scaled to his true reference size directly
-    // - applying the correction to those too was the bug that made his
-    // crouch (and other new poses) render oversized.
-    const REIFFER_LEGACY_PADDED_STATES = new Set(['walk', 'victory', 'punch_lo', 'hurt']); // kick_lo re-cropped tight (see reiffer_kick_lo.webp?v=3 fix) - no longer needs the padding boost
-    const REIFFER_SIZE_CORRECTION = 1.255;
-
-    // Conmen's cloak flows almost to the ground even while he's crouching,
-    // so the crouch/crouch_punch source frames measure nearly as tall as
-    // his standing frames (the cloak fabric fills the frame regardless of
-    // pose) - without this he barely looks any shorter than standing.
-    // crouch_kick isn't listed here because it already measures noticeably
-    // shorter on its own. First-pass estimate - nudge the number if it
-    // still doesn't read as a crouch once you see it live.
-    const CONMEN_CROUCH_STATES = new Set(['crouch', 'crouch_punch']);
-    const CONMEN_CROUCH_CORRECTION = 0.87;
-
-    // Same issue, same fix, different character: the Wizard's robe also
-    // flows to the ground regardless of pose, so all three of his crouch
-    // states measure just as tall as standing. Caught this one proactively
-    // by measuring fill ratios before shipping, rather than waiting for a
-    // bug report - same correction value as Conmen's fix since the
-    // underlying cause and target look are identical.
-    const WIZARD_CROUCH_STATES = new Set(['crouch', 'crouch_kick', 'crouch_punch']);
-    const WIZARD_CROUCH_CORRECTION = 0.61; // 0.87 * 0.7 - shrunk another 30% on top of the first pass per feedback
-
-    // The new dedicated hurt sprite fills its own canvas noticeably less
-    // than his reference walk pose (~83% vs ~98%), so without this he'd
-    // render smaller than every other state during a hit reaction.
-    const WIZARD_BOOST_STATES = new Set(['hurt']);
-    const WIZARD_BOOST_CORRECTION = 1.18;
-
-    // Skull X's coat/cape reaches near the ground in every pose too (same
-    // root cause as Conmen/Wizard above), so raw crouch frame height
-    // doesn't read as noticeably shorter than standing without this.
-    // Genuinely a first-pass estimate this time - unlike Conmen/Wizard,
-    // there was no live match to check fill ratios against yet, so
-    // starting halfway between their two values. Nudge once it's live.
-    const SKULLX_CROUCH_STATES = new Set(['crouch', 'crouch_kick', 'crouch_punch', 'crouch_block', 'crouch_hurt']);
-    const SKULLX_CROUCH_CORRECTION = 0.75;
 
     async function loadFighterAnims(key) {
         const files = FIGHTER_ANIM_FILES[key];
         const anims = {};
         for (const state in files) {
             const [path, count] = files[state];
-            let outH = P_H;
-            if (key === 'reiffer' && REIFFER_LEGACY_PADDED_STATES.has(state)) outH = P_H * REIFFER_SIZE_CORRECTION;
-            else if (key === 'conmen' && CONMEN_CROUCH_STATES.has(state)) outH = P_H * CONMEN_CROUCH_CORRECTION;
-            else if (key === 'wizard' && WIZARD_CROUCH_STATES.has(state)) outH = P_H * WIZARD_CROUCH_CORRECTION;
-            else if (key === 'wizard' && WIZARD_BOOST_STATES.has(state)) outH = P_H * WIZARD_BOOST_CORRECTION;
-            else if (key === 'skullx' && SKULLX_CROUCH_STATES.has(state)) outH = P_H * SKULLX_CROUCH_CORRECTION;
-            anims[state] = await loadStrip(path, count, outH);
+            // The state itself is all loadStrip needs now - it measures the
+            // artwork and scales to POSE_HEIGHT[state]. No per-character
+            // fudge factors, no frame-padding guesswork.
+            anims[state] = await loadStrip(path, count, state);
         }
-        anims.idle = (anims.idle && anims.idle.length) ? anims.idle : (anims.walk.length ? [anims.walk[0]] : []);
+        // Characters with no idle strip of their own stand on the first
+        // frame of their walk cycle. Building a NEW array here would drop
+        // the measurements loadStrip() attached to the original - and those
+        // are exactly what put the feet on the floor and the body on the
+        // collision box, so the derived pose would hover by however much
+        // padding its source export happened to have. Carry them across.
+        anims.idle = (anims.idle && anims.idle.length)
+            ? anims.idle
+            : (anims.walk.length ? withStripMeta([anims.walk[0]], anims.walk) : []);
 
-        /* FOOT ALIGNMENT - why everyone looked like they were hovering.
+        /* FOOT ALIGNMENT is now per STRIP, not per character.
 
-           Sprites are bottom-anchored: the frame's bottom edge is placed on
-           the arena's ground line. That only puts FEET on the ground if the
-           art has no transparent margin below them, and most of this set
-           does. Measured from the source strips:
+           Every strip already knows its own `footPad` - the gap between the
+           bottom of its frame and the bottom of its artwork, measured in
+           loadStrip() at the scale that strip was actually rendered at. So
+           each pose lands its own feet on the floor, rather than every pose
+           inheriting one number measured off the walk cycle. That old
+           approach was right for characters whose exports were uniform and
+           wrong for everyone else.
 
-             reiffer  9px of empty space under the shoes (of a 300px frame,
-                      and his legacy strips get scaled UP by 1.255, so it
-                      lands as ~8px on screen)
-             undead   26px of 835 -> ~7px on screen
-             wizard   10px of 951 -> ~2px
-             conmen    3px of 668 -> ~1px
-             skullx    0px        -> already correct
-
-           So Reiffer floated about 8px on every single stage and Skull X
-           didn't float at all, which is exactly the inconsistency that made
-           it read as a bug rather than a style.
-
-           This measures the character's own walk strip once at load and
-           shifts that character down by the gap. Deliberately measured from
-           ONE reference pose and applied to all of their states: per-frame
-           correction would be wrong, because a jump or a crouch is SUPPOSED
-           to have the feet higher in the frame, and auto-flattening those
-           would destroy the animation. */
-        anims._footPad = measureFootPad(anims.walk && anims.walk.length ? anims.walk[0] : anims.idle[0]);
-        console.log(`[fightgame] ${key}: foot gap ${anims._footPad}px - sprite shifted down by that much so the feet meet the floor`);
+           BODY WIDTH is fixed here too. `_fw` - the collision box, the
+           stage clamp, and the origin every hitbox is measured from - used
+           to be overwritten on every single frame with the current sprite
+           CANVAS width. So a fighter's hitbox silently changed shape
+           mid-animation, and a pose exported on a wider canvas got a wider
+           body for no reason the player could see. It is now measured once,
+           from the standing pose's actual artwork, and never changes. */
+        // Measured from the standing pose's artwork, with only a sanity
+        // clamp. Deliberately NOT normalised across characters: the Wizard
+        // and Skull X really are wider silhouettes because of the robe and
+        // the cape, and those were already their effective widths while
+        // walking, so keeping them preserves the spacing the game already
+        // had. What changes is that the number now holds still - it used to
+        // swing from 83px to 315px between Reiffer's own animation frames.
+        const stand = (anims.walk && anims.walk.length) ? anims.walk : anims.idle;
+        anims._bodyW = Math.max(70, Math.min(260, Math.round((stand && stand.artW) || 90)));
 
         // PLACEHOLDERS for anything not defined above in FIGHTER_ANIM_FILES -
         // replace the corresponding FIGHTER_ANIM_FILES entry with a real
@@ -507,26 +616,6 @@ window.FightGame = (function () {
         return anims;
     }
 
-    // Transparent rows below the lowest opaque pixel of a rendered frame.
-    // Returns 0 for anything unreadable rather than guessing, so a failure
-    // here can only ever mean "no correction applied", never a wrong one.
-    function measureFootPad(frameCanvas) {
-        if (!frameCanvas || !frameCanvas.width || !frameCanvas.height) return 0;
-        try {
-            const c = frameCanvas.getContext('2d');
-            const w = frameCanvas.width, h = frameCanvas.height;
-            const data = c.getImageData(0, 0, w, h).data;
-            for (let y = h - 1; y >= 0; y--) {
-                const row = y * w * 4;
-                for (let x = 0; x < w; x++) {
-                    if (data[row + x * 4 + 3] > 8) return h - 1 - y; // alpha > 8 = a real pixel
-                }
-            }
-        } catch (e) {
-            console.warn('[fightgame] could not measure foot padding, leaving it uncorrected:', e);
-        }
-        return 0;
-    }
 
     let lastArenaBg = null; // tracks the previous match's background so the next one never repeats it
 
@@ -574,7 +663,13 @@ window.FightGame = (function () {
             this.crouching = false;
             this.hp = MAX_HP;
             this.state = 'idle'; this.fr = 0; this.frT = 0;
-            this._fw = 90;
+            // Fixed for the whole match, measured from this character's
+            // standing artwork (see loadFighterAnims). Everything positional
+            // hangs off this - the collision box, the stage clamp, every
+            // hitbox origin - so it must not change between animation
+            // frames the way it used to.
+            this._fw = (anims && anims._bodyW) || 90;
+            this._strip = null;
             this.atkT = 0; this.atkDur = 0; this.hitReg = false; this.canW = false; this.canT = 0;
             this.stop = 0;
             this.blocking = false;
@@ -714,29 +809,42 @@ window.FightGame = (function () {
             }
             const frames = this.anims[stateForFrames] && this.anims[stateForFrames].length ? this.anims[stateForFrames] : this.anims.idle;
             if (!frames || !frames.length) return null;
-            const s = frames[this.fr % frames.length];
-            if (s && s.width !== this._fw) this._fw = s.width;
-            return s;
+            // Remembered so draw() can read this strip's measured foot
+            // padding and artwork centre. `_fw` is deliberately NOT touched
+            // here any more - it used to be reassigned to this frame's
+            // canvas width every single frame, which silently changed the
+            // fighter's collision box and every hitbox origin mid-animation.
+            this._strip = frames;
+            return frames[this.fr % frames.length];
         }
 
         draw(ctx, so) {
             const img = this._surf();
             if (!img) return;
-            const sx = Math.round(this.x + so[0]);
-            // Bottom-anchored: most sprites are exactly P_H tall (this is a
-            // no-op for those), but some dynamic poses (e.g. a full diagonal
-            // jump-punch) need a taller canvas to avoid cropping the head or
-            // limbs. Anchoring by the bottom keeps feet/ground-contact in the
-            // same place regardless of a given frame's actual height.
-            // `_footPad` closes the gap between the bottom of the frame and
-            // the bottom of the actual artwork - see the FOOT ALIGNMENT
-            // note in loadFighterAnims(). Without it a character whose art
-            // has empty space under the shoes hovers above every floor in
-            // the game by exactly that many pixels.
-            const sy = Math.round(this.y + P_H - img.height + so[1] + (this.anims._footPad || 0));
+            const strip = this._strip;   // the array this frame came from, carrying its measurements
+
+            // VERTICAL: put the artwork's FEET on the fighter's baseline.
+            // Anchoring on the frame's bottom edge alone would leave any
+            // pose exported with empty space beneath the shoes hovering by
+            // exactly that much - and every export has a different amount.
+            const footPad = (strip && strip.footPad) || 0;
+            const sy = Math.round(this.y + P_H - img.height + so[1] + footPad);
+
+            // HORIZONTAL: centre the artwork on the collision box, rather
+            // than aligning the frame's left edge to it. Frames differ in
+            // width from pose to pose, so left-aligning made the character
+            // visibly slide sideways whenever the state changed - most
+            // obvious going into and out of a crouch.
+            const bodyCx = this.x + this._fw / 2;
+            const artCx = (strip && strip.artCx != null) ? strip.artCx : img.width / 2;
+            const sx = Math.round(bodyCx - artCx + so[0]);
+
             if (this.facing === -1) {
+                // Mirror about the artwork's own centre, not the frame's -
+                // otherwise a frame with lopsided padding jumps sideways
+                // the moment the fighter turns around.
                 ctx.save();
-                ctx.translate(sx + this._fw, sy);
+                ctx.translate(Math.round(bodyCx + artCx + so[0]), sy);
                 ctx.scale(-1, 1);
                 ctx.drawImage(img, 0, 0);
                 ctx.restore();
