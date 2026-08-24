@@ -693,6 +693,32 @@ window.BonusStage = (function () {
         window.addEventListener('keyup', keyupHandler);
         keydownHandler._keyupPair = keyupHandler; // stash so stop() can remove it too
 
+        /* ---------------- TOUCH CONTROLS ----------------
+           Same approach as the fight game's pad: the buttons drive the very
+           same `keys` object and input buffer the keyboard does, so there is
+           no parallel input path that could drift out of step.
+
+           The fryer needs far less than a fighter - it only walks left and
+           right and throws two attacks - so this is a two-button row plus
+           two action buttons rather than a full d-pad.
+
+           Restarting after a win or loss is a TAP ON THE CANVAS rather than
+           another button. On a keyboard that is ENTER, and there is no
+           on-screen equivalent worth dedicating a button to for something
+           you press once at the end of a round. */
+        bindBonusTouchPad({
+            press: (name, on) => {
+                if (name === 'left') keys.left = on;
+                else if (name === 'right') keys.right = on;
+                else if (on && g.phase === 'playing') {
+                    g.player.ib.push(name === 'punch' ? 'punch_lo' : 'kick_lo');
+                }
+            },
+            tapCanvas: () => {
+                if (g.phase === 'won' || g.phase === 'lost') g = newGame(reifferAnims, fryerImgs);
+            },
+        });
+
         let last = performance.now();
         function frame(now) {
             const dt = Math.min((now - last) / 1000, 0.05);
@@ -795,6 +821,77 @@ window.BonusStage = (function () {
         rafId = requestAnimationFrame(frame);
     }
 
+    let _btButtons = [];
+    let _btCanvasTap = null;
+    let _btReveal = null;
+
+    function bindBonusTouchPad(handlers) {
+        unbindBonusTouchPad();
+        const pad = document.getElementById('bonusTouchPad');
+        const canvas = document.getElementById('bonusStageCanvas');
+        if (!pad) return;
+
+        pad.querySelectorAll('[data-bonus-key]').forEach((el) => {
+            const name = el.getAttribute('data-bonus-key');
+            const onDown = (ev) => {
+                ev.preventDefault();   // no scroll, no zoom, no synthetic click
+                ev.stopPropagation();
+                el.classList.add('ft-on');
+                handlers.press(name, true);
+            };
+            // touchcancel matters as much as touchend: an incoming call or
+            // the browser reclaiming the gesture fires cancel, and without
+            // it a held direction would stay stuck on for the rest of the
+            // round.
+            const onUp = (ev) => {
+                ev.preventDefault();
+                el.classList.remove('ft-on');
+                handlers.press(name, false);
+            };
+            el.addEventListener('touchstart', onDown, { passive: false });
+            el.addEventListener('touchend', onUp, { passive: false });
+            el.addEventListener('touchcancel', onUp, { passive: false });
+            _btButtons.push({ el, onDown, onUp });
+        });
+
+        if (canvas) {
+            _btCanvasTap = (ev) => { ev.preventDefault(); handlers.tapCanvas(); };
+            canvas.addEventListener('touchstart', _btCanvasTap, { passive: false });
+        }
+
+        // Revealed by the first REAL touch, not by user-agent sniffing or an
+        // 'ontouchstart' check - plenty of laptops report touch support
+        // while the person is using a mouse.
+        if (pad.classList.contains('hidden')) {
+            _btReveal = () => {
+                pad.classList.remove('hidden');
+                window.removeEventListener('touchstart', _btReveal, true);
+                _btReveal = null;
+            };
+            window.addEventListener('touchstart', _btReveal, true);
+        }
+    }
+
+    function unbindBonusTouchPad() {
+        _btButtons.forEach(({ el, onDown, onUp }) => {
+            // The options object must match the one used to add these, or
+            // the browser treats it as a different listener and never
+            // removes it.
+            el.removeEventListener('touchstart', onDown, { passive: false });
+            el.removeEventListener('touchend', onUp, { passive: false });
+            el.removeEventListener('touchcancel', onUp, { passive: false });
+            el.classList.remove('ft-on');
+        });
+        _btButtons = [];
+        const canvas = document.getElementById('bonusStageCanvas');
+        if (canvas && _btCanvasTap) canvas.removeEventListener('touchstart', _btCanvasTap, { passive: false });
+        _btCanvasTap = null;
+        if (_btReveal) {
+            window.removeEventListener('touchstart', _btReveal, true);
+            _btReveal = null;
+        }
+    }
+
     function stop() {
         if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
         if (keydownHandler) {
@@ -802,6 +899,7 @@ window.BonusStage = (function () {
             if (keydownHandler._keyupPair) window.removeEventListener('keyup', keydownHandler._keyupPair);
             keydownHandler = null;
         }
+        unbindBonusTouchPad();
         if (themeMusic) { themeMusic.pause(); themeMusic.currentTime = 0; }
     }
 
