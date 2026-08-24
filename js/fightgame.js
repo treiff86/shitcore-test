@@ -414,22 +414,48 @@ window.FightGame = (function () {
        the open, in POSE_HEIGHT below - rather than smuggled in as
        per-character corrections. */
 
-    // Target artwork height per pose, as a fraction of standing height.
-    // Anything unlisted stands full height. These are the only numbers in
-    // the sprite pipeline that are a judgement call rather than measured.
-    const POSE_HEIGHT = {
-        crouch: 0.70, crouch_punch: 0.70, crouch_kick: 0.70,
-        crouch_block: 0.70, crouch_hurt: 0.70,
-        // Checked against the art: every fighter's defeat frame is a
-        // STANDING stagger - clutching the chest, head snapped back, reeling
-        // - not a body on the floor. An early 0.55 here shrank them to dolls.
-        // 0.95 keeps them full-size while allowing for Undead's, which falls
-        // diagonally and so measures a little shorter than upright.
-        defeat: 0.95,
-    };
-    function poseHeightFactor(state) {
-        return Object.prototype.hasOwnProperty.call(POSE_HEIGHT, state) ? POSE_HEIGHT[state] : 1;
-    }
+    /* HOW A POSE'S SIZE IS DECIDED
+
+       First attempt normalised each strip so its bounding-box HEIGHT hit a
+       target. That is only a measure of the character while they are stood
+       upright, and it broke badly the moment a pose was not:
+
+         - Undead's death pose is a body falling DIAGONALLY. Short bounding
+           box, wide bounding box. Forcing its height up to standing height
+           inflated the entire sprite - it rendered roughly three times too
+           big, lying across half the arena.
+         - Skull X's crouch has a cape that still reaches the floor, so its
+           box is nearly full height even though he is crouched. Squashing
+           that box to 70% shrank the CHARACTER rather than the pose.
+
+       Height was simply the wrong ruler. What actually stays constant as a
+       character changes pose is how much of them there IS - the count of
+       lit pixels. A body lying down has about the same pixel area as the
+       same body standing; arms raised in a victory pose add height but
+       barely any area.
+
+       So every strip is now scaled so its OPAQUE PIXEL AREA matches the
+       character's standing pose. Size stops depending on orientation, and
+       the pose-height table is gone entirely: a crouch ends up shorter
+       because a crouch IS shorter, not because a number said so. */
+
+    /* SAFETY BAND, and why it bounds the OUTPUT rather than the scale.
+
+       An early version clamped the scale FACTOR to within ~20% of the
+       standing pose's. That was wrong, and visibly so: Conmen's block is
+       exported at 120x240 while his walk is 668 tall, so his block
+       legitimately needs about three times the scale to come out the same
+       size. Clamping the factor crushed it to 44% and he blocked as a
+       doll.
+
+       Scale factors are meaningless to compare - every strip was exported
+       at a different resolution. What is worth bounding is the RESULT: how
+       tall the character actually ends up on screen. The band is wide
+       enough to leave every real pose alone (a body on the floor is short,
+       a victory pose with arms up is tall) and only catches a measurement
+       that has gone properly wrong. */
+    const POSE_MIN_H = 0.45;   // x P_H
+    const POSE_MAX_H = 1.55;   // x P_H
 
     // Measures each frame's opaque box, then combines them two different
     // ways because the two jobs want different answers:
@@ -474,6 +500,7 @@ window.FightGame = (function () {
         // Per-frame boxes.
         const fTop = new Array(frameCount).fill(mh);
         const fBot = new Array(frameCount).fill(-1);
+        const fArea = new Array(frameCount).fill(0);
         let left = mw, right = -1, unionBottom = -1;
         for (let yy = 0; yy < mh; yy++) {
             const row = yy * mw * 4;
@@ -483,6 +510,7 @@ window.FightGame = (function () {
                 // or two off every measurement.
                 if (data[row + xx * 4 + 3] > 4) {
                     const fi = Math.min(frameCount - 1, Math.floor(xx / mCellW));
+                    fArea[fi]++;
                     if (yy < fTop[fi]) fTop[fi] = yy;
                     if (yy > fBot[fi]) fBot[fi] = yy;
                     if (yy > unionBottom) unionBottom = yy;
@@ -494,11 +522,17 @@ window.FightGame = (function () {
         }
         if (unionBottom < 0) return null;
 
-        const heights = [];
-        for (let i = 0; i < frameCount; i++) if (fBot[i] >= 0) heights.push(fBot[i] - fTop[i] + 1);
+        const heights = [], areas = [];
+        for (let i = 0; i < frameCount; i++) {
+            if (fBot[i] < 0) continue;
+            heights.push(fBot[i] - fTop[i] + 1);
+            areas.push(fArea[i]);
+        }
         if (!heights.length) return null;
         heights.sort((a, b) => a - b);
+        areas.sort((a, b) => a - b);
         const median = heights[Math.floor(heights.length / 2)];
+        const medianArea = areas[Math.floor(areas.length / 2)];
 
         // Back to source pixels so every caller stays in source units.
         const inv = 1 / s;
@@ -506,8 +540,11 @@ window.FightGame = (function () {
             bottom: unionBottom * inv,
             left: left * inv,
             right: right * inv,
-            artH: median * inv,                        // scale reference
+            artH: median * inv,                  // still used for the standing reference
             artW: (right - left + 1) * inv,
+            // Area is measured on the DOWNSCALED copy, so convert back by
+            // inv squared - it is an area, not a length.
+            artArea: medianArea * inv * inv,
         };
     }
 
@@ -523,19 +560,23 @@ window.FightGame = (function () {
         return target;
     }
 
-    async function loadStrip(fullPath, frameCount, state) {
+    // Loads and measures a strip WITHOUT rendering it. Scale can't be
+    // decided per-strip any more: it depends on the character's standing
+    // pose, which may not have been measured yet. So measurement and
+    // rendering are two passes.
+    async function measureStrip(fullPath, frameCount) {
         let img;
         try { img = await loadImage(fullPath); }
-        catch (e) { console.warn('[fightgame] missing sprite', fullPath, e); return []; }
+        catch (e) { console.warn('[fightgame] missing sprite', fullPath, e); return null; }
+        return { img, frameCount, art: measureStripArt(img, frameCount) };
+    }
+
+    // Renders a measured strip at an explicit scale.
+    function renderStrip(m, scale) {
+        if (!m) return [];
+        const { img, frameCount, art } = m;
         const cellW = img.width / frameCount;
         const cellH = img.height;
-
-        const art = measureStripArt(img, frameCount);
-        const targetArtH = P_H * poseHeightFactor(state);
-        // Falls back to the old frame-based scale ONLY if the artwork can't
-        // be measured at all, rather than silently guessing a wrong size.
-        const scale = art ? (targetArtH / art.artH) : (targetArtH / cellH);
-
         const outW = Math.max(1, Math.round(cellW * scale));
         const outH = Math.max(1, Math.round(cellH * scale));
         const frames = [];
@@ -559,13 +600,49 @@ window.FightGame = (function () {
 
     async function loadFighterAnims(key) {
         const files = FIGHTER_ANIM_FILES[key];
-        const anims = {};
+
+        // PASS 1 - measure every strip. Nothing is rendered yet, because the
+        // scale each one needs depends on the character's standing pose.
+        const measured = {};
         for (const state in files) {
             const [path, count] = files[state];
-            // The state itself is all loadStrip needs now - it measures the
-            // artwork and scales to POSE_HEIGHT[state]. No per-character
-            // fudge factors, no frame-padding guesswork.
-            anims[state] = await loadStrip(path, count, state);
+            measured[state] = await measureStrip(path, count);
+        }
+
+        // The standing reference. Its scale is set the old way - artwork
+        // height to P_H - so standing characters come out exactly the size
+        // they already were, and nothing about the game's feel shifts.
+        const refKey = (measured.walk && measured.walk.art) ? 'walk'
+                     : ((measured.idle && measured.idle.art) ? 'idle' : null);
+        const ref = refKey ? measured[refKey] : null;
+        const refScale = ref ? (P_H / ref.art.artH) : 1;
+        // Target lit-pixel count for this character, in on-screen pixels.
+        // Every other pose is scaled to match it.
+        const targetArea = ref ? (ref.art.artArea * refScale * refScale) : 0;
+
+        // PASS 2 - render each strip at the scale that makes its pixel area
+        // match the standing pose.
+        const anims = {};
+        for (const state in files) {
+            const m = measured[state];
+            if (!m) { anims[state] = []; continue; }
+            let scale = refScale;
+            if (m.art && targetArea > 0 && m.art.artArea > 0) {
+                scale = Math.sqrt(targetArea / m.art.artArea);
+                // Guard on the RESULT, not the factor - see the note on
+                // POSE_MIN_H. Only trips when a measurement has genuinely
+                // gone wrong, and says so rather than failing quietly.
+                const outH = m.art.artH * scale;
+                const lo = P_H * POSE_MIN_H, hi = P_H * POSE_MAX_H;
+                if (outH < lo || outH > hi) {
+                    const fixed = (outH < lo ? lo : hi) / m.art.artH;
+                    console.warn(`[fightgame] ${key}/${state}: area scaling wanted ${Math.round(outH)}px tall, outside ${Math.round(lo)}-${Math.round(hi)} - clamped`);
+                    scale = fixed;
+                }
+            } else if (m.art) {
+                scale = P_H / m.art.artH;   // no reference to compare against
+            }
+            anims[state] = renderStrip(m, scale);
         }
         // Characters with no idle strip of their own stand on the first
         // frame of their walk cycle. Building a NEW array here would drop
@@ -1077,10 +1154,23 @@ window.FightGame = (function () {
 
     function resolveFighterCollision(p1, p2) {
         if (!p1.grounded || !p2.grounded) return; // jumping over each other still works
-        // Sprites are allowed to clinch a fair way into each other, the way
-        // they do in most 2D fighters, rather than hitting a hard wall the
-        // moment they touch. Only true stacking gets corrected.
-        const ALLOWED_OVERLAP = 45;
+        /* How far the two bodies may clinch before they stop closing.
+
+           This was a flat 45px, chosen back when `_fw` was whatever the
+           current sprite CANVAS happened to measure - typically 190-223px
+           while walking, so 45 was about a fifth of a body and read as a
+           clinch.
+
+           Fixing `_fw` to the real artwork width made those bodies much
+           narrower (Undead is 117px), and the same 45 became a THIRD of a
+           body. Nobody is displaced by it - walking into someone still
+           moves them zero pixels - but you end up standing so far inside
+           your opponent that it reads as shoving through them, which is
+           what it looked like.
+
+           Proportional to the narrower of the two fighters, so it means the
+           same thing whoever is on screen. */
+        const ALLOWED_OVERLAP = Math.round(0.22 * Math.min(p1._fw, p2._fw));
 
         const p1Right = p1.x + p1._fw, p2Right = p2.x + p2._fw;
         const overlap = Math.min(p1Right, p2Right) - Math.max(p1.x, p2.x);
