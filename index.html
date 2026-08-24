@@ -39,7 +39,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Local styles (FIXED PATH) -->
     <link rel="stylesheet" href="style.css?v=53">
-    <link rel="stylesheet" href="bonusstage.css?v=15">
+    <link rel="stylesheet" href="bonusstage.css?v=16">
 </head>
 <body class="overflow-x-hidden min-h-screen flex flex-col justify-between">
     <!-- Hand-drawn wobble filter for the chart canvas in Mid Evils mode -
@@ -1110,8 +1110,21 @@
             <div class="win95-menubar">
                 <span>File</span><span>Edit</span><span>View</span><span>Help</span>
             </div>
-            <div class="win95-content">
+            <div class="win95-content fight-content">
                 <canvas id="bonusStageCanvas" width="960" height="540"></canvas>
+                <!-- Touch controls, same mechanism as the fight game's (see
+                     bindBonusTouchPad in js/bonusstage.js). Fewer inputs here:
+                     the fryer only needs left/right and two attacks. -->
+                <div id="bonusTouchPad" class="fight-touch hidden">
+                    <div class="ft-dpad ft-dpad-lr">
+                        <button type="button" class="ft-btn ft-left" data-bonus-key="left" aria-label="Move left">&#9664;</button>
+                        <button type="button" class="ft-btn ft-right" data-bonus-key="right" aria-label="Move right">&#9654;</button>
+                    </div>
+                    <div class="ft-actions">
+                        <button type="button" class="ft-btn ft-act ft-kick" data-bonus-key="kick" aria-label="Kick">KICK</button>
+                        <button type="button" class="ft-btn ft-act ft-punch" data-bonus-key="punch" aria-label="Punch">PUNCH</button>
+                    </div>
+                </div>
             </div>
             <div class="win95-statusbar">
                 <span class="win95-statusfield">Ready</span>
@@ -1418,7 +1431,7 @@
 <script src="js/volatility.js" defer></script>
 <script src="js/staking.js" defer></script>
 <script src="js/perks.js?v=5" defer></script>
-<script src="js/bonusstage.js?v=22" defer></script>
+<script src="js/bonusstage.js?v=23" defer></script>
 <script src="js/fightgame.js?v=53" defer></script>
 <script src="js/mevghosts.js?v=2" defer></script>
 <script src="js/mevsandwich.js?v=11" defer></script>
