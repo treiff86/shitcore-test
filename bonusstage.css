@@ -159,14 +159,14 @@
    pinch-zooming before it dispatches anything to JavaScript. Both halves
    are required, which is why they carry matching comments.
 
-   The bonus stage canvas is still left out on purpose. Turning this on for
-   a canvas that ignores touch would just swallow the gesture - dragging
-   would neither scroll the page nor do anything in the game. It gets this
-   line at the same time it gets its handlers. */
+   All three canvases have touch handlers now, so all three get this. */
 #mevSandwichCanvas,
 #fightGameCanvas,
+#bonusStageCanvas,
 #fightTouchPad,
-#fightTouchPad .ft-btn {
+#bonusTouchPad,
+#fightTouchPad .ft-btn,
+#bonusTouchPad .ft-btn {
     -ms-touch-action: none;
     touch-action: none;
 
@@ -215,6 +215,14 @@
     grid-template-rows: repeat(3, 46px);
     gap: 3px;
 }
+.ft-dpad-lr {
+    grid-template-columns: repeat(2, 46px);
+    grid-template-rows: 46px;
+    gap: 10px;
+}
+.ft-dpad-lr .ft-left { grid-area: 1 / 1; }
+.ft-dpad-lr .ft-right { grid-area: 1 / 2; }
+
 .ft-up { grid-area: 1 / 2; }
 .ft-left { grid-area: 2 / 1; }
 .ft-right { grid-area: 2 / 3; }
@@ -283,6 +291,7 @@
     /* Smaller in landscape - the canvas is doing the work and the buttons
        are borrowing its space, so they take as little of it as possible. */
     .fight-touch .ft-dpad { grid-template-columns: repeat(3, 40px); grid-template-rows: repeat(3, 40px); }
+    .fight-touch .ft-dpad-lr { grid-template-columns: repeat(2, 40px); grid-template-rows: 40px; }
     .fight-touch .ft-act { width: 54px; height: 54px; font-size: 10px; }
     .fight-touch .ft-block { width: 46px; height: 46px; }
     .fight-touch .ft-dpad,
