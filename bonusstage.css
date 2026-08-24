@@ -228,7 +228,24 @@
 .ft-right { grid-area: 2 / 3; }
 .ft-down { grid-area: 3 / 2; }
 
-.ft-actions { display: flex; align-items: center; gap: 8px; }
+/* A 2x2 CLUSTER, not a single row.
+
+   Adding the throw made four action buttons, and in one row they pushed
+   the whole control bar wider than a phone screen - measured at 375px
+   wide the d-pad's LEFT button ended up at x=-9, i.e. off the edge.
+   Stacking them two-by-two roughly halves the cluster's width, which puts
+   everything back on screen without shrinking any button below a
+   thumb-friendly size. Reverse row/column so the two primary attacks sit
+   nearest the thumb and the situational ones (block, throw) sit inboard. */
+.ft-actions {
+    display: grid;
+    grid-template-columns: repeat(2, auto);
+    align-items: center;
+    justify-items: center;
+    gap: 6px;
+    direction: rtl;   /* punch/kick land on the outer edge, nearest the thumb */
+}
+.ft-actions > * { direction: ltr; }
 
 .ft-btn {
     /* Same raised bevel as the Win95 buttons elsewhere, so the controls
@@ -274,6 +291,9 @@
 .ft-punch { background: linear-gradient(180deg, #e8b3b3 0%, #c06a6a 100%); }
 .ft-kick  { background: linear-gradient(180deg, #e8d0a8 0%, #c09a5a 100%); }
 .ft-block { background: linear-gradient(180deg, #b3c6e8 0%, #6a86c0 100%); width: 52px; height: 52px; }
+/* Throw sits with the attack buttons but reads as its own thing - it is the
+   only unblockable option, and the only one that is a hard commitment. */
+.ft-throw { background: linear-gradient(180deg, #d9b3e8 0%, #8f6ac0 100%); width: 52px; height: 52px; font-size: 10px; }
 
 /* Landscape on a phone: no room below the canvas, so float the controls
    over its bottom corners instead. */
@@ -292,8 +312,10 @@
        are borrowing its space, so they take as little of it as possible. */
     .fight-touch .ft-dpad { grid-template-columns: repeat(3, 40px); grid-template-rows: repeat(3, 40px); }
     .fight-touch .ft-dpad-lr { grid-template-columns: repeat(2, 40px); grid-template-rows: 40px; }
+    .fight-touch .ft-actions { gap: 5px; }
     .fight-touch .ft-act { width: 54px; height: 54px; font-size: 10px; }
     .fight-touch .ft-block { width: 46px; height: 46px; }
+    .fight-touch .ft-throw { width: 46px; height: 46px; font-size: 9px; }
     .fight-touch .ft-dpad,
     .fight-touch .ft-actions { pointer-events: auto; }
     .fight-touch .ft-btn { opacity: 0.72; }
