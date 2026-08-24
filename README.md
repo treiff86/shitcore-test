@@ -1,8 +1,12 @@
 # Shitcore (USDSHT) — Layer 1 Shitcoin Tycoon
 
-> **v2.0.0: LET HIM COOK!** — The most unhinged fake blockchain tycoon game on GitHub Pages.
+> **v2.1.0: PROVE IT'S YOU** — The most unhinged fake blockchain tycoon game on GitHub Pages.
 
-A 100% free, 100% client-side satirical idle/tycoon game about meme-coin rug pulls, leveraged trading, NFT grifts, and Ponzi yield farms. No real blockchain. No real money ever moves — every dollar is `Math.random()` running in your browser. Wallet connect is real (optional, read-only, just for cloud saves and the leaderboard) but never touches funds or asks for a signature. It exists to satirize crypto culture, not teach or enable it.
+A 100% free satirical idle/tycoon game about meme-coin rug pulls, leveraged trading, NFT grifts, and Ponzi yield farms. No real money ever moves — every dollar *in the game* is `Math.random()` running in your browser. It exists to satirize crypto culture, not teach or enable it.
+
+**Yes, there is real wallet connection.** It is optional — the whole game plays fine having never connected one — but it is genuinely there, and it does four things: unlocks NFT-holder themes, unlocks holder perks, saves your progress to the cloud so you can pick your run back up on any device, and puts you on the live leaderboard. Both Solana (Phantom, Solflare, anything Wallet Standard) and Bitcoin (Xverse, UniSat) wallets are supported.
+
+Connecting is read-only and never touches your funds. Signing in asks your wallet to sign **one plain-text message** so that nobody else can play as you or overwrite your save. A signature is not a transaction: it approves nothing, spends nothing, and cannot move a token — it is the same "sign in" step Magic Eden and Tensor use. Full detail in [Wallet Connect & Leaderboard](#-wallet-connect--leaderboard) below.
 
 ---
 
@@ -96,7 +100,7 @@ Mock OpenSea. Generate real AI art via Pollinations.ai (free, no API key). Mint 
 ---
 
 ### 🥊 Fight Club — Local Brawler *(New in v2.0.0, TEST Play preview)*
-A full side-scrolling fighter buried inside the tycoon game, because why not. Live for holders of any supported collection — Mid Evils, Conmen, Skull X, $MIM/Bitcoin Wizard and Genuine Undead — and they can all match against each other online.
+A full side-scrolling fighter buried inside the tycoon game, because why not. Currently gated to TEST Play while it finishes cooking toward a LIVE release for real Mid Evils and Conmen holders.
 
 - **4 playable characters** — Reiffer (Mid Evils), the Conmen character, the $MIM/Bitcoin Wizard, and Genuine Undead (an office zombie in a suit, exclusive to that theme's preview)
 - **4 arenas** — a prison yard, a medieval market, a wizard's study (with a jumpable table), and a corporate office (with a jumpable reception desk) — each with matching background music where a track exists
@@ -119,16 +123,20 @@ A Street Fighter 2-style beat-em-up against a McDonald's fry machine, accessed v
 
 ## 🔗 Wallet Connect & Leaderboard *(New in v1.6.9)*
 
-Fully optional — the game works exactly the same with zero wallet ever connected, same as v1.0.0.
+Fully optional — the game works exactly the same with zero wallet ever connected, same as v1.0.0. But it is real, and this is what it does.
 
-- **Connect Wallet** — Wallet connect is real. Optional — the game plays fine without one — but connecting unlocks NFT-holder themes, holder perks, cloud saves and the live leaderboard. Connecting is read-only and never touches funds. Signing in asks your wallet to sign one plain-text message so nobody else can play as you or overwrite your save; that's a signature, not a transaction — it approves nothing, spends nothing, and can't move a token.
-- **Cloud save** — your wallet address becomes your save-slot key. Connect from any device and, if a save already exists under that address, you'll be asked whether to load it.
-- **Live Leaderboard** — ranks players by lifetime earned (the same number your Degen Level is based on). Updates live across every open browser tab the instant anyone's score changes, via Supabase Realtime — no refreshing.
-- **.sol domain display** — if your connected wallet owns a Solana Name Service domain, it replaces your wallet address everywhere it'd otherwise show up: the header button, and your row on the leaderboard.
+- **Connect Wallet** — read-only. Asks your browser wallet for your public address and nothing else. Solana (Phantom, Solflare, and anything supporting Wallet Standard) and Bitcoin (Xverse, UniSat) are both supported. Connecting never requests a transaction and never touches funds.
+- **Sign in** — once connected, your wallet is asked to sign one short plain-text message. **This is not a transaction.** It approves nothing, spends nothing, and cannot move a token; your wallet shows you the exact text before you sign. It exists so the server can tell that you actually hold that wallet, which is what stops anyone else playing as you, writing a fake score under your name, or wiping your save. The session lasts a week, so you'll see it on first connect and then about weekly — not every visit. Decline it and the game still plays perfectly; your progress just won't sync.
+- **NFT themes and holder perks** — ownership is checked on-chain, server-side. Each supported collection reskins the whole site and carries its own gameplay perks. See [Holder Perks](#-holder-perks).
+- **Cloud save** — your wallet address is your save slot. Connect from any device and your run resumes automatically.
+- **Live Leaderboard** — ranks players by lifetime earned (the same number your Degen Level is based on). Refreshes every 20 seconds while it's open.
+- **.sol domain display** — if your connected wallet owns a Solana Name Service domain, it replaces your address everywhere it would otherwise show: the header button, and your row on the leaderboard.
 
-**Trust note:** writes aren't signature-verified, on purpose — it keeps connecting frictionless for a leaderboard with zero real stakes. Someone could still technically inflate their own local numbers via the browser console since progress lives client-side, but as of v2.0.0 a database-level rule clamps how much a score can jump in a single save, so a spoofed number can't actually land on the shared leaderboard everyone else sees. Fine for bragging rights on a satire game; noted here for transparency.
+**Trust note — what is and isn't protected.** Saves are locked to the wallet that signed for them: the `players` table takes no anonymous reads or writes at all any more, so nobody can read your save, write a score under your address, or wipe your progress. Every write goes through a server function that also enforces value ceilings, a growth-rate limit and a save-frequency limit, and logs anything it rejects.
 
-**Setup required to enable this:** run `supabase_setup.sql` once in your own Supabase project's SQL Editor, then fill in that project's URL and public API key at the top of `js/web3.js`.
+What that does **not** do is make the game itself tamper-proof. It runs in your browser, so a determined player can still edit *their own* numbers before they're sent — the server bounds how absurd that can get, but it can't referee a game it isn't simulating. Making that impossible too would mean running the whole tycoon sim server-side, which is a different project. Stated plainly here rather than implied away.
+
+**Setup required to enable this in your own fork:** run `supabase_setup.sql` once in your own Supabase project's SQL Editor, deploy the `game-save`, `sol-lookup` and `btc-lookup` Edge Functions, then fill in that project's URL and publishable API key at the top of `js/web3.js`.
 
 ---
 
@@ -150,6 +158,26 @@ A passive difficulty system that runs the whole time you have the tab open — c
 | Telegram Bot Automator | $600 | Hype Meter decays 40% slower AND generates +1%/sec passively — campaigns last much longer |
 | DeFi Twitter Coordination Network | $2,500 | +40% capital inflow, Marketing Campaigns 25% cheaper, victim count grows 50% faster |
 | Offshore Cayman Layering Loop | $12,000 | Seizures and rug pulls generate ~50% less Regulatory Heat |
+
+---
+
+## 🎭 Holder Perks
+
+Separate from the shop above: these come from genuinely holding an NFT from a supported collection, verified on-chain. Every collection now carries perks — connect your wallet and a toast tells you exactly what yours are.
+
+| Collection | One-time bonus | Ongoing perk |
+|---|---|---|
+| **Mid Evils** | $3,000 | Bonus Stage + Online Fight Club |
+| **Conmen** | $3,000 | 40% less Regulatory Heat (stacks with Cayman), rare chance to wipe Heat to 0, Bonus Stage + Fight Club |
+| **Skull X** | $3,000 | **3x Markets luck** — DRAINED/RUGGED/BUST are 3x rarer |
+| **$MIM / Bitcoin Wizard** | $3,000 | **+40% capital inflow** on every deployment, plus the Windows 95 desktop |
+| **Genuine Undead / Forever Undead** | $3,000 | **Second Life** — the first time Regulatory Heat maxes out in a run, it drops to 50% instead of ending you. Once per run |
+
+**Trait-gated on top of that:** a Mid Evils holder whose NFT has the **Caravaggio** Clothing trait gets a further **$4,200** and a permanent **10x Markets luck** multiplier. The luck is kept forever once earned, even if the NFT is later sold. Holding both Caravaggio and Skull X gives you the *better* of the two multipliers, not the product.
+
+The one-time cash bonuses are claimed once per wallet and kept. The ongoing perks are live — they read your current holdings, so selling the NFT ends them.
+
+Every collection also unlocks its own full-site theme, theme music, easter egg, and playable Fight Club character. **Online Fight Club is open to holders of any supported collection, and they can all match against each other** — a $MIM Wizard holder can fight a Skull X holder.
 
 ---
 
@@ -211,9 +239,15 @@ Heat is **account-wide**. Hit **100% = instant game over**, all assets seized.
 ## 🗂️ File Structure
 
 ```
-index.html            Page structure, all tabs, modals, wallet/leaderboard UI
+index.html            Page structure, all tabs, modals, wallet/leaderboard UI, CSP
 style.css              Theme, animations, card styling
+tailwind.css          Vendored Tailwind build - GENERATED, don't hand-edit (rebuild steps in its header)
 supabase_setup.sql    One-time DB setup for cloud save + leaderboard (run in Supabase SQL Editor)
+
+Supabase Edge Functions (deployed separately, they hold the server-side keys):
+  game-save           Wallet sign-in + the only path to read/write a cloud save
+  sol-lookup          Solana NFT/token ownership checks (holds the Helius key)
+  btc-lookup          Bitcoin ordinal/rune ownership checks (holds the Ordiscan key)
 js/audio.js           Web Audio API synthesizer (no audio files)
 js/state.js           Game state, save/load, levels, lambo tiers
 js/ui.js              Tab switching, toasts, header rendering
@@ -223,7 +257,7 @@ js/deployer.js        Rug Creator mini-game
 js/volatility.js      Passive Market Volatility (wallet decay every 5 min)
 js/staking.js         Ponzi Yield Pools mini-game
 js/perks.js           Perk shop
-js/web3.js            Wallet connect, cloud save/load, live leaderboard (needs your Supabase URL/key)
+js/web3.js            Wallet connect + sign-in, cloud save/load, holder perks, leaderboard
 js/sns.js             .sol domain resolution (ES module, Solana Name Service)
 js/openshit.js        OpenShit NFT mini-game (self-injecting)
 js/fightgame.js       Fight Club mini-game (TEST Play preview)
@@ -238,6 +272,35 @@ js/main.js            Boot + 1-second game tick
 ---
 
 ## 🆕 Changelog
+
+> Entries below describe what shipped **at the time of that version**. Where a later change superseded one, it's marked inline. For current behaviour, read the sections above rather than the changelog.
+
+### Unreleased — since v2.0.0
+Shipped to the live site, not yet cut as a tagged release.
+
+**Wallet, perks and anti-cheat**
+- **New:** Wallet sign-in. Your wallet signs one plain-text message (not a transaction — it approves nothing and cannot move funds) to prove you hold it. Sessions last a week
+- **Security:** The `players` table accepted anonymous reads *and writes* from anyone holding the public API key. That meant any visitor could read every player's save, write any score to the leaderboard, and overwrite or wipe someone else's progress. All anonymous access is revoked — every read and write now goes through a server function that requires a signed session
+- **Security:** Server-side save validation — value ceilings, a growth-rate limit, a save-frequency limit, structural checks that reject non-finite numbers and oversized payloads. Rejections are logged rather than silently dropped
+- **Security:** The public leaderboard now reads a view exposing only name, earnings and level. Save files are no longer world-readable
+- **New:** Every collection has holder perks, not just Conmen and Mid Evils — Skull X gets 3x Markets luck, $MIM/Bitcoin Wizard gets +40% capital inflow, Genuine Undead gets Second Life. All five get a $3,000 holder bonus. See [Holder Perks](#-holder-perks)
+- **Changed:** The Conmen holder bonus is $3,000 (was $4,200). Anyone who already claimed the old amount keeps it
+- **Changed:** The Caravaggio trait bonus is now additive and granted on ownership, rather than replacing starting cash for brand-new wallets only — it was previously invisible to anyone who had already played
+- **New:** Connecting now announces your perks by name in a toast, so holders can actually tell what they get
+
+**Reliability**
+- **Fixed:** The entire visual design depended on `cdn.tailwindcss.com` being reachable at page load — if it was slow, blocked or down, the site rendered as raw unstyled HTML with every modal and hidden panel visible at once. Tailwind is now a vendored stylesheet built into the repo
+- **New:** Content-Security-Policy. Restricts where scripts, styles, fonts, images and network connections may come from, so a bug that got script onto the page still couldn't send player data anywhere
+- **Changed:** The leaderboard refreshes on a 20-second poll instead of a Realtime subscription — Realtime enforces row-level security, so with `players` locked down the old subscription would have connected successfully and then silently never fired
+
+**Fight Club and mini-games**
+- **Fixed:** Sprite sizes are now consistent across every pose and character — victory dances, deaths, crouches and jumps were rendering at wildly different scales
+- **Fixed:** Fighters could be shoved by an opponent simply walking into them
+- **New:** Touch controls across Fight Club, Bonus Stage and MEV Sandwich
+- **New:** Mid Evils easter egg, plus theme music for Skull X and Genuine Undead (both tracks were in the repo but unreachable)
+- **Fixed:** Embedded easter-egg games now stop the site's background music instead of playing over it
+- **Fixed:** A listener leak in the Windows 95 desktop that accumulated handlers every time it was opened
+- **Performance:** Fight Club loads only the two characters in the match (3.80MB → 2.18MB, 2064ms → 654ms); MEV Sandwich runs 2.8–8x faster; the Victim Hall of Fame is capped so saves stop growing without bound
 
 ### v2.0.0 — LET HIM COOK!
 - **New mini-game:** Fight Club — a full local fighting game (TEST Play preview). 4 characters, 4 arenas, CPU opponent, guard meter/chip damage, counter-hits, combo scaling, real recorded sound effects, and matching arena music
@@ -255,7 +318,7 @@ js/main.js            Boot + 1-second game tick
 - **Fixed:** "Play Fight Game" appeared broken immediately after picking a cosmetic theme in TEST Play — the Theme Preview modal never closed itself after a selection, so it just sat on top of everything silently eating the next click
 
 ### v1.6.9 — Leaders of Rugging: Web3 Integrations Begin
-- **New:** Wallet Connect (Phantom) — read-only, address-only, never requests a transaction or a signature
+- **New:** Wallet Connect (Phantom) — read-only, address-only, never requests a transaction or a signature *(superseded: a sign-in signature was added in Unreleased above. Connecting is still read-only and still never requests a transaction)*
 - **New:** Cloud save — your wallet address becomes your save-slot key, pick up your run on any device
 - **New:** Live Leaderboard — ranks lifetime earned, updates in real time across every open tab via Supabase Realtime
 - **New:** .sol domain resolution — a connected wallet with a Solana Name Service domain shows that domain (e.g. "degen.sol") instead of its address, everywhere in the UI and on the leaderboard
