@@ -105,7 +105,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Local styles (FIXED PATH) -->
     <link rel="stylesheet" href="style.css?v=53">
-    <link rel="stylesheet" href="bonusstage.css?v=18">
+    <link rel="stylesheet" href="bonusstage.css?v=19">
 </head>
 <body class="overflow-x-hidden min-h-screen flex flex-col justify-between">
     <!-- Hand-drawn wobble filter for the chart canvas in Mid Evils mode -
@@ -1245,6 +1245,10 @@
                              plural - see bindFightTouchPad). Only usable in the beat
                              after blocking a hit, and it costs guard meter. -->
                         <button type="button" class="ft-btn ft-act ft-counter" data-fight-keys="punch,kick" aria-label="Guard counter">CNTR</button>
+                        <!-- Throw: unlocked only after blocking a barrage. The
+                             button dims until it is actually available, because a
+                             control that looks live but does nothing reads as broken. -->
+                        <button type="button" class="ft-btn ft-act ft-throwbtn" data-fight-key="throwGrab" aria-label="Throw">THROW</button>
                     </div>
                 </div>
             </div>
@@ -1508,7 +1512,7 @@
 <script src="js/staking.js" defer></script>
 <script src="js/perks.js?v=5" defer></script>
 <script src="js/bonusstage.js?v=23" defer></script>
-<script src="js/fightgame.js?v=56" defer></script>
+<script src="js/fightgame.js?v=57" defer></script>
 <script src="js/mevghosts.js?v=2" defer></script>
 <script src="js/mevsandwich.js?v=11" defer></script>
 <script src="js/conmen-egg.js?v=6" defer></script>
