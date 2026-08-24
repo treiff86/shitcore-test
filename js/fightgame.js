@@ -60,8 +60,8 @@ window.FightGame = (function () {
     // Shared per-attack-type numbers - jump/crouch variants borrow their
     // grounded counterpart's values until they get their own tuning.
     const ATTACK_BASE = { punch: 'punch_lo', kick: 'kick_lo' };
-    const DMG = { punch_lo: 5, kick_lo: 8, counter_lo: 10 }; // tuned so continuous unblocked hitting takes ~20-30s to KO, not ~5 hits
-    const HEAVY = new Set(['kick_lo', 'counter_lo']);
+    const DMG = { punch_lo: 5, kick_lo: 8, counter_lo: 10, throw_lo: 18 }; // throw_lo mirrors THROW_DMG below - kept literal because DMG is built before it // tuned so continuous unblocked hitting takes ~20-30s to KO, not ~5 hits
+    const HEAVY = new Set(['kick_lo', 'counter_lo', 'throw_lo']);
     const HS_LT = 5, HS_HV = 9;
 
     /* ============================================================
@@ -117,6 +117,10 @@ window.FightGame = (function () {
         // beat whatever they were about to do next. Long recovery, so a
         // wasted one costs you the turn as well as the meter.
         counter_lo:   { startup: 3, active: 3,  recovery: 20, hitStun: 30, blockStun: 0  },
+        // The throw. Slower than the counter because it is the bigger
+        // payoff, and its recovery is the worst in the game - a whiffed
+        // throw should cost you the round's momentum.
+        throw_lo:     { startup: 6, active: 3,  recovery: 28, hitStun: 46, blockStun: 0  },
     };
     function moveData(state) { return MOVES[state] || MOVES[baseAttackKind(state)] || MOVES.punch_lo; }
     function moveDuration(state) {
@@ -150,6 +154,26 @@ window.FightGame = (function () {
        STILL SPRITE-FREE: it borrows the punch frames, so it reads as a
        shove. It PLAYS correctly today and will LOOK right once there is
        art for it. */
+    /* THE THROW - C, but only after blocking a BARRAGE.
+
+       The guard counter (Z+X) answers a single blocked hit. This answers
+       someone leaning on one button: block THROW_STREAK hits in a row and
+       the throw unlocks, hitting far harder than the counter and putting
+       them on the floor. An opponent who mashes the same attack is
+       literally building your meter to punish them with.
+
+       The streak has to be CONSECUTIVE and RECENT (THROW_STREAK_WINDOW),
+       or blocks spread across a whole round would quietly bank into a
+       free throw nobody earned. Taking a clean hit resets it - you have to
+       actually hold the block, not trade. */
+    const THROW_STREAK = 3;             // consecutive blocked hits to unlock it
+    const THROW_STREAK_WINDOW = 1.6;    // seconds between blocks before the streak lapses
+    const THROW_DMG = 18;               // vs kick 8, guard counter 10. Mirrored in DMG above.
+    const THROW_RANGE = 64;             // px of grab reach past the body box
+    const THROW_LAUNCH_VY = -430;       // upward kick, px/s - physics does the arc
+    const THROW_LAUNCH_VX = 250;        // horizontal fling, px/s
+    const THROWN_GROUND_T = 0.45;       // seconds spent on the floor before getting up
+
     const COUNTER_WINDOW = 0.32;      // seconds after blocking a hit to input it
     const COUNTER_METER_COST = 34;    // roughly a third of a full guard meter
     const CPU_COUNTER_CHANCE = 0.35;  // how often the CPU counters out of its own block
@@ -170,14 +194,16 @@ window.FightGame = (function () {
         // 'jump_punch' / 'crouch_punch' -> 'punch_lo', etc. - so damage and
         // hitbox lookups work the same regardless of variant.
         if (state === 'counter_lo') return 'counter_lo';
+        if (state === 'throw_lo') return 'throw_lo';
         if (state.endsWith('_punch') || state === 'punch_lo') return 'punch_lo';
         if (state.endsWith('_kick') || state === 'kick_lo') return 'kick_lo';
         return null;
     }
     function isAttackState(state) {
-        return state === 'punch_lo' || state === 'kick_lo' || state === 'jump_punch' || state === 'jump_kick' || state === 'crouch_punch' || state === 'crouch_kick' || state === 'counter_lo';
+        return state === 'punch_lo' || state === 'kick_lo' || state === 'jump_punch' || state === 'jump_kick' || state === 'crouch_punch' || state === 'crouch_kick' || state === 'counter_lo' || state === 'throw_lo';
     }
     function isCounterState(state) { return state === 'counter_lo'; }
+    function isThrowState(state) { return state === 'throw_lo'; }
 
     // ---------------- Guard meter, chip damage, guard break ----------------
     // Blocking is free (0 damage) while the guard meter has charge. Each
@@ -287,6 +313,12 @@ window.FightGame = (function () {
             // resolveHurtPose below) - purely additive, doesn't touch
             // Reiffer/Conmen/Wizard.
             crouch_block: ['assets/fight_game/undead_crouch_block.webp', 1],
+            // THROW ART. `throw` is the thrower (reach, grip, toss) and
+            // `thrown` is the victim (airborne, landed). Genuine Undead is
+            // the first character to have these; everyone else falls back
+            // to punch/hurt frames until their art exists - see _surf().
+            throw:    ['assets/fight_game/undead_throw.webp', 3],
+            thrown:   ['assets/fight_game/undead_thrown.webp', 2],
             crouch_hurt:  ['assets/fight_game/undead_crouch_hurt.webp', 1],
             jump_block:   ['assets/fight_game/undead_jump_block.webp', 1],
             jump_hurt:    ['assets/fight_game/undead_jump_hurt.webp', 1],
@@ -852,6 +884,10 @@ window.FightGame = (function () {
             this.atkT = 0; this.atkDur = 0; this.hitReg = false; this.canW = false; this.canT = 0;
             this.stop = 0;   // HITSTOP - freezes BOTH fighters, impact feel only
             this.counterWindowT = 0;  // seconds left to input a guard counter
+            this.blockStreak = 0;     // consecutive blocked hits - unlocks the throw
+            this.blockStreakT = 0;    // seconds left before that streak lapses
+            this.thrownT = 0;         // >0 while being thrown (airborne, then floored)
+            this.thrownGrounded = false;
             this.stunIsBlock = false; // was that stun from blocking, or from eating it?
             this.stunT = 0;  // HIT/BLOCK STUN - freezes only THIS fighter, in seconds.
                              // The difference between the two is where frame
@@ -915,10 +951,19 @@ window.FightGame = (function () {
                 return { x: ex, y: this.y + P_H * 0.55, w: 54, h: 28 };
             }
             if (base === 'counter_lo') {
-                // Shorter reach than either strike, and tall, because a
-                // throw should mean "I got right up in your face".
+                // Short reach and tall - a counter means "get off me", so it
+                // has to connect with someone already in your face.
                 const ex = this.facing === 1 ? this.x + this._fw - 10 : this.x - (COUNTER_RANGE - 10);
                 return { x: ex, y: this.y + P_H * 0.25, w: COUNTER_RANGE, h: P_H * 0.5 };
+            }
+            if (base === 'throw_lo') {
+                /* A grab box: short, and TALL enough to catch a crouching
+                   opponent, because a throw that whiffs on someone ducking
+                   would be maddening for a move you had to earn with three
+                   blocks. Without this case hitbox() returned null and the
+                   throw animation played through without ever connecting. */
+                const ex = this.facing === 1 ? this.x + this._fw - 12 : this.x - (THROW_RANGE - 12);
+                return { x: ex, y: this.y + P_H * 0.15, w: THROW_RANGE, h: P_H * 0.75 };
             }
             return null;
         }
@@ -935,6 +980,45 @@ window.FightGame = (function () {
             this.fr = 0; this.frT = 0;
             this.atkDur = moveDuration(kind);
             if (typeof playSfxFile === 'function') playSfxFile(baseKind === 'punch' ? SFX_PUNCH_WHOOSH : SFX_KICK_WHOOSH, 0.35);
+        }
+
+        // True once they have blocked a genuine barrage - read by the HUD
+        // so the player can SEE the throw is available, not guess.
+        throwReady() {
+            return this.grounded && !this.guardBroken
+                && this.blockStreakT > 0 && this.blockStreak >= THROW_STREAK;
+        }
+
+        beginThrow() {
+            if (!this.throwReady()) return false;
+            this.blockStreak = 0; this.blockStreakT = 0;   // spent
+            this.blocking = false; this.crouching = false;
+            this.stunT = 0; this.stunIsBlock = false; this.stop = 0;
+            this.state = 'throw_lo'; this.atkT = 0; this.hitReg = false;
+            this.canW = false; this.canT = 0;
+            this.fr = 0; this.frT = 0;
+            this.atkDur = moveDuration('throw_lo');
+            if (typeof playSfxFile === 'function') playSfxFile(SFX_KICK_WHOOSH, 0.55);
+            return true;
+        }
+
+        /* Being thrown. The ARC IS PHYSICS, not animation: the victim is
+           launched with a real velocity and gravity brings them down, so the
+           two sprite frames only ever have to say "airborne" and "on the
+           floor". That is why two frames is enough for this to read properly
+           - trying to animate the whole arc would have needed six. */
+        launchThrown(fromX) {
+            this.state = 'thrown';
+            this.fr = 0; this.frT = 0;
+            this.grounded = false;
+            this.thrownGrounded = false;
+            this.thrownT = 0;
+            this.vy = THROW_LAUNCH_VY;
+            this.vx = (this.x < fromX ? -1 : 1) * THROW_LAUNCH_VX;
+            this.blocking = false; this.crouching = false;
+            this.stunT = 0; this.stop = 0;
+            this.blockStreak = 0; this.blockStreakT = 0;
+            this.comboCounter = 0; this.comboWindowT = 0;
         }
 
         /* Grounded only, and only out of a block. Returns false when it
@@ -966,7 +1050,7 @@ window.FightGame = (function () {
         takeDamage(rawDmg, heavy, isCounterHit, attackState) {
             let dmg;
             const move = attackState ? moveData(attackState) : MOVES.punch_lo;
-            const unblockable = !!(attackState && isCounterState(attackState));
+            const unblockable = !!(attackState && (isCounterState(attackState) || isThrowState(attackState)));
 
             /* Stun is applied to the DEFENDER ONLY and is what creates
                frame advantage - see the FRAME DATA note at the top. It runs
@@ -1031,6 +1115,11 @@ window.FightGame = (function () {
                 // still registers a few frames after guard is released -
                 // demanding a frame-perfect release would be miserable.
                 this.counterWindowT = COUNTER_WINDOW;
+                // A blocked hit extends the barrage streak that unlocks the
+                // throw. Consecutive AND recent: blockStreakT lapsing is what
+                // stops blocks spread over a round banking into a free throw.
+                this.blockStreak = (this.blockStreakT > 0 ? this.blockStreak : 0) + 1;
+                this.blockStreakT = THROW_STREAK_WINDOW;
                 if (this.guardMeter > 0) {
                     // Free block - guard meter absorbs it instead of health.
                     this.guardMeter = Math.max(0, this.guardMeter - GUARD_COST_PER_BLOCK);
@@ -1050,6 +1139,9 @@ window.FightGame = (function () {
                 this.stop = (heavy ? HS_HV : HS_LT) + (isCounterHit ? COUNTER_HIT_EXTRA_STOP : 0);
                 this.timeSinceBlockOrHit = 0;
                 applyStun(move.hitStun);
+                // Taking one clean hit wipes the barrage streak. The throw is
+                // a reward for actually holding a block, not for trading.
+                this.blockStreak = 0; this.blockStreakT = 0;
                 // A clean non-blocked hit also resets guard - no reason to
                 // stay "worn down" from blocking once they've eaten a real hit.
                 this.chipBlockCount = 0;
@@ -1097,10 +1189,19 @@ window.FightGame = (function () {
             // which art to draw. Falls back to the plain block pose for any
             // character without the crouch/jump variants.
             let stateForFrames = this.state;
-            // The throw has no art of its own. Borrowing the punch strip
-            // makes it read as a hard shove, which is close enough to sell
-            // the move until a real grab animation exists.
+            // The guard counter still borrows the punch strip - it reads as
+            // a shove, which is what it is.
             if (this.state === 'counter_lo') stateForFrames = 'punch_lo';
+            /* The throw has REAL art now, but only for characters who have
+               been drawn yet. Genuine Undead is first; everyone else falls
+               back to punch (thrower) and hurt (victim) so the move stays
+               playable rather than rendering an empty frame. */
+            if (this.state === 'throw_lo') {
+                stateForFrames = (this.anims.throw && this.anims.throw.length) ? 'throw' : 'punch_lo';
+            }
+            if (this.state === 'thrown') {
+                stateForFrames = (this.anims.thrown && this.anims.thrown.length) ? 'thrown' : 'hurt';
+            }
             if (this.state === 'block') {
                 if (!this.grounded && this.anims.jump_block && this.anims.jump_block.length) stateForFrames = 'jump_block';
                 else if (this.grounded && this.crouching && this.anims.crouch_block && this.anims.crouch_block.length) stateForFrames = 'crouch_block';
@@ -1165,7 +1266,7 @@ window.FightGame = (function () {
     let onKeyDown, onKeyUp;
 
     const HANDLED_KEYS = new Set([
-        'a', 'd', 'w', 's', 'z', 'x', ' ',
+        'a', 'd', 'w', 's', 'z', 'x', 'c', ' ',
         'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Enter', '/',
         'Shift', 'Escape',
     ]);
@@ -1449,6 +1550,7 @@ window.FightGame = (function () {
             [bind.jump]: !!(rk && rk.cpu_jump), [bind.crouch]: !!(rk && rk.cpu_crouch),
             [bind.punch]: !!(rk && rk.cpu_punch), [bind.kick]: !!(rk && rk.cpu_kick),
             [bind.block]: !!(rk && rk.cpu_block),
+            [bind.throwGrab]: !!(rk && rk.cpu_throw),
         };
         for (const k in next) {
             if (next[k] && !keys[k]) justPressed[k] = true; // rising edge only, same rule as a real keydown
@@ -1466,6 +1568,7 @@ window.FightGame = (function () {
         // Release every virtual key first, then set only what this frame's
         // decision calls for - same shape as a human's actual key state.
         keys[bind.left] = false; keys[bind.right] = false; keys[bind.crouch] = false; keys[bind.block] = false;
+        keys[bind.throwGrab] = false;
 
         ai.attackCooldown = Math.max(0, ai.attackCooldown - dt);
 
@@ -1490,7 +1593,11 @@ window.FightGame = (function () {
                solve. It holds both attack buttons, exactly as a human does -
                beginGuardCounter() then applies the same window and the same
                meter cost, so the AI can't cheat its way past either. */
-            if (cpu.counterWindowT > 0 && cpu.guardMeter >= COUNTER_METER_COST
+            // A barrage the CPU blocked earns it the throw, same as it does
+            // for you - otherwise mashing one button at the AI stays free.
+            if (cpu.throwReady() && Math.random() < CPU_COUNTER_CHANCE * dt * 60) {
+                justPressed[bind.throwGrab] = true;
+            } else if (cpu.counterWindowT > 0 && cpu.guardMeter >= COUNTER_METER_COST
                 && Math.random() < CPU_COUNTER_CHANCE * dt * 60) {
                 keys[bind.punch] = true; keys[bind.kick] = true;
             } else {
@@ -1549,6 +1656,35 @@ window.FightGame = (function () {
            timers underneath - and their blockstun never expired. They would
            have been frozen for as long as they kept holding block. */
 
+        /* BEING THROWN. Handled before everything else because it ignores
+           input entirely - you are in the air, then on the floor, and only
+           then are you allowed to act again. Physics supplies the arc; the
+           two sprite frames just pick airborne vs floored. */
+        if (f.state === 'thrown') {
+            if (!f.thrownGrounded) {
+                f.x = Math.max(STAGE_MARGIN, Math.min(SW - STAGE_MARGIN - f._fw, f.x + f.vx * dt));
+                /* applyGravity does the landing itself - platforms, the
+                   "where were they last frame" ledge check, all of it - and
+                   returns true on the frame they touch down. An earlier
+                   version of this compared f.y against surfaceBelow()
+                   directly, which returns an OBJECT, not a number: the
+                   comparison was always false and the victim flew off the
+                   stage and never came back. */
+                if (applyGravity(f, dt, false)) {
+                    f.vx = 0;
+                    f.thrownGrounded = true; f.thrownT = 0;
+                    f.fr = 1;                     // the "landed" frame
+                    if (typeof playSfxFile === 'function') playSfxFile(randomFrom(SFX_HITS), 0.5);
+                }
+            } else {
+                f.thrownT += dt;
+                if (f.thrownT >= THROWN_GROUND_T) {
+                    f.state = 'idle'; f.fr = 0; f.thrownT = 0; f.thrownGrounded = false;
+                }
+            }
+            return;
+        }
+
         // HITSTOP: both fighters frozen, nobody gains anything by it.
         if (f.stop > 0) { f.stop--; return; }
 
@@ -1565,6 +1701,14 @@ window.FightGame = (function () {
            and reads the same to a player. */
         if (f.counterWindowT > 0 && keys[bind.punch] && keys[bind.kick]) {
             if (f.beginGuardCounter()) return;
+        }
+
+        // THE THROW. Same reasoning as the counter for why it is read here:
+        // the player is in blockstun when they press it, and the stun gate
+        // below returns early. justPressed, not held - this is a deliberate
+        // single commitment, not something to lean on.
+        if (justPressed[bind.throwGrab] && f.throwReady()) {
+            if (f.beginThrow()) return;
         }
 
         // STUN: carried only by the fighter who was hit. The attacker is
@@ -1674,6 +1818,7 @@ window.FightGame = (function () {
         if (f.guardBroken) {
             f.guardBreakT -= dt;
             if (f.counterWindowT > 0) f.counterWindowT = Math.max(0, f.counterWindowT - dt);
+        if (f.blockStreakT > 0) { f.blockStreakT = Math.max(0, f.blockStreakT - dt); if (f.blockStreakT === 0) f.blockStreak = 0; }
         if (f.hurtT > 0) f.hurtT = Math.max(0, f.hurtT - dt);
             if (f.guardBreakT <= 0) {
                 f.guardBroken = false;
@@ -1761,6 +1906,12 @@ window.FightGame = (function () {
             }
 
             defender.takeDamage(dmg, heavy, isCounterHit, attacker.state);
+            // A throw doesn't just damage - it puts them on the floor. Done
+            // after takeDamage so the KO check has already run: launching a
+            // corpse would strand it mid-air with no state to recover into.
+            if (isThrowState(attacker.state) && !defender.ko) {
+                defender.launchThrown(attacker.x);
+            }
             attacker.stop = heavy ? HS_HV : HS_LT;
             shake.hit(heavy ? 7.0 : 3.2);
 
@@ -1793,6 +1944,7 @@ window.FightGame = (function () {
     }
 
     function drawHUD(ctx, g) {
+        syncThrowButton(g.p1.throwReady && g.p1.throwReady());
         const barW = 300, barH = 18;
         drawBar(ctx, 24, 20, barW, barH, g.p1.hp / MAX_HP, COL.GN, hudLabel(g.p1Label), false);
         drawBar(ctx, SW - 24 - barW, 20, barW, barH, g.p2.hp / MAX_HP, COL.BL, hudLabel(g.p2Label), true);
@@ -1812,6 +1964,15 @@ window.FightGame = (function () {
         ctx.fillText(String(t), SW / 2 - tw / 2, 18);
     }
 
+    // Mirrors the HUD cue onto the touch button, so a phone player gets the
+    // same information a keyboard player does instead of guessing.
+    let _lastThrowReady = null;
+    function syncThrowButton(ready) {
+        if (ready === _lastThrowReady) return;   // don't touch the DOM every frame
+        _lastThrowReady = ready;
+        document.querySelector('#fightTouchPad .ft-throwbtn')?.classList.toggle('ft-ready', !!ready);
+    }
+
     function drawGuardBar(ctx, x, y, w, h, fighter, rightAlign) {
         const pct = fighter.guardBroken ? 0 : Math.max(0, Math.min(1, fighter.guardMeter / GUARD_METER_MAX));
         const empty = fighter.guardBroken || fighter.guardMeter <= 0;
@@ -1823,6 +1984,24 @@ window.FightGame = (function () {
         ctx.strokeStyle = COL.W;
         ctx.lineWidth = 1;
         ctx.strokeRect(x, y, w, h);
+
+        /* THROW READY. A move the player cannot see is available may as well
+           not exist - the throw only unlocks after blocking a barrage, which
+           is exactly the kind of hidden state nobody discovers on their own.
+           It pulses so it reads as "now", not as another static bar. */
+        if (fighter.throwReady && fighter.throwReady()) {
+            const label = 'THROW READY  [C]';
+            ctx.font = "11px 'BonusStagePixel', monospace";
+            const tw = ctx.measureText(label).width;
+            const tx = rightAlign ? x + w - tw : x;
+            const pulse = 0.6 + 0.4 * Math.sin(Date.now() / 110);
+            ctx.save();
+            ctx.globalAlpha = pulse;
+            ctx.fillStyle = COL.YL;
+            ctx.textBaseline = 'top';
+            ctx.fillText(label, tx, y + h + 3);
+            ctx.restore();
+        }
     }
 
     function drawBar(ctx, x, y, w, h, pct, color, label, rightAlign) {
@@ -1945,14 +2124,14 @@ window.FightGame = (function () {
         const shake = new Shake();
         const fx = [];
 
-        const P1_BIND = { left: 'ArrowLeft', right: 'ArrowRight', jump: 'ArrowUp', crouch: 'ArrowDown', punch: 'z', kick: 'x', block: ' ' };
+        const P1_BIND = { left: 'ArrowLeft', right: 'ArrowRight', jump: 'ArrowUp', crouch: 'ArrowDown', punch: 'z', kick: 'x', block: ' ', throwGrab: 'c' };
         // P2 is CPU-only now (see updateCPUInput) - these are just internal
         // dictionary keys the AI sets programmatically, not real keyboard
         // keys, so they're deliberately NOT actual key names anymore. That
         // matters: if these matched P1_BIND's real key strings, a P1 key
         // press would leak into the CPU's virtual input for that frame
         // (they share the same `keys`/`justPressed` objects).
-        const P2_BIND = { left: 'cpu_left', right: 'cpu_right', jump: 'cpu_jump', crouch: 'cpu_crouch', punch: 'cpu_punch', kick: 'cpu_kick', block: 'cpu_block' };
+        const P2_BIND = { left: 'cpu_left', right: 'cpu_right', jump: 'cpu_jump', crouch: 'cpu_crouch', punch: 'cpu_punch', kick: 'cpu_kick', block: 'cpu_block', throwGrab: 'cpu_throw' };
 
         keys = {}; justPressed = {};
         let lastSentInputSnapshot = null;
@@ -2018,6 +2197,7 @@ window.FightGame = (function () {
                         cpu_jump: !!keys[P1_BIND.jump], cpu_crouch: !!keys[P1_BIND.crouch],
                         cpu_punch: !!keys[P1_BIND.punch], cpu_kick: !!keys[P1_BIND.kick],
                         cpu_block: !!keys[P1_BIND.block],
+                        cpu_throw: !!keys[P1_BIND.throwGrab],
                     };
                     const snap = JSON.stringify(outKeys);
                     if (snap !== lastSentInputSnapshot) {
@@ -2127,7 +2307,7 @@ window.FightGame = (function () {
             // Z+X is listed because a move nobody can discover may as well
             // not exist - and the guard counter is the whole answer to an
             // opponent leaning on you.
-            const leg = 'P1: \u2190\u2192 Move  \u2191 Jump  \u2193 Crouch  Z Punch  X Kick  Space Block  Z+X Counter   |   P2: CPU';
+            const leg = 'P1: \u2190\u2192 Move  \u2191 Jump  \u2193 Crouch  Z Punch  X Kick  Space Block  Z+X Counter  C Throw   |   P2: CPU';
             ctx.font = "9px 'BonusStagePixel', monospace";
             ctx.fillStyle = '#aaaaaa';
             ctx.textAlign = 'center';
