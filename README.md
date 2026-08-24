@@ -96,7 +96,7 @@ Mock OpenSea. Generate real AI art via Pollinations.ai (free, no API key). Mint 
 ---
 
 ### 🥊 Fight Club — Local Brawler *(New in v2.0.0, TEST Play preview)*
-A full side-scrolling fighter buried inside the tycoon game, because why not. Currently gated to TEST Play while it finishes cooking toward a LIVE release for real Mid Evils and Conmen holders.
+A full side-scrolling fighter buried inside the tycoon game, because why not. Live for holders of any supported collection — Mid Evils, Conmen, Skull X, $MIM/Bitcoin Wizard and Genuine Undead — and they can all match against each other online.
 
 - **4 playable characters** — Reiffer (Mid Evils), the Conmen character, the $MIM/Bitcoin Wizard, and Genuine Undead (an office zombie in a suit, exclusive to that theme's preview)
 - **4 arenas** — a prison yard, a medieval market, a wizard's study (with a jumpable table), and a corporate office (with a jumpable reception desk) — each with matching background music where a track exists
@@ -121,7 +121,7 @@ A Street Fighter 2-style beat-em-up against a McDonald's fry machine, accessed v
 
 Fully optional — the game works exactly the same with zero wallet ever connected, same as v1.0.0.
 
-- **Connect Wallet** — read-only. Asks your browser wallet (Phantom, or anything Phantom-compatible) for your public address and nothing else. Never requests a transaction or a signature, never touches funds.
+- **Connect Wallet** — Wallet connect is real. Optional — the game plays fine without one — but connecting unlocks NFT-holder themes, holder perks, cloud saves and the live leaderboard. Connecting is read-only and never touches funds. Signing in asks your wallet to sign one plain-text message so nobody else can play as you or overwrite your save; that's a signature, not a transaction — it approves nothing, spends nothing, and can't move a token.
 - **Cloud save** — your wallet address becomes your save-slot key. Connect from any device and, if a save already exists under that address, you'll be asked whether to load it.
 - **Live Leaderboard** — ranks players by lifetime earned (the same number your Degen Level is based on). Updates live across every open browser tab the instant anyone's score changes, via Supabase Realtime — no refreshing.
 - **.sol domain display** — if your connected wallet owns a Solana Name Service domain, it replaces your wallet address everywhere it'd otherwise show up: the header button, and your row on the leaderboard.
