@@ -118,7 +118,13 @@ const TRAIT_REWARDS = [
         traitValue: "Caravaggio",
         cashBonus: 4200,
         marketsLuckMultiplier: 10,
-        requiresThemeClass: "medieval-mode", // only recognized/granted once the Mid Evils theme has actually connected - not just on raw wallet connect
+        // WAS requiresThemeClass: "medieval-mode", a live check of the body's
+        // CSS class. That class is added asynchronously, so a check running a
+        // moment early saw no theme and silently skipped the reward - and for
+        // a dual holder who hadn't answered the theme picker yet, it never
+        // fired at all. This keys off the CHOSEN theme id instead, which is
+        // set the instant a theme is applied.
+        themeId: "midevils",
     },
 ];
 
@@ -189,54 +195,71 @@ function ownsThemeId(id) {
     return Array.isArray(ownedThemesList) && ownedThemesList.some((t) => t.id === id);
 }
 
-// Best (not cumulative) luck across owned collections, versus whatever the
-// save already permanently holds from a trait reward. Caravaggio's 10x
-// therefore still beats Skull X's 3x for anyone holding both, instead of
-// the two multiplying into a 30x nobody designed.
+/* The one perk set that is live: the worn theme's, and only if the wallet
+   genuinely owns that collection. Both conditions matter - the ownership
+   half stops someone forcing a theme class in the console to grant
+   themselves perks. */
+function activePerkSet() {
+    const id = activePerkThemeId();
+    if (!id || !ownsThemeId(id)) return null;
+    return HOLDER_PERKS.find((p) => p.themeId === id) || null;
+}
+
+/* Markets luck, from the worn theme only.
+
+   Two sources can supply it and the BEST wins rather than the product,
+   so nothing compounds into a multiplier nobody designed:
+     - the collection's own perk (Skull X: 3x)
+     - a claimed trait reward belonging to that same collection
+       (Caravaggio: 10x, claimed permanently, kept even if the NFT is sold)
+
+   The claimed trait multiplier is deliberately gated on its collection's
+   theme being worn, same as everything else. It stays CLAIMED forever -
+   selling the NFT never takes it away - it simply isn't in effect while
+   you are wearing a different collection's colours. */
 function holderMarketsLuck() {
+    const id = activePerkThemeId();
+    if (!id || !ownsThemeId(id)) return 1;
     let best = 1;
-    try { best = (state && state.marketsLuckMultiplier) || 1; } catch (e) { best = 1; }
-    for (const p of HOLDER_PERKS) {
-        if (p.marketsLuck && ownsThemeId(p.themeId)) best = Math.max(best, p.marketsLuck);
-    }
+
+    const perk = HOLDER_PERKS.find((p) => p.themeId === id);
+    if (perk && perk.marketsLuck) best = Math.max(best, perk.marketsLuck);
+
+    try {
+        const claimed = (state && state.claimedTraitRewards) || [];
+        for (const reward of TRAIT_REWARDS) {
+            if (reward.themeId !== id) continue;
+            if (!reward.marketsLuckMultiplier) continue;
+            if (claimed.includes(reward.id)) best = Math.max(best, reward.marketsLuckMultiplier);
+        }
+    } catch (e) { /* state not ready yet - the perk value above still stands */ }
+
     return best;
 }
 
-// These two DO compound across collections - a dual holder should feel
-// like a dual holder. With one perk of each kind in the table today it
-// makes no practical difference; it matters the moment a second is added.
 function holderCapitalInflowMult() {
-    let m = 1;
-    for (const p of HOLDER_PERKS) {
-        if (p.capitalInflowMult && ownsThemeId(p.themeId)) m *= p.capitalInflowMult;
-    }
-    return m;
+    const p = activePerkSet();
+    return (p && p.capitalInflowMult) || 1;
 }
 
 function holderHeatMultiplier() {
-    let m = 1;
-    for (const p of HOLDER_PERKS) {
-        if (p.heatMultiplier && ownsThemeId(p.themeId)) m *= p.heatMultiplier;
-    }
-    return m;
+    const p = activePerkSet();
+    return (p && p.heatMultiplier) || 1;
 }
 
 function holderHasSecondLife() {
-    return HOLDER_PERKS.some((p) => p.secondLife && ownsThemeId(p.themeId));
+    const p = activePerkSet();
+    return !!(p && p.secondLife);
 }
 
-// One toast per owned collection, spelling out what that collection
-// actually gives them. showToast displays one at a time and replaces
-// whatever is on screen, so these are spaced far enough apart to each be
-// readable instead of firing as a burst where only the last is ever seen.
+// One toast, for the collection actually being worn. It used to fire one
+// per owned collection, so a dual holder who picked Mid Evils was still
+// told about their Conmen perks - perks that, as of this change, they are
+// not currently getting.
 function announceHolderPerks() {
-    const owned = HOLDER_PERKS.filter((p) => ownsThemeId(p.themeId));
-    if (!owned.length) return;
-    let delay = 2600; // let the "theme detected" toast land first
-    owned.forEach((p) => {
-        setTimeout(() => showToast(`✨ ${p.name} perks — ${p.lines}`, "success"), delay);
-        delay += 4200;
-    });
+    const p = activePerkSet();
+    if (!p) return;
+    setTimeout(() => showToast(`✨ ${p.name} perks — ${p.lines}`, "success"), 2600);
 }
 
 let sb = null;
@@ -263,11 +286,42 @@ function initSupabase() {
 
 /* ---------------- Cosmetic theme detection ---------------- */
 
+/* THE THEME YOU PICK IS THE PERKS YOU GET.
+
+   This used to be ownership-based: hold three collections and you got all
+   three sets of perks at once, plus three separate perk toasts on
+   connect. That made the choice meaningless - picking Mid Evils and then
+   being told about your Conmen heat discount. You wear one collection at
+   a time, so you get that collection's perks.
+
+   None of it is farmable by switching back and forth. The ONGOING perks
+   (heat, luck, inflow, second life) are read live from whichever theme is
+   worn, so switching swaps one set for another instead of accumulating.
+   The one-time cash bonuses are recorded per collection in the save, so
+   each is claimable exactly once ever - switching to Conmen later pays
+   the Conmen bonus one time and never again.
+
+   `activeThemeId` is the single source of truth. Reading the body's CSS
+   class instead - which is what the Caravaggio trait check used to do -
+   was fragile: the class is applied asynchronously, so a check running a
+   moment early saw no theme and silently skipped the reward. */
+let activeThemeId = null;
+
 function clearCosmeticThemes() {
     COSMETIC_THEMES.forEach((t) => { if (t.cssClass) document.body.classList.remove(t.cssClass); });
     document.getElementById("audioToggleBtn")?.classList.add("hidden");
     if (typeof stopMainThemeIfPlaying === "function") stopMainThemeIfPlaying();
     if (typeof exitWin95Desktop === "function") exitWin95Desktop();
+    activeThemeId = null; // no theme worn = no collection perks
+}
+
+// Which collection's perks are live right now. Theme Preview (master
+// wallet only) counts, so previewing a theme shows that theme's perks
+// rather than none.
+function activePerkThemeId() {
+    if (activeThemeId) return activeThemeId;
+    try { if (window.activePreviewThemeId) return window.activePreviewThemeId; } catch (e) {}
+    return null;
 }
 
 // Themes the currently-connected wallet actually owns (real ownership,
@@ -367,6 +421,9 @@ function updateOnlineLobbyAccess() {
 
 function applyTheme(theme) {
     clearCosmeticThemes(); // also exits Win95 desktop if it was active, so switching straight between themes doesn't stack states
+    // Set AFTER clearCosmeticThemes(), which nulls it - order matters here,
+    // or applying a theme would immediately wipe its own perk selection.
+    activeThemeId = theme.id;
     if (theme.cssClass) document.body.classList.add(theme.cssClass);
     showToast(theme.toastMsg, "success", theme.id === "skullx" ? pickRandomSkullXOrdinal() : null);
     if (theme.id === "mimwizard" && typeof enterWin95Desktop === "function") {
@@ -436,8 +493,14 @@ function renderThemeChoiceButtons() {
 function selectOwnedTheme(themeId) {
     const theme = ownedThemesList.find((t) => t.id === themeId);
     if (!theme) return;
+    const previous = activeThemeId;
     applyTheme(theme);
-    closeThemeChoice();
+    closeThemeChoice(); // releases the connect flow waiting on this choice
+
+    // Only on an actual CHANGE, and only when this wasn't the first pick of
+    // the session. The connect flow already handles the first one - firing
+    // here too would double up the toast and race it for the same grant.
+    if (previous && previous !== theme.id) refreshPerksForActiveTheme();
 }
 
 // Opting out - holding a gated NFT doesn't have to mean wanting the
@@ -907,7 +970,9 @@ function updateWalletUI() {
 // multiplier is granted regardless (and permanently, once granted).
 async function applyTraitRewards(addr, isNewSave) {
     for (const reward of TRAIT_REWARDS) {
-        if (reward.requiresThemeClass && !document.body.classList.contains(reward.requiresThemeClass)) continue; // theme hasn't actually connected yet - don't even check, let alone recognize
+        // Only the worn collection's trait rewards are considered, matching
+        // how every other perk now works.
+        if (reward.themeId && activePerkThemeId() !== reward.themeId) continue;
 
         const has = await window.checkTraitOwnership(addr, reward.collectionAddress, reward.traitType, reward.traitValue);
         if (!has) continue;
@@ -959,20 +1024,39 @@ const LEGACY_BONUS_IDS = { conmen: "conmen_holder_bonus" };
 
 async function grantHolderBonuses() {
     if (typeof state === "undefined" || !state) return;
-    let total = 0;
-    for (const perk of HOLDER_PERKS) {
-        if (!perk.cashBonus || !ownsThemeId(perk.themeId)) continue;
-        const id = `holder_bonus_${perk.themeId}`;
-        const claimed = state.claimedTraitRewards || [];
-        const legacy = LEGACY_BONUS_IDS[perk.themeId];
-        if (claimed.includes(id) || (legacy && claimed.includes(legacy))) continue;
 
-        state.claimedTraitRewards = [...claimed, id];
-        state.cash = (state.cash || 0) + perk.cashBonus;
-        total += perk.cashBonus;
-        showToast(`💰 ${perk.name} holder bonus: +$${perk.cashBonus.toLocaleString()}`, "success");
+    // Only the WORN collection's bonus, not every collection owned. A dual
+    // holder who picks Mid Evils gets the Mid Evils $3,000 and nothing
+    // else; the Conmen $3,000 stays unclaimed until they actually wear
+    // Conmen. Recorded per collection, so each pays exactly once ever -
+    // switching themes back and forth can never farm it.
+    const perk = activePerkSet();
+    if (!perk || !perk.cashBonus) return;
+
+    const id = `holder_bonus_${perk.themeId}`;
+    const claimed = state.claimedTraitRewards || [];
+    const legacy = LEGACY_BONUS_IDS[perk.themeId];
+    if (claimed.includes(id) || (legacy && claimed.includes(legacy))) return;
+
+    state.claimedTraitRewards = [...claimed, id];
+    state.cash = (state.cash || 0) + perk.cashBonus;
+    showToast(`💰 ${perk.name} holder bonus: +$${perk.cashBonus.toLocaleString()}`, "success");
+    if (typeof updateUI === "function") updateUI();
+}
+
+/* Switching themes mid-session has to re-run the perk handover, or the
+   new theme's bonus never lands and the old theme's toast is the last
+   thing the player saw. Called from selectOwnedTheme(). */
+async function refreshPerksForActiveTheme() {
+    if (!walletAddress) return;
+    try {
+        if (typeof applyTraitRewards === "function") await applyTraitRewards(walletAddress, false);
+        await grantHolderBonuses();
+        announceHolderPerks();
+        if (typeof saveToCloud === "function") await saveToCloud();
+    } catch (e) {
+        console.warn("[web3] perk refresh after theme switch failed:", e);
     }
-    if (total > 0 && typeof updateUI === "function") updateUI();
 }
 
 /* ============================================================
