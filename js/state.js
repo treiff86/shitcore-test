@@ -28,7 +28,15 @@ const defaultState = {
     // earned, persisted in the save so they survive even if the NFT is
     // later sold/transferred.
     claimedTraitRewards: [],   // reward ids already granted
-    marketsLuckMultiplier: 1   // divides Markets catastrophe odds; 1 = no bonus
+    marketsLuckMultiplier: 1,  // divides Markets catastrophe odds; 1 = no bonus
+
+    // Genuine Undead "Second Life" - one free revival per RUN, not per
+    // wallet. It lives in defaultState precisely so resetGame() and
+    // resetGameStateInMemory() clear it for free; it does still ride along
+    // in the cloud save, which is correct - closing the tab mid-run and
+    // coming back should not hand you a fresh revival you already spent.
+    // See triggerLossGameOver() in js/deployer.js.
+    secondLifeUsed: false
 };
 
 let state = { ...defaultState };
