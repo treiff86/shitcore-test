@@ -455,8 +455,51 @@ function openThemeChoice() {
     document.getElementById("themeChoiceModal")?.classList.remove("hidden");
 }
 
+/* ---------------- Waiting for the theme choice ----------------
+   applyCosmeticThemes() opens the "Choose Your Theme" modal and RETURNS
+   immediately - it does not wait for an answer. The perk grants and their
+   toasts ran straight afterwards, so a holder got "Mid Evils perks -
+   $3,000 holder bonus..." fired over the top of a modal they hadn't
+   answered yet, before they'd even seen what they were choosing between.
+
+   This gives that modal a completion signal. Every way out of it resolves
+   the same promise - picking a theme, picking No Theme, or dismissing
+   with the X - so nothing can leave a caller waiting forever.
+
+   The timeout is a backstop, not the normal path: if a player wanders off
+   with the modal open, their holder bonus should still land rather than
+   being lost because they never clicked. */
+const THEME_CHOICE_TIMEOUT_MS = 120000;
+let _themeChoiceWaiters = [];
+
+function themeChoiceOpen() {
+    const m = document.getElementById("themeChoiceModal");
+    return !!m && !m.classList.contains("hidden");
+}
+
+// Resolves once the modal is closed, or immediately if it was never open.
+function whenThemeChoiceSettled() {
+    if (!themeChoiceOpen()) return Promise.resolve();
+    return new Promise((resolve) => {
+        const done = () => resolve();
+        _themeChoiceWaiters.push(done);
+        setTimeout(() => {
+            const i = _themeChoiceWaiters.indexOf(done);
+            if (i !== -1) { _themeChoiceWaiters.splice(i, 1); done(); }
+        }, THEME_CHOICE_TIMEOUT_MS);
+    });
+}
+
+function settleThemeChoice() {
+    const waiters = _themeChoiceWaiters;
+    _themeChoiceWaiters = [];
+    waiters.forEach((fn) => { try { fn(); } catch (e) {} });
+}
+
 function closeThemeChoice() {
     document.getElementById("themeChoiceModal")?.classList.add("hidden");
+    settleThemeChoice(); // covers the X and both picker buttons, which
+                         // all route through here
 }
 
 /* ---------------- Master wallet: LIVE Play vs TEST Play ---------------- */
@@ -1121,6 +1164,11 @@ async function offerCloudLoadIfExists() {
     const data = res.found ? { game_state: res.game_state, updated_at: res.updated_at } : null;
 
     if (!data) {
+        // Hold everything perk-related until the player has actually
+        // answered the theme picker - otherwise the bonus toasts fire over
+        // the top of a modal they haven't read yet. saveToCloud stays AFTER
+        // the grants so the bonus cash is in the state being written.
+        await whenThemeChoiceSettled();
         await applyTraitRewards(walletAddress, true); // brand-new wallet - eligible for one-time starting bonuses too
         await grantHolderBonuses();
         announceHolderPerks();
@@ -1145,6 +1193,9 @@ async function offerCloudLoadIfExists() {
     saveGame();     // no-op now, harmless leftover call
     updateUI();
     showToast("☁️ Welcome back - resumed where you left off.", "success");
+    // Same as the new-wallet path above: nothing perk-related is announced
+    // over an unanswered theme picker.
+    await whenThemeChoiceSettled();
     await applyTraitRewards(walletAddress, false); // existing save - can still earn permanent perks (e.g. luck)
     await grantHolderBonuses();
     // Always announced, claimed or not: the perks are ongoing, so a
