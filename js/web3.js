@@ -98,9 +98,14 @@ const COSMETIC_THEMES = [
 // Trait-gated rewards - checked against the specific NFT's metadata
 // attributes, not just collection membership. Add more entries here as
 // new ones get designed; nothing else needs to change to support them.
-//   - startingCashBonus: one-time, only applied the very first time a
-//     wallet is seen (see offerCloudLoadIfExists) - REPLACES the default
-//     starting cash, doesn't stack with it.
+//   - cashBonus: one-time, claimed once and recorded in the save.
+//     WAS startingCashBonus, which REPLACED the default starting cash and
+//     only applied to a brand-new wallet. That made it invisible to
+//     anyone who had already played, and it silently conflicted with the
+//     flat holder bonus below (one sets cash, the other adds to it, and
+//     the order they ran in decided the result). It is now additive and
+//     ownership-triggered like every other holder bonus, so a Caravaggio
+//     holder gets the Mid Evils $3,000 AND this $4,200 on top.
 //   - marketsLuckMultiplier: permanent once earned (persisted in the
 //     save via claimedTraitRewards), divides all Markets catastrophe
 //     odds (DRAINED/RUGGED/BUST) by this amount. Sticks even if the NFT
@@ -111,11 +116,128 @@ const TRAIT_REWARDS = [
         collectionAddress: "w44WvLKRdLGye2ghhDJBxcmnWpBo31A1tCBko2G6DgW", // Mid Evils
         traitType: "Clothing",
         traitValue: "Caravaggio",
-        startingCashBonus: 4200,
+        cashBonus: 4200,
         marketsLuckMultiplier: 10,
         requiresThemeClass: "medieval-mode", // only recognized/granted once the Mid Evils theme has actually connected - not just on raw wallet connect
     },
 ];
+
+/* ---------------- HOLDER PERKS ----------------
+   Every collection now carries perks, not just Conmen and Mid Evils.
+
+   WHY THIS IS A TABLE. The perks used to be scattered: a bespoke
+   grantConmenHolderBonus() for the cash, a hardcoded multiplier buried in
+   deployer.js for the heat, a trait reward for the luck. Adding a sixth
+   collection meant touching four files and remembering all four. The perk
+   is the data now - the effects read this table, so a new collection is
+   one entry here and nothing else.
+
+   `themeId` matches COSMETIC_THEMES above. Ownership is read from
+   ownedThemesList - the single source of truth applyCosmeticThemes fills
+   from real on-chain checks - rather than the individual isXHolder
+   booleans, which are only mirrors of it.
+
+   Two kinds of perk live here and the difference matters:
+     - cashBonus is CLAIMED ONCE, recorded in the save, and kept forever
+       even if the NFT is later sold. Same contract as the trait rewards.
+     - every other field is LIVE, re-read from current ownership at the
+       moment of use. Sell the NFT and the perk stops. That asymmetry is
+       deliberate: a one-off welcome gift can be permanent, an ongoing
+       mechanical advantage for an NFT you no longer hold should not be.
+
+   `lines` is what the player is actually told on connect (see
+   announceHolderPerks) - keep it accurate, because it is the only place
+   most people will ever learn what they get. */
+const HOLDER_PERKS = [
+    {
+        themeId: "midevils",
+        name: "Mid Evils",
+        cashBonus: 3000,
+        lines: "$3,000 holder bonus · Bonus Stage unlocked · Online Fight Club unlocked",
+    },
+    {
+        themeId: "conmen",
+        name: "Conmen",
+        cashBonus: 3000,
+        heatMultiplier: 0.6,   // 40% less Regulatory Heat from every heat event
+        lines: "$3,000 holder bonus · 40% less Regulatory Heat · rare chance to wipe Heat to 0 · Bonus Stage + Online Fight Club unlocked",
+    },
+    {
+        themeId: "skullx",
+        name: "Skull X",
+        cashBonus: 3000,
+        marketsLuck: 3,        // divides DRAINED/RUGGED/BUST odds
+        lines: "$3,000 holder bonus · 3x Markets luck — crashes are 3x rarer · Online Fight Club unlocked",
+    },
+    {
+        themeId: "mimwizard",
+        name: "$MIM / Bitcoin Wizard",
+        cashBonus: 3000,
+        capitalInflowMult: 1.40,
+        lines: "$3,000 holder bonus · +40% capital inflow on every deployment · the Windows 95 desktop · Online Fight Club unlocked",
+    },
+    {
+        themeId: "genuineundead",
+        name: "Genuine Undead / Forever Undead",
+        cashBonus: 3000,
+        secondLife: true,      // one free revival per run when Heat maxes out
+        lines: "$3,000 holder bonus · Second Life: one free revival per run when Heat maxes out · Online Fight Club unlocked",
+    },
+];
+
+function ownsThemeId(id) {
+    return Array.isArray(ownedThemesList) && ownedThemesList.some((t) => t.id === id);
+}
+
+// Best (not cumulative) luck across owned collections, versus whatever the
+// save already permanently holds from a trait reward. Caravaggio's 10x
+// therefore still beats Skull X's 3x for anyone holding both, instead of
+// the two multiplying into a 30x nobody designed.
+function holderMarketsLuck() {
+    let best = 1;
+    try { best = (state && state.marketsLuckMultiplier) || 1; } catch (e) { best = 1; }
+    for (const p of HOLDER_PERKS) {
+        if (p.marketsLuck && ownsThemeId(p.themeId)) best = Math.max(best, p.marketsLuck);
+    }
+    return best;
+}
+
+// These two DO compound across collections - a dual holder should feel
+// like a dual holder. With one perk of each kind in the table today it
+// makes no practical difference; it matters the moment a second is added.
+function holderCapitalInflowMult() {
+    let m = 1;
+    for (const p of HOLDER_PERKS) {
+        if (p.capitalInflowMult && ownsThemeId(p.themeId)) m *= p.capitalInflowMult;
+    }
+    return m;
+}
+
+function holderHeatMultiplier() {
+    let m = 1;
+    for (const p of HOLDER_PERKS) {
+        if (p.heatMultiplier && ownsThemeId(p.themeId)) m *= p.heatMultiplier;
+    }
+    return m;
+}
+
+function holderHasSecondLife() {
+    return HOLDER_PERKS.some((p) => p.secondLife && ownsThemeId(p.themeId));
+}
+
+// One toast per owned collection, spelling out what that collection
+// actually gives them. showToast displays one at a time and replaces
+// whatever is on screen, so these are spaced far enough apart to each be
+// readable instead of firing as a burst where only the last is ever seen.
+function announceHolderPerks() {
+    const owned = HOLDER_PERKS.filter((p) => ownsThemeId(p.themeId));
+    if (!owned.length) return;
+    let delay = 2600; // let the "theme detected" toast land first
+    owned.forEach((p) => {
+        setTimeout(() => showToast(`✨ ${p.name} perks — ${p.lines}`, "success"), delay);
+        delay += 4200;
+    });
+}
 
 let sb = null;
 let walletAddress = null;
@@ -156,6 +278,7 @@ let isConmenHolder = false; // real Conmen NFT ownership - separate from cosmeti
 let isSkullXHolder = false; // real Skull X ownership - same idea, gates the Skull X easter egg below
 let isUndeadHolder = false; // real Genuine Undead / Forever Undead ownership - same idea, gates the Undead easter egg below
 let isMidEvilsHolder = false; // real Mid Evils ownership - same idea, gates the Mid Evils easter egg (js/midevils-egg.js)
+let isMimWizardHolder = false; // real $MIM / Bitcoin Wizard ownership - drives the capital-inflow perk in deployer.js
 
 // showChoiceIfMultiple=false is used specifically for the master wallet's
 // TEST Play path, where Theme Preview is about to open right after and
@@ -192,6 +315,7 @@ async function applyCosmeticThemes(addr, showChoiceIfMultiple = true) {
     // "midevils" is the THEME ID here (its cssClass is "medieval-mode" -
     // the two names differ, and mixing them up is an easy mistake).
     isMidEvilsHolder = owned.some((t) => t.id === "midevils");
+    isMimWizardHolder = owned.some((t) => t.id === "mimwizard");
     updateOnlineLobbyAccess();
 
     const switchBtn = document.getElementById("themeSwitchBtn");
@@ -373,7 +497,14 @@ function choosePlayMode(mode) {
         // wallet gets - including the dual-theme picker if this wallet
         // holds more than one gated collection. Nothing about this call
         // is different for the master wallet.
-        applyCosmeticThemes(walletAddress, true);
+        // The grants are chained onto this rather than fired alongside it:
+        // ownedThemesList only exists once applyCosmeticThemes resolves, and
+        // for the master wallet offerCloudLoadIfExists already ran back in
+        // connectToProvider - before LIVE was even picked - so this is the
+        // only place a master-wallet LIVE session can pick its perks up.
+        applyCosmeticThemes(walletAddress, true).then(() => {
+            grantHolderBonuses().then(announceHolderPerks);
+        });
         document.getElementById("btcWalletConnectBtn")?.classList.add("hidden");
         if (typeof disconnectBitcoinWallet === "function" && typeof btcWalletAddress !== "undefined" && btcWalletAddress) {
             disconnectBitcoinWallet(); // BTC connectivity is TEST-only - don't let it carry over into a LIVE Play session
@@ -670,6 +801,7 @@ function disconnectWallet() {
     isSkullXHolder = false;
     isUndeadHolder = false;
     isMidEvilsHolder = false;
+    isMimWizardHolder = false;
     isTestPlayMode = false;
     updateOnlineLobbyAccess();
     document.getElementById("themePreviewBtn")?.classList.add("hidden");
@@ -743,8 +875,11 @@ async function applyTraitRewards(addr, isNewSave) {
         if (reward.marketsLuckMultiplier) {
             state.marketsLuckMultiplier = Math.max(state.marketsLuckMultiplier || 1, reward.marketsLuckMultiplier);
         }
-        if (isNewSave && reward.startingCashBonus) {
-            state.cash = reward.startingCashBonus; // replaces the default starting cash, doesn't stack with it
+        if (reward.cashBonus) {
+            // Additive and ownership-triggered, not new-wallet-only - see the
+            // note on TRAIT_REWARDS. `isNewSave` is no longer consulted here.
+            state.cash = (state.cash || 0) + reward.cashBonus;
+            showToast(`🎨 ${reward.traitValue} trait bonus: +$${reward.cashBonus.toLocaleString()}`, "success");
         }
 
         showToast(`✨ Reward unlocked permanently from ${reward.traitValue}.`, "success");
@@ -753,22 +888,41 @@ async function applyTraitRewards(addr, isNewSave) {
     }
 }
 
-// One-time $4,200 bonus for genuinely holding a Conmen NFT. Independent
-// ownership check rather than reusing isConmenHolder - applyCosmeticThemes
-// runs concurrently with this (not awaited before it), so that flag isn't
-// guaranteed to have resolved yet by the time this runs.
-async function grantConmenHolderBonus(addr) {
-    if (typeof window.checkCollectionOwnership !== "function") return;
-    const conmenTheme = COSMETIC_THEMES.find((t) => t.id === "conmen");
-    if (!conmenTheme) return;
-    const owns = await window.checkCollectionOwnership(addr, conmenTheme.collectionAddress);
-    if (!owns) return;
-    if ((state.claimedTraitRewards || []).includes("conmen_holder_bonus")) return;
+/* One-time holder cash bonuses, one per collection, driven by HOLDER_PERKS.
 
-    state.claimedTraitRewards = [...(state.claimedTraitRewards || []), "conmen_holder_bonus"];
-    state.cash = (state.cash || 0) + 4200;
-    showToast("🔒 Conman detected - $4,200 welcome bonus added.", "success");
-    updateUI();
+   REPLACES grantConmenHolderBonus(), which was a bespoke $4,200 for Conmen
+   and nothing at all for the other four collections.
+
+   Reads ownedThemesList rather than re-checking ownership on chain, which
+   the old function had to do because it ran concurrently with
+   applyCosmeticThemes. It no longer does: connectToProvider awaits
+   applyCosmeticThemes before offerCloudLoadIfExists, so the list is
+   already settled here - and skipping the redundant checks saves five
+   round trips through the sol-lookup function on every single connect.
+
+   MIGRATION. Conmen holders who already claimed the old $4,200 carry the
+   legacy id "conmen_holder_bonus" in their save. That is treated as
+   equivalent to the new id, so nobody gets paid twice for the same
+   collection - and nobody who already claimed has their bonus revoked
+   down to $3,000 either. The price change applies to new claims only. */
+const LEGACY_BONUS_IDS = { conmen: "conmen_holder_bonus" };
+
+async function grantHolderBonuses() {
+    if (typeof state === "undefined" || !state) return;
+    let total = 0;
+    for (const perk of HOLDER_PERKS) {
+        if (!perk.cashBonus || !ownsThemeId(perk.themeId)) continue;
+        const id = `holder_bonus_${perk.themeId}`;
+        const claimed = state.claimedTraitRewards || [];
+        const legacy = LEGACY_BONUS_IDS[perk.themeId];
+        if (claimed.includes(id) || (legacy && claimed.includes(legacy))) continue;
+
+        state.claimedTraitRewards = [...claimed, id];
+        state.cash = (state.cash || 0) + perk.cashBonus;
+        total += perk.cashBonus;
+        showToast(`💰 ${perk.name} holder bonus: +$${perk.cashBonus.toLocaleString()}`, "success");
+    }
+    if (total > 0 && typeof updateUI === "function") updateUI();
 }
 
 /* ---------------- Cloud save / load ---------------- */
@@ -784,7 +938,8 @@ async function offerCloudLoadIfExists() {
     if (error) { console.error("[web3] load check failed:", error); return; }
     if (!data) {
         await applyTraitRewards(walletAddress, true); // brand-new wallet - eligible for one-time starting bonuses too
-        await grantConmenHolderBonus(walletAddress);
+        await grantHolderBonuses();
+        announceHolderPerks();
         await saveToCloud();
         return;
     }
@@ -806,8 +961,12 @@ async function offerCloudLoadIfExists() {
     saveGame();     // no-op now, harmless leftover call
     updateUI();
     showToast("☁️ Welcome back - resumed where you left off.", "success");
-    await applyTraitRewards(walletAddress, false); // existing save - can still earn permanent perks (e.g. luck), no cash bonus though
-    await grantConmenHolderBonus(walletAddress);
+    await applyTraitRewards(walletAddress, false); // existing save - can still earn permanent perks (e.g. luck)
+    await grantHolderBonuses();
+    // Always announced, claimed or not: the perks are ongoing, so a
+    // returning player still needs reminding what holding gets them. Only
+    // the CASH is once-per-wallet, and grantHolderBonuses handles that.
+    announceHolderPerks();
 }
 
 async function saveToCloud() {
