@@ -60,22 +60,105 @@ window.FightGame = (function () {
     // Shared per-attack-type numbers - jump/crouch variants borrow their
     // grounded counterpart's values until they get their own tuning.
     const ATTACK_BASE = { punch: 'punch_lo', kick: 'kick_lo' };
-    const DMG = { punch_lo: 5, kick_lo: 8 }; // tuned so continuous unblocked hitting takes ~20-30s to KO, not ~5 hits
-    const ATK_DUR = { punch_lo: 0.26, kick_lo: 0.34 };
-    const HEAVY = new Set(['kick_lo']);
+    const DMG = { punch_lo: 5, kick_lo: 8, throw_lo: 12 }; // tuned so continuous unblocked hitting takes ~20-30s to KO, not ~5 hits
+    const HEAVY = new Set(['kick_lo', 'throw_lo']);
     const HS_LT = 5, HS_HV = 9;
+
+    /* ============================================================
+       FRAME DATA - the thing that makes this feel like a fighting game
+       ============================================================
+       WHAT WAS WRONG BEFORE. hitbox() returned a live box the instant you
+       pressed, and kept it live for the move's entire duration. Every
+       attack was effectively frame-1, so exchanges resolved as "whoever
+       pressed first wins" rather than "whoever read the other player".
+       There was nothing to whiff-punish and no reason to space. It also
+       left the counter-hit code below nearly dead: both attacks landed
+       simultaneously, so it fired on a coin flip instead of on a read.
+
+       Every move now runs STARTUP -> ACTIVE -> RECOVERY, in frames at 60fps:
+         startup   committed, no hitbox yet. A faster move can interrupt -
+                   which is what makes a counter hit a genuine read.
+         active    the hitbox exists. Usually only a few frames.
+         recovery  committed, no hitbox, cannot act. THIS is what makes a
+                   whiffed attack punishable, and the main reason spacing
+                   suddenly matters.
+
+       HIT AND BLOCK STUN are separate from hitstop, and that separation is
+       the whole game. Hitstop (HS_LT/HS_HV) freezes BOTH fighters, purely
+       for impact feel. Stun freezes only the DEFENDER. The gap between the
+       defender's stun and the attacker's remaining recovery is "frame
+       advantage": plus means you keep your turn, minus means they punish
+       you. Before this, both sides always unfroze together - so nothing
+       was ever plus or minus and no move was ever unsafe.
+
+       READING THE TABLE. The attacker's move runs to completion on
+       schedule (updateFighterCommon ignores hitstop), so what they still
+       owe after contact is (total - contactFrame). The defender is frozen
+       for exactly `stun` frames. Therefore:
+           advantage = stun - (total - contactFrame)
+         punch on hit    19 - 12 = +7   links into another punch (4 startup)
+         punch on block  13 - 12 = +1   safe, barely keeps your turn
+         kick  on hit    25 - 19 = +6   still your turn
+         kick  on block  10 - 19 = -9   PUNISHABLE by a 4-frame punch
+       That last line is the point: the heavy hits harder and reaches
+       further, and throwing it out carelessly now costs you the turn.
+       ============================================================ */
+    const FRAME = 1 / 60;
+    const MOVES = {
+        punch_lo:     { startup: 4, active: 3,  recovery: 9,  hitStun: 19, blockStun: 13 },
+        kick_lo:      { startup: 7, active: 4,  recovery: 15, hitStun: 25, blockStun: 10 },
+        crouch_punch: { startup: 4, active: 3,  recovery: 8,  hitStun: 18, blockStun: 12 },
+        crouch_kick:  { startup: 6, active: 4,  recovery: 14, hitStun: 24, blockStun: 10 },
+        // Air moves get long active windows and short recovery - landing
+        // ends the move anyway, so recovery would be mostly invisible.
+        jump_punch:   { startup: 4, active: 8,  recovery: 4,  hitStun: 20, blockStun: 14 },
+        jump_kick:    { startup: 6, active: 10, recovery: 4,  hitStun: 24, blockStun: 16 },
+        // The throw: slow to start, unblockable, brutal when it whiffs.
+        throw_lo:     { startup: 7, active: 2,  recovery: 26, hitStun: 32, blockStun: 0  },
+    };
+    function moveData(state) { return MOVES[state] || MOVES[baseAttackKind(state)] || MOVES.punch_lo; }
+    function moveDuration(state) {
+        const m = moveData(state);
+        return (m.startup + m.active + m.recovery) * FRAME;
+    }
+
+    /* THROWS - the answer to blocking.
+       The game had strike and block and nothing else, which left blocking
+       close to dominant: chip damage and guard break were its only
+       counters and both take five hits to bite. A throw completes the
+       triangle - throw beats block, strike beats throw (it is slow enough
+       to interrupt), block beats strike.
+
+       Deliberately sprite-free: it renders with the existing punch frames,
+       so it reads as a hard shove rather than a cinematic grab. It PLAYS
+       correctly today and will LOOK right once there is art for it. */
+    const CPU_THROW_ON_BLOCK = 0.55; // chance the CPU punishes a turtling player with a throw
+    const CPU_THROW_MIXUP   = 0.12; // baseline throw rate so blocking never feels automatically safe
+    const THROW_RANGE = 54;   // px of reach past the body box - you must get close
+    const THROW_KB = 78;      // px of shove, far more than any normal hit
+
+    /* CANCELS - now only ON HIT.
+       A cancel used to open at 40% of the move's duration whether or not it
+       connected, so a whiffed attack could always be cancelled out of. That
+       handed you a free escape from your own recovery and would have made
+       whiff-punishing impossible even after recovery existed. Cancelling
+       only on hit is the standard rule, and it is what turns punch -> kick
+       into a real combo instead of a mash. */
     const CANCEL_W = 0.18;
 
     function baseAttackKind(state) {
-        // 'jump_punch' / 'crouch_punch' -> 'punch_lo', etc. - so damage/
-        // duration/hitbox lookups work the same regardless of variant.
+        if (typeof state !== 'string') return null;
+        // 'jump_punch' / 'crouch_punch' -> 'punch_lo', etc. - so damage and
+        // hitbox lookups work the same regardless of variant.
+        if (state === 'throw_lo') return 'throw_lo';
         if (state.endsWith('_punch') || state === 'punch_lo') return 'punch_lo';
         if (state.endsWith('_kick') || state === 'kick_lo') return 'kick_lo';
         return null;
     }
     function isAttackState(state) {
-        return state === 'punch_lo' || state === 'kick_lo' || state === 'jump_punch' || state === 'jump_kick' || state === 'crouch_punch' || state === 'crouch_kick';
+        return state === 'punch_lo' || state === 'kick_lo' || state === 'jump_punch' || state === 'jump_kick' || state === 'crouch_punch' || state === 'crouch_kick' || state === 'throw_lo';
     }
+    function isThrowState(state) { return state === 'throw_lo'; }
 
     // ---------------- Guard meter, chip damage, guard break ----------------
     // Blocking is free (0 damage) while the guard meter has charge. Each
@@ -748,7 +831,12 @@ window.FightGame = (function () {
             this._fw = (anims && anims._bodyW) || 90;
             this._strip = null;
             this.atkT = 0; this.atkDur = 0; this.hitReg = false; this.canW = false; this.canT = 0;
-            this.stop = 0;
+            this.stop = 0;   // HITSTOP - freezes BOTH fighters, impact feel only
+            this.stunIsBlock = false; // was that stun from blocking, or from eating it?
+            this.stunT = 0;  // HIT/BLOCK STUN - freezes only THIS fighter, in seconds.
+                             // The difference between the two is where frame
+                             // advantage comes from; see the FRAME DATA note above.
+
             this.blocking = false;
             this.hurtT = 0;
             this.heliT = 0;
@@ -773,8 +861,30 @@ window.FightGame = (function () {
             return { x: this.x, y: this.y + (P_H - h), w: this._fw, h };
         }
 
+        // Which phase of the move we're in right now. Everything about how
+        // the game feels hangs off this being correct.
+        attackPhase() {
+            if (!isAttackState(this.state)) return null;
+            const m = moveData(this.state);
+            /* EPSILON IS NOT OPTIONAL HERE. atkT accumulates by += dt, so
+               after 7 frames it holds 6.9999999... rather than 7. Comparing
+               that raw against integer frame counts moves every phase
+               boundary by a frame in whichever direction the error happens
+               to fall - a 3-frame active window measured as 4, a 4-frame one
+               measured as 3. Rounding to the nearest frame first makes the
+               boundaries land exactly where the table says they do. */
+            const f = Math.floor(this.atkT / FRAME + 1e-6);
+            if (f < m.startup) return 'startup';
+            if (f < m.startup + m.active) return 'active';
+            return 'recovery';
+        }
+
         hitbox() {
+            // ONLY during the active window. Returning a box during startup
+            // or recovery is exactly the bug this rework exists to fix.
             if (!isAttackState(this.state) || this.hitReg) return null;
+            if (this.attackPhase() !== 'active') return null;
+
             const base = baseAttackKind(this.state);
             if (base === 'punch_lo') {
                 const ex = this.facing === 1 ? this.x + this._fw - 6 : this.x - 40;
@@ -783,6 +893,12 @@ window.FightGame = (function () {
             if (base === 'kick_lo') {
                 const ex = this.facing === 1 ? this.x + this._fw - 4 : this.x - 46;
                 return { x: ex, y: this.y + P_H * 0.55, w: 54, h: 28 };
+            }
+            if (base === 'throw_lo') {
+                // Shorter reach than either strike, and tall, because a
+                // throw should mean "I got right up in your face".
+                const ex = this.facing === 1 ? this.x + this._fw - 10 : this.x - (THROW_RANGE - 10);
+                return { x: ex, y: this.y + P_H * 0.25, w: THROW_RANGE, h: P_H * 0.5 };
             }
             return null;
         }
@@ -797,15 +913,70 @@ window.FightGame = (function () {
             else kind = ATTACK_BASE[baseKind];
             this.state = kind; this.atkT = 0; this.hitReg = false; this.canW = false; this.canT = 0;
             this.fr = 0; this.frT = 0;
-            this.atkDur = ATK_DUR[baseAttackKind(kind)];
+            this.atkDur = moveDuration(kind);
             if (typeof playSfxFile === 'function') playSfxFile(baseKind === 'punch' ? SFX_PUNCH_WHOOSH : SFX_KICK_WHOOSH, 0.35);
+        }
+
+        // Grounded only, on purpose: an air throw would need its own art and
+        // its own escape rules, and neither exists yet.
+        beginThrow() {
+            if (this.blocking || !this.grounded || this.crouching) return;
+            this.state = 'throw_lo'; this.atkT = 0; this.hitReg = false;
+            this.canW = false; this.canT = 0;
+            this.fr = 0; this.frT = 0;
+            this.atkDur = moveDuration('throw_lo');
+            if (typeof playSfxFile === 'function') playSfxFile(SFX_PUNCH_WHOOSH, 0.4);
         }
 
         // rawDmg has already had counter-hit and combo scaling applied by
         // resolveHit() by the time it gets here - this method's only job is
         // deciding how blocking/guard state affects it.
-        takeDamage(rawDmg, heavy, isCounterHit) {
+        takeDamage(rawDmg, heavy, isCounterHit, attackState) {
             let dmg;
+            const move = attackState ? moveData(attackState) : MOVES.punch_lo;
+            const unblockable = !!(attackState && isThrowState(attackState));
+
+            /* Stun is applied to the DEFENDER ONLY and is what creates
+               frame advantage - see the FRAME DATA note at the top. It runs
+               AFTER hitstop (`stop`), which freezes both fighters equally
+               for impact feel and grants nobody an advantage.
+               Counter hits add a few frames, which is what makes reading an
+               opponent's startup actually pay. */
+            /* STUN IS INCLUSIVE OF HITSTOP, and this is the subtle part.
+               updateHumanFighter gates on `stop` FIRST and `stunT` second,
+               so they run back to back - a defender given both is frozen for
+               stop + stun frames, not stun frames. Meanwhile
+               updateFighterCommon advances the ATTACKER's move timer with no
+               hitstop check at all, so their move ends on schedule
+               regardless. Left uncorrected every exchange came out ~5 frames
+               worse for the attacker than the table claims: measurement had
+               a "+1 on block" punch landing at -3. Subtracting the hitstop
+               already applied makes the defender's total freeze exactly
+               `frames`, which is what the table means. */
+            const applyStun = (frames, wasBlocked) => {
+                const extra = isCounterHit ? COUNTER_HIT_EXTRA_STOP : 0;
+                const total = frames + extra;
+                const already = this.stop || 0;
+                this.stunT = Math.max(this.stunT || 0, Math.max(0, total - already) * FRAME);
+                this.stunIsBlock = !!wasBlocked;
+            };
+
+            if (unblockable && !this.guardBroken) {
+                // A throw ignores blocking entirely - that is its entire
+                // reason for existing. It still can't hit someone already
+                // guard-broken any harder than the normal path does.
+                dmg = Math.round(rawDmg);
+                this.hurtT = HURT_FLASH_T;
+                this.stop = HS_HV + (isCounterHit ? COUNTER_HIT_EXTRA_STOP : 0);
+                this.timeSinceBlockOrHit = 0;
+                this.chipBlockCount = 0;
+                this.blocking = false;   // yanked out of the block stance
+                applyStun(move.hitStun);
+                this.hp = Math.max(0, this.hp - dmg);
+                if (this.hp <= 0) this.ko = true;
+                return dmg;
+            }
+
             if (this.guardBroken) {
                 // Fully vulnerable - blocking isn't possible during a guard
                 // break, so this always behaves like an unblocked hit.
@@ -813,8 +984,16 @@ window.FightGame = (function () {
                 this.hurtT = HURT_FLASH_T;
                 this.stop = (heavy ? HS_HV : HS_LT) + (isCounterHit ? COUNTER_HIT_EXTRA_STOP : 0);
                 this.timeSinceBlockOrHit = 0;
+                applyStun(move.hitStun);
             } else if (this.blocking) {
                 this.timeSinceBlockOrHit = 0;
+                // The defender gets hitstop on a block too. Previously only
+                // the ATTACKER froze on a blocked hit, which quietly handed
+                // the defender ~5 free frames on every single block.
+                this.stop = heavy ? HS_HV : HS_LT;
+                // Blockstun is shorter than hitstun - that gap is what makes
+                // blocking a way to survive rather than a way to win the turn.
+                applyStun(move.blockStun, true);
                 if (this.guardMeter > 0) {
                     // Free block - guard meter absorbs it instead of health.
                     this.guardMeter = Math.max(0, this.guardMeter - GUARD_COST_PER_BLOCK);
@@ -833,6 +1012,7 @@ window.FightGame = (function () {
                 this.hurtT = HURT_FLASH_T;
                 this.stop = (heavy ? HS_HV : HS_LT) + (isCounterHit ? COUNTER_HIT_EXTRA_STOP : 0);
                 this.timeSinceBlockOrHit = 0;
+                applyStun(move.hitStun);
                 // A clean non-blocked hit also resets guard - no reason to
                 // stay "worn down" from blocking once they've eaten a real hit.
                 this.chipBlockCount = 0;
@@ -880,6 +1060,10 @@ window.FightGame = (function () {
             // which art to draw. Falls back to the plain block pose for any
             // character without the crouch/jump variants.
             let stateForFrames = this.state;
+            // The throw has no art of its own. Borrowing the punch strip
+            // makes it read as a hard shove, which is close enough to sell
+            // the move until a real grab animation exists.
+            if (this.state === 'throw_lo') stateForFrames = 'punch_lo';
             if (this.state === 'block') {
                 if (!this.grounded && this.anims.jump_block && this.anims.jump_block.length) stateForFrames = 'jump_block';
                 else if (this.grounded && this.crouching && this.anims.crouch_block && this.anims.crouch_block.length) stateForFrames = 'crouch_block';
@@ -944,7 +1128,7 @@ window.FightGame = (function () {
     let onKeyDown, onKeyUp;
 
     const HANDLED_KEYS = new Set([
-        'a', 'd', 'w', 's', 'z', 'x', ' ',
+        'a', 'd', 'w', 's', 'z', 'x', 'c', ' ',
         'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Enter', '/',
         'Shift', 'Escape',
     ]);
@@ -1133,6 +1317,15 @@ window.FightGame = (function () {
     // Applies a knockback nudge to the defender, respecting the chain cap.
     // Returns true if they actually moved, false if they've gone stiff.
     function applyKnockback(defender, attacker, blocked) {
+        // A throw is not part of a flurry - it is the thing that ENDS one -
+        // so it shoves hard and ignores the chain cap entirely.
+        if (isThrowState(attacker.state)) {
+            const dirT = defender.x < attacker.x ? -1 : 1;
+            defender.x = Math.max(STAGE_MARGIN, Math.min(SW - STAGE_MARGIN - defender._fw, defender.x + dirT * THROW_KB));
+            defender.kbChain = 0;
+            defender.kbResetT = KB_RESET_SECONDS;
+            return true;
+        }
         if (defender.kbChain >= KB_MAX_CHAIN) {
             defender.kbResetT = KB_RESET_SECONDS; // still refresh the timer - the flurry is ongoing
             return false;
@@ -1219,6 +1412,7 @@ window.FightGame = (function () {
             [bind.jump]: !!(rk && rk.cpu_jump), [bind.crouch]: !!(rk && rk.cpu_crouch),
             [bind.punch]: !!(rk && rk.cpu_punch), [bind.kick]: !!(rk && rk.cpu_kick),
             [bind.block]: !!(rk && rk.cpu_block),
+            [bind.throwGrab]: !!(rk && rk.cpu_throw),
         };
         for (const k in next) {
             if (next[k] && !keys[k]) justPressed[k] = true; // rising edge only, same rule as a real keydown
@@ -1236,6 +1430,7 @@ window.FightGame = (function () {
         // Release every virtual key first, then set only what this frame's
         // decision calls for - same shape as a human's actual key state.
         keys[bind.left] = false; keys[bind.right] = false; keys[bind.crouch] = false; keys[bind.block] = false;
+        keys[bind.throwGrab] = false;
 
         ai.attackCooldown = Math.max(0, ai.attackCooldown - dt);
 
@@ -1265,7 +1460,20 @@ window.FightGame = (function () {
             } else {
                 ai.moveDir = 0;
                 if (ai.attackCooldown <= 0 && Math.random() < diff.attackChance) {
-                    ai.wantAttack = Math.random() < 0.5 ? 'punch' : 'kick';
+                    /* The CPU has to be able to throw, or the player can
+                       simply hold block forever and win every round. Now
+                       that throws exist and beat blocking, an AI that only
+                       strikes would hand the human a free dominant strategy.
+                       So: if they are turtling and we are close enough to
+                       grab, throw them. Otherwise strike as before. */
+                    const inThrowRange = absDist < (cpu._fw + THROW_RANGE * 0.8);
+                    if (target.blocking && inThrowRange && Math.random() < CPU_THROW_ON_BLOCK) {
+                        ai.wantAttack = 'throwGrab';
+                    } else if (inThrowRange && Math.random() < CPU_THROW_MIXUP) {
+                        ai.wantAttack = 'throwGrab'; // occasional mixup so blocking never feels safe
+                    } else {
+                        ai.wantAttack = Math.random() < 0.5 ? 'punch' : 'kick';
+                    }
                     ai.attackCooldown = diff.attackCooldown;
                 }
             }
@@ -1299,7 +1507,40 @@ window.FightGame = (function () {
         const attacking = isAttackState(f.state);
         const crouchHeld = !!keys[bind.crouch];
 
-        // Blocking works airborne now too (see jump_block art) - grounded
+        /* ORDER MATTERS HERE, and getting it wrong is subtle.
+
+           Freeze states are checked BEFORE the block stance is evaluated.
+           The block branch below returns early for a grounded fighter, so
+           when it ran first a fighter who held block never reached the
+           timers underneath - and their blockstun never expired. They would
+           have been frozen for as long as they kept holding block. */
+
+        // HITSTOP: both fighters frozen, nobody gains anything by it.
+        if (f.stop > 0) { f.stop--; return; }
+
+        // STUN: carried only by the fighter who was hit. The attacker is
+        // already free and acting - that gap IS frame advantage, and it is
+        // what makes a combo or a punish possible at all.
+        if (f.stunT > 0) {
+            f.stunT = Math.max(0, f.stunT - dt);
+            // Blockstun keeps the guard up, so a block string reads as one
+            // continuous stance instead of flickering. Hitstun does not -
+            // you cannot start blocking in the middle of eating a combo,
+            // which is exactly what makes getting hit once cost something.
+            if (f.stunIsBlock && blockHeld && !attacking) {
+                f.blocking = true;
+                f.crouching = f.grounded && crouchHeld;
+                f.state = 'block'; f.fr = 0;
+                f.timeSinceBlockOrHit = 0;
+            } else {
+                f.blocking = false;
+            }
+            if (!f.grounded) applyGravity(f, dt, true);
+            f.vx = 0;
+            return;
+        }
+
+        // Blocking works airborne too (see jump_block art) - grounded
         // blocking still stops input dead like before; airborne blocking
         // falls through so gravity/landing keeps running underneath it.
         f.blocking = blockHeld && !attacking;
@@ -1309,8 +1550,6 @@ window.FightGame = (function () {
             f.timeSinceBlockOrHit = 0; // holding block also resets the recovery clock, not just getting hit while blocking
             if (f.grounded) return;
         }
-
-        if (f.stop > 0) { f.stop--; return; }
 
         // --- jump physics (runs regardless of attack state, so you can
         // still fall/land mid-attack, and now also mid-air-block).
@@ -1357,7 +1596,12 @@ window.FightGame = (function () {
 
         // --- attacks: only fire on a genuine key PRESS, mashing required ---
         const canStart = !attacking || (f.canW && f.canT > 0);
-        if (justPressed[bind.punch] && canStart) {
+        // Throw is checked first and never cancels into or out of anything:
+        // it has to be a standalone commitment, or it stops being the risky
+        // option that beats blocking and becomes a free combo ender.
+        if (justPressed[bind.throwGrab] && !attacking && f.grounded && !f.crouching) {
+            f.beginThrow();
+        } else if (justPressed[bind.punch] && canStart) {
             f.beginAttack('punch');
         } else if (justPressed[bind.kick]) {
             // Helicopter kick: mashing kick WHILE ALREADY mid-air-kicking (not
@@ -1412,7 +1656,11 @@ window.FightGame = (function () {
         if (isAttackState(f.state) && !heliActive) {
             f.atkT += dt;
             if (f.canT > 0) f.canT -= dt;
-            if (!f.canW && f.atkT >= f.atkDur * 0.4) { f.canW = true; f.canT = CANCEL_W; }
+            // Cancel opens the moment the move CONNECTS, not at a fixed
+            // fraction of its duration. Whiffing now means sitting in your
+            // own recovery, which is the entire point of having recovery.
+            // Throws never cancel into anything.
+            if (!f.canW && f.hitReg && !isThrowState(f.state)) { f.canW = true; f.canT = CANCEL_W; }
             if (f.atkT >= f.atkDur) {
                 f.state = f.grounded ? 'idle' : 'jump'; f.atkT = 0; f.canW = false; f.fr = 0;
             }
@@ -1446,7 +1694,13 @@ window.FightGame = (function () {
             // Counter hit: defender was already mid-attack (committed,
             // hasn't landed their own hit yet) when this connected -
             // interrupting a startup earns bonus damage and extra hitstun.
-            const isCounterHit = isAttackState(defender.state) && !defender.hitReg && !defender.guardBroken;
+            // A counter hit now means what it says: catching them during
+            // the STARTUP of their own move, before their hitbox exists.
+            // It used to fire whenever the defender was in any attack
+            // state, which - back when every hitbox was live on frame 1 -
+            // was effectively a coin flip rather than a read.
+            const isCounterHit = isAttackState(defender.state) && !defender.hitReg
+                && !defender.guardBroken && defender.attackPhase() === 'startup';
             let dmg = isCounterHit ? baseDmg * COUNTER_HIT_MULT : baseDmg;
 
             // Combo scaling only applies to genuinely unguarded hits -
@@ -1458,7 +1712,7 @@ window.FightGame = (function () {
                 dmg *= scale;
             }
 
-            defender.takeDamage(dmg, heavy, isCounterHit);
+            defender.takeDamage(dmg, heavy, isCounterHit, attacker.state);
             attacker.stop = heavy ? HS_HV : HS_LT;
             shake.hit(heavy ? 7.0 : 3.2);
 
@@ -1643,14 +1897,14 @@ window.FightGame = (function () {
         const shake = new Shake();
         const fx = [];
 
-        const P1_BIND = { left: 'ArrowLeft', right: 'ArrowRight', jump: 'ArrowUp', crouch: 'ArrowDown', punch: 'z', kick: 'x', block: ' ' };
+        const P1_BIND = { left: 'ArrowLeft', right: 'ArrowRight', jump: 'ArrowUp', crouch: 'ArrowDown', punch: 'z', kick: 'x', block: ' ', throwGrab: 'c' };
         // P2 is CPU-only now (see updateCPUInput) - these are just internal
         // dictionary keys the AI sets programmatically, not real keyboard
         // keys, so they're deliberately NOT actual key names anymore. That
         // matters: if these matched P1_BIND's real key strings, a P1 key
         // press would leak into the CPU's virtual input for that frame
         // (they share the same `keys`/`justPressed` objects).
-        const P2_BIND = { left: 'cpu_left', right: 'cpu_right', jump: 'cpu_jump', crouch: 'cpu_crouch', punch: 'cpu_punch', kick: 'cpu_kick', block: 'cpu_block' };
+        const P2_BIND = { left: 'cpu_left', right: 'cpu_right', jump: 'cpu_jump', crouch: 'cpu_crouch', punch: 'cpu_punch', kick: 'cpu_kick', block: 'cpu_block', throwGrab: 'cpu_throw' };
 
         keys = {}; justPressed = {};
         let lastSentInputSnapshot = null;
@@ -1716,6 +1970,7 @@ window.FightGame = (function () {
                         cpu_jump: !!keys[P1_BIND.jump], cpu_crouch: !!keys[P1_BIND.crouch],
                         cpu_punch: !!keys[P1_BIND.punch], cpu_kick: !!keys[P1_BIND.kick],
                         cpu_block: !!keys[P1_BIND.block],
+                        cpu_throw: !!keys[P1_BIND.throwGrab],
                     };
                     const snap = JSON.stringify(outKeys);
                     if (snap !== lastSentInputSnapshot) {
@@ -1822,7 +2077,10 @@ window.FightGame = (function () {
             if (g.phase === 'intro') drawIntro(ctx, g);
             else if (g.phase !== 'playing') drawEnd(ctx, g);
 
-            const leg = 'P1: \u2190\u2192 Move  \u2191 Jump  \u2193 Crouch  Z Punch  X Kick  Space Block   |   P2: CPU';
+            // C Throw is listed because a move nobody can discover may as
+            // well not exist - and the throw is the whole answer to an
+            // opponent who just holds block.
+            const leg = 'P1: \u2190\u2192 Move  \u2191 Jump  \u2193 Crouch  Z Punch  X Kick  C Throw  Space Block   |   P2: CPU';
             ctx.font = "9px 'BonusStagePixel', monospace";
             ctx.fillStyle = '#aaaaaa';
             ctx.textAlign = 'center';
