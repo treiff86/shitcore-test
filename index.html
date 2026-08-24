@@ -24,19 +24,17 @@
              against every screen of the real site in a headless browser
              before shipping.
 
-         WHY script-src IS NOT STRICT. Two hard blockers, both real:
-           - 'unsafe-eval' is required because cdn.tailwindcss.com
-             compiles your CSS at runtime with new Function(). Remove it
-             and the entire site renders unstyled.
-           - 'unsafe-inline' is required because there are 98 inline
-             onclick="" handlers in this file. CSP has no nonce path for
-             inline event handlers - they are all-or-nothing. Drop it and
-             every button on the site silently stops responding.
-         So script-src is genuinely weak here, and pretending otherwise
-         would be worse than saying it. The real protection in this
-         policy is connect-src, object-src, base-uri and form-action.
-         Vendoring a built Tailwind file and moving those 98 handlers to
-         addEventListener would let both 'unsafe-*' come out.
+         WHY script-src IS STILL NOT STRICT - one blocker left, not two.
+           - 'unsafe-eval' is GONE, because Tailwind is now a vendored
+             stylesheet instead of a runtime compiler calling
+             new Function(). Nothing on this page evals strings any more.
+           - 'unsafe-inline' is still required: there are 98 inline
+             onclick="" handlers in this file, and CSP has no nonce path
+             for inline event handlers - they are all-or-nothing. Drop it
+             and every button on the site silently stops responding.
+         Moving those 98 handlers to addEventListener is what would let
+         the last 'unsafe-*' come out. Until then the real protection in
+         this policy is connect-src, object-src, base-uri and form-action.
 
          fonts.gstatic.com appears nowhere else in this file - Google's
          stylesheet fetches the actual font files from it. Same for the
@@ -48,7 +46,7 @@
          They cost nothing: an attacker cannot serve from those schemes
          without the visitor first installing their extension.
          ============================================================ -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://esm.sh chrome-extension: moz-extension:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: blob: https://image.pollinations.ai; media-src 'self' blob:; connect-src 'self' https://dhoewjzwimvgogckprof.supabase.co wss://dhoewjzwimvgogckprof.supabase.co https://esm.sh https://rpc.ankr.com https://solana-rpc.publicnode.com https://rpc.apechain.com; frame-src https://classicjoy.games; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://esm.sh chrome-extension: moz-extension:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: blob: https://image.pollinations.ai; media-src 'self' blob:; connect-src 'self' https://dhoewjzwimvgogckprof.supabase.co wss://dhoewjzwimvgogckprof.supabase.co https://esm.sh https://rpc.ankr.com https://solana-rpc.publicnode.com https://rpc.apechain.com; frame-src https://classicjoy.games; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
 
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Shitcore (USDSHT) — The Ultimate L1 for Absolute Rugs</title>
@@ -79,8 +77,28 @@
         });
     </script>
 
-    <!-- Tailwind CSS (CDN, no build step needed) -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tailwind CSS - VENDORED, was <script src="https://cdn.tailwindcss.com">.
+
+         Why it moved: the CDN build compiled the entire stylesheet in the
+         browser on every single page load, which meant (a) if that CDN was
+         ever slow, blocked or down, the site rendered as raw unstyled HTML,
+         and (b) the CSP had to allow 'unsafe-eval', because the compiler
+         runs on new Function(). Both are gone now. It also loads faster -
+         one 42KB cached file instead of fetching and running a compiler.
+
+         POSITION MATTERS, do not move this below style.css. The old script
+         was render-blocking and sat here, so the CDN injected its rules at
+         THIS point in the document - before style.css. Several custom
+         classes rely on that ordering to win a tie: .neon-glow-red/green
+         and .neon-glow-amber sit on the same elements as Tailwind's
+         shadow-2xl and border-*/60, and if Tailwind came later it would
+         overwrite them and the win/loss modals would lose their glow.
+
+         REGENERATE after adding new Tailwind classes - see the comment at
+         the top of tailwind.css. A class that is never scanned is simply
+         absent from the file, and the only symptom is one element quietly
+         losing its styling. -->
+    <link rel="stylesheet" href="tailwind.css?v=1">
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&family=MedievalSharp&family=UnifrakturMaguntia&family=Special+Elite&family=Rye&display=swap" rel="stylesheet">
     <!-- FontAwesome icons -->
