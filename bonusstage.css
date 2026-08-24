@@ -291,9 +291,9 @@
 .ft-punch { background: linear-gradient(180deg, #e8b3b3 0%, #c06a6a 100%); }
 .ft-kick  { background: linear-gradient(180deg, #e8d0a8 0%, #c09a5a 100%); }
 .ft-block { background: linear-gradient(180deg, #b3c6e8 0%, #6a86c0 100%); width: 52px; height: 52px; }
-/* Throw sits with the attack buttons but reads as its own thing - it is the
-   only unblockable option, and the only one that is a hard commitment. */
-.ft-throw { background: linear-gradient(180deg, #d9b3e8 0%, #8f6ac0 100%); width: 52px; height: 52px; font-size: 10px; }
+/* The guard counter sits with the attack buttons but reads as its own thing -
+   it is defensive, costs meter, and is only live for a moment after a block. */
+.ft-counter { background: linear-gradient(180deg, #d9b3e8 0%, #8f6ac0 100%); width: 52px; height: 52px; font-size: 10px; }
 
 /* Landscape on a phone: no room below the canvas, so float the controls
    over its bottom corners instead. */
@@ -315,7 +315,7 @@
     .fight-touch .ft-actions { gap: 5px; }
     .fight-touch .ft-act { width: 54px; height: 54px; font-size: 10px; }
     .fight-touch .ft-block { width: 46px; height: 46px; }
-    .fight-touch .ft-throw { width: 46px; height: 46px; font-size: 9px; }
+    .fight-touch .ft-counter { width: 46px; height: 46px; font-size: 9px; }
     .fight-touch .ft-dpad,
     .fight-touch .ft-actions { pointer-events: auto; }
     .fight-touch .ft-btn { opacity: 0.72; }
