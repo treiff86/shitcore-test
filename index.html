@@ -2,6 +2,54 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+
+    <!-- ============================================================
+         CONTENT SECURITY POLICY
+         ============================================================
+         A whitelist of where this page is allowed to load code, styles,
+         fonts, images, media and network connections FROM. Anything not
+         listed is refused by the browser before a request is even made.
+         The thing it is actually protecting against: if a bug ever lets
+         an attacker get script onto the page, connect-src means they
+         still cannot ship your visitors' data anywhere - the only
+         network destinations that exist are the ones below.
+
+         DELIVERED AS A META TAG because GitHub Pages cannot set HTTP
+         response headers. That has two consequences worth knowing:
+           - frame-ancestors and report-uri are IGNORED in meta form, so
+             there is no clickjacking protection and no violation
+             reporting here. Both would need a real host with headers.
+           - there is no Report-Only mode for a meta tag, so this could
+             not be staged in warn-first mode. It was instead validated
+             against every screen of the real site in a headless browser
+             before shipping.
+
+         WHY script-src IS NOT STRICT. Two hard blockers, both real:
+           - 'unsafe-eval' is required because cdn.tailwindcss.com
+             compiles your CSS at runtime with new Function(). Remove it
+             and the entire site renders unstyled.
+           - 'unsafe-inline' is required because there are 98 inline
+             onclick="" handlers in this file. CSP has no nonce path for
+             inline event handlers - they are all-or-nothing. Drop it and
+             every button on the site silently stops responding.
+         So script-src is genuinely weak here, and pretending otherwise
+         would be worse than saying it. The real protection in this
+         policy is connect-src, object-src, base-uri and form-action.
+         Vendoring a built Tailwind file and moving those 98 handlers to
+         addEventListener would let both 'unsafe-*' come out.
+
+         fonts.gstatic.com appears nowhere else in this file - Google's
+         stylesheet fetches the actual font files from it. Same for the
+         cdnjs webfonts behind Font Awesome. Miss either and the site
+         renders in fallback fonts with no obvious error.
+
+         chrome-extension: / moz-extension: keep injected wallet
+         providers (Phantom, Solflare, MetaMask, Xverse, UniSat) working.
+         They cost nothing: an attacker cannot serve from those schemes
+         without the visitor first installing their extension.
+         ============================================================ -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://esm.sh chrome-extension: moz-extension:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: blob: https://image.pollinations.ai; media-src 'self' blob:; connect-src 'self' https://dhoewjzwimvgogckprof.supabase.co wss://dhoewjzwimvgogckprof.supabase.co https://esm.sh https://rpc.ankr.com https://solana-rpc.publicnode.com https://rpc.apechain.com; frame-src https://classicjoy.games; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
+
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Shitcore (USDSHT) — The Ultimate L1 for Absolute Rugs</title>
     <meta name="description" content="A satirical idle-tycoon game about meme-coin rug pulls. 100% fake money, 100% fake blockchain, 100% real bad decisions.">
