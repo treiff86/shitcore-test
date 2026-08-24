@@ -99,15 +99,15 @@ Mock OpenSea. Generate real AI art via Pollinations.ai (free, no API key). Mint 
 
 ---
 
-### 🥊 Fight Club — Local Brawler *(New in v2.0.0, TEST Play preview)*
-A full side-scrolling fighter buried inside the tycoon game, because why not. Currently gated to TEST Play while it finishes cooking toward a LIVE release for real Mid Evils and Conmen holders.
+### 🥊 Fight Club — Local Brawler & Online *(New in v2.0.0)*
+A full side-scrolling fighter buried inside the tycoon game, because why not. **Live for holders of any supported collection** — the local CPU version is TEST Play, but the Online Fight Club lobby is open to every holder, and they can all match against each other. A $MIM Wizard holder can fight a Skull X holder.
 
-- **4 playable characters** — Reiffer (Mid Evils), the Conmen character, the $MIM/Bitcoin Wizard, and Genuine Undead (an office zombie in a suit, exclusive to that theme's preview)
-- **4 arenas** — a prison yard, a medieval market, a wizard's study (with a jumpable table), and a corporate office (with a jumpable reception desk) — each with matching background music where a track exists
+- **5 playable characters** — Reiffer (Mid Evils), the Conmen character, the $MIM/Bitcoin Wizard, Genuine Undead (an office zombie in a suit), and Skull X
+- **5 arenas** — a prison yard, a medieval market (with a jumpable trestle table), a wizard's study (jumpable table and cauldron), a corporate office (jumpable filing cabinets and desk), and the Skull X stage — each with matching background music where a track exists
 - **P2 is CPU-controlled** (medium difficulty) — approaches, throws punches and kicks in range, reacts to your attacks with a chance to block
 - Punch, kick, block, crouch, jump, and jump/crouch-specific block and hit-reaction poses; guard meter and chip damage; counter-hit and combo damage scaling
 - Real recorded hit/block/whoosh sound effects, mixed randomly so it doesn't repeat, plus a distinct sound for the finishing blow
-- P1 spawns as whichever character matches your active cosmetic theme; P2 and the arena are randomized from everything currently built
+- P1 spawns as whichever character matches your active cosmetic theme. In a local match P2 and the arena are randomized; in an online match each side plays as their own collection's character
 
 ---
 
@@ -163,7 +163,9 @@ A passive difficulty system that runs the whole time you have the tab open — c
 
 ## 🎭 Holder Perks
 
-Separate from the shop above: these come from genuinely holding an NFT from a supported collection, verified on-chain. Every collection now carries perks — connect your wallet and a toast tells you exactly what yours are.
+Separate from the shop above: these come from genuinely holding an NFT from a supported collection, verified on-chain. Every collection carries perks.
+
+**You get the perks of the theme you're wearing.** Hold three collections and you still pick one look at a time, so you get that one's perks — choosing Mid Evils means Mid Evils perks, not everyone's at once. Switch theme and the perks switch with you. A toast on connect spells out exactly what the collection you picked gives you.
 
 | Collection | One-time bonus | Ongoing perk |
 |---|---|---|
@@ -173,9 +175,11 @@ Separate from the shop above: these come from genuinely holding an NFT from a su
 | **$MIM / Bitcoin Wizard** | $3,000 | **+40% capital inflow** on every deployment, plus the Windows 95 desktop |
 | **Genuine Undead / Forever Undead** | $3,000 | **Second Life** — the first time Regulatory Heat maxes out in a run, it drops to 50% instead of ending you. Once per run |
 
-**Trait-gated on top of that:** a Mid Evils holder whose NFT has the **Caravaggio** Clothing trait gets a further **$4,200** and a permanent **10x Markets luck** multiplier. The luck is kept forever once earned, even if the NFT is later sold. Holding both Caravaggio and Skull X gives you the *better* of the two multipliers, not the product.
+**Trait-gated on top of that:** a Mid Evils holder whose NFT has the **Caravaggio** Clothing trait gets a further **$4,200** and a **10x Markets luck** multiplier while wearing the Mid Evils theme. Once earned it's yours permanently — selling the NFT never takes it back — it's simply dormant while you're wearing another collection's colours. If you also hold Skull X, wearing Mid Evils gives you the 10x and wearing Skull X gives you its 3x; they never multiply together.
 
-The one-time cash bonuses are claimed once per wallet and kept. The ongoing perks are live — they read your current holdings, so selling the NFT ends them.
+**On the cash bonuses:** each collection's is claimable exactly once, ever, the first time you wear that theme. Wear Mid Evils and you get its $3,000; switch to Conmen later and you get that one's $3,000 too — once. Flipping back and forth pays nothing further, so there's no farming it.
+
+**On the ongoing perks:** they're read live from the theme you're wearing *and* verified against what you actually hold, so forcing a theme in the browser console grants nothing. Sell the NFT and its perks end.
 
 Every collection also unlocks its own full-site theme, theme music, easter egg, and playable Fight Club character. **Online Fight Club is open to holders of any supported collection, and they can all match against each other** — a $MIM Wizard holder can fight a Skull X holder.
 
@@ -287,6 +291,9 @@ Shipped to the live site, not yet cut as a tagged release.
 - **Changed:** The Conmen holder bonus is $3,000 (was $4,200). Anyone who already claimed the old amount keeps it
 - **Changed:** The Caravaggio trait bonus is now additive and granted on ownership, rather than replacing starting cash for brand-new wallets only — it was previously invisible to anyone who had already played
 - **New:** Connecting now announces your perks by name in a toast, so holders can actually tell what they get
+- **Changed:** Perks follow the theme you WEAR, not everything you hold. A dual holder who picks Mid Evils gets Mid Evils perks only — previously they got every collection's perks at once, plus a toast per collection, which made the choice meaningless. Switching theme switches the perks; each collection's one-time cash bonus is still claimable exactly once, ever
+- **Changed:** The Caravaggio trait check no longer reads the page's CSS class, which was applied asynchronously — a check running a moment early saw no theme and silently skipped the reward, and for a dual holder who hadn't answered the theme picker yet it never fired at all
+- **Fixed:** Perk grants and their toasts fired over the top of the unanswered "Choose Your Theme" picker. They now wait for it
 
 **Reliability**
 - **Fixed:** The entire visual design depended on `cdn.tailwindcss.com` being reachable at page load — if it was slow, blocked or down, the site rendered as raw unstyled HTML with every modal and hidden panel visible at once. Tailwind is now a vendored stylesheet built into the repo
