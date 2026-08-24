@@ -131,7 +131,10 @@ function getPlayerLevel() {
  *  real conman doesn't leave much of a paper trail. */
 function applyCaymanDiscount(heatGain) {
     let g = state.ownedPerks.includes('cayman_vault') ? heatGain * 0.5 : heatGain;
-    if (typeof isConmenHolder !== 'undefined' && isConmenHolder) g *= 0.6;
+    // The 40% was hardcoded here and keyed to isConmenHolder alone. It now
+    // comes from HOLDER_PERKS in web3.js, so a future collection with a
+    // heat perk works without touching this file.
+    if (typeof holderHeatMultiplier === 'function') g *= holderHeatMultiplier();
     return g;
 }
 
@@ -337,6 +340,11 @@ function processTokenLifecycle() {
     // Inflow calculation engine logic
     let entryRate = (t.hype / 10) * (1 + (t.liquidity / 1000));
     if (influencerOwned) entryRate *= 1.40;
+    // $MIM / Bitcoin Wizard holders get the same +40% for free (HOLDER_PERKS
+    // in web3.js). It multiplies with the shop perk rather than replacing
+    // it - buying the upgrade you already effectively have should still do
+    // something, or the perk reads as a punishment for holding.
+    if (typeof holderCapitalInflowMult === 'function') entryRate *= holderCapitalInflowMult();
     entryRate *= (t.campaignCapitalMult || 1); // Marketing Campaigns permanently speed this up
 
     let newSuckers = Math.random() * entryRate;
@@ -474,7 +482,31 @@ function pullTheRug() {
     }
 }
 
+/* SECOND LIFE - Genuine Undead / Forever Undead holder perk.
+
+   Sits at the top of the ONE function every game-over path funnels through
+   (seizeContract, the rug-pull heat climb, and the OpenShit collection
+   route all call this), so there is no way to lose that bypasses it.
+
+   Once per run, not once per wallet: state.secondLifeUsed is part of
+   defaultState, so it resets with the game and does NOT ride along in the
+   cloud save as a permanently-spent flag. Heat comes back to 50 rather
+   than 0 - a reprieve, not a reset, or maxing out stops meaning anything. */
 function triggerLossGameOver() {
+    const canRevive = typeof holderHasSecondLife === 'function' && holderHasSecondLife();
+    if (canRevive && !state.secondLifeUsed) {
+        state.secondLifeUsed = true;
+        state.globalHeat = 50;
+        const pct = document.getElementById('heatPct');
+        const bar = document.getElementById('heatBarFill');
+        if (pct) pct.innerText = '50%';
+        if (bar) bar.style.width = '50%';
+        playSound('buy');
+        showToast('☠️ SECOND LIFE — you claw your way back out. Heat cut to 50%. That was your one.', 'success');
+        if (typeof updateUI === 'function') updateUI();
+        return;
+    }
+
     document.getElementById('lossModal').classList.remove('hidden');
     document.getElementById('lossMessage').innerText = "Regulatory Heat maxed out at 100%. Tax compliance enforcement raids seized your account assets.";
     playSound('liquidated');
