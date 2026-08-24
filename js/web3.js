@@ -242,7 +242,8 @@ function announceHolderPerks() {
 let sb = null;
 let walletAddress = null;
 let walletSolDomain = null; // e.g. "degen.sol" - null until/unless resolved
-let leaderboardChannel = null;
+// leaderboardChannel is gone with the realtime subscription it held -
+// see startLeaderboardPolling() for why that had to become a poll.
 
 function web3Ready() {
     return !!(SUPABASE_URL && SUPABASE_ANON_KEY);
@@ -803,6 +804,12 @@ function disconnectWallet() {
     isMidEvilsHolder = false;
     isMimWizardHolder = false;
     isTestPlayMode = false;
+    // Drop the signed-in session with the wallet. The stored token is
+    // deliberately left in localStorage: it belongs to that wallet, is
+    // useless without it, and keeping it means reconnecting the same
+    // wallet later doesn't demand a fresh signature.
+    playerSessionToken = null;
+    stopLeaderboardPolling();
     updateOnlineLobbyAccess();
     document.getElementById("themePreviewBtn")?.classList.add("hidden");
     document.getElementById("themeSwitchBtn")?.classList.add("hidden");
@@ -925,17 +932,194 @@ async function grantHolderBonuses() {
     if (total > 0 && typeof updateUI === "function") updateUI();
 }
 
+/* ============================================================
+   WALLET SIGN-IN  (anti-cheat / save ownership)
+   ============================================================
+   THE PROBLEM THIS SOLVES. The `players` table used to accept anonymous
+   reads and writes from anyone holding the publishable key - which is in
+   this very file, by design, because it has to be. That meant anyone
+   could read every player's save, write any score they liked to the
+   leaderboard, and overwrite or wipe SOMEBODY ELSE'S save. The last one
+   is the one that can't be patched client-side: connecting a wallet only
+   tells us an address, and an address is public information. Nothing
+   proved the person sending it actually held that wallet.
+
+   THE FIX. On connect the wallet signs a short server-issued challenge.
+   Only a real signature from that wallet's private key verifies, so the
+   server can finally tell the owner from someone who typed the address
+   in. It hands back a session token, and the `game-save` Edge Function
+   refuses every read and write that doesn't carry a valid one.
+
+   WHAT THE SIGNATURE IS NOT. It is not a transaction. It approves
+   nothing, spends nothing, and cannot move a token - it is a plain text
+   message, and the wallet shows the exact text before signing. This is
+   the same "sign in" step Magic Eden and Tensor use.
+
+   The token lasts a week and is kept in localStorage, so the popup shows
+   up on first connect and then roughly weekly - not on every page load.
+   ============================================================ */
+const GAME_SAVE_FUNCTION = "game-save";
+const SESSION_KEY_PREFIX = "shitcore_session_";
+
+let playerSessionToken = null;
+
+function loadStoredSession(addr) {
+    try {
+        const raw = localStorage.getItem(SESSION_KEY_PREFIX + addr);
+        if (!raw) return null;
+        const s = JSON.parse(raw);
+        // A minute of headroom, so a token that expires mid-request doesn't
+        // produce a confusing "session expired" on an action already begun.
+        if (!s.token || !s.expiresAt || s.expiresAt < Date.now() + 60000) return null;
+        return s.token;
+    } catch (e) { return null; }
+}
+
+function storeSession(addr, token, expiresAt) {
+    try { localStorage.setItem(SESSION_KEY_PREFIX + addr, JSON.stringify({ token, expiresAt })); }
+    catch (e) { /* private browsing - the session just won't outlive the tab */ }
+}
+
+function clearStoredSession(addr) {
+    try { localStorage.removeItem(SESSION_KEY_PREFIX + addr); } catch (e) {}
+}
+
+async function callGameSave(payload) {
+    if (!sb) return { error: "no_client" };
+    try {
+        const { data, error } = await sb.functions.invoke(GAME_SAVE_FUNCTION, { body: payload });
+        if (error) {
+            // supabase-js turns a non-2xx into an error whose body holds the
+            // real reason, which is the part actually worth knowing.
+            let detail = null;
+            try { detail = await error.context?.json?.(); } catch (e) {}
+            return { error: detail?.error || error.message || "request_failed" };
+        }
+        return data || {};
+    } catch (e) {
+        console.warn("[web3] game-save call threw:", e);
+        return { error: "unreachable" };
+    }
+}
+
+// Asks the connected wallet to sign the challenge. Handles both provider
+// shapes: Wallet Standard exposes solana:signMessage as a feature, the
+// older injected providers expose provider.signMessage directly.
+async function signMessageWithWallet(message) {
+    const bytes = new TextEncoder().encode(message);
+    if (activeProviderKind === "standard") {
+        const feature = activeProvider?.features?.["solana:signMessage"];
+        if (!feature) throw new Error("wallet can't sign messages");
+        const accounts = activeProvider?.accounts || [];
+        const res = await feature.signMessage({ account: accounts[0], message: bytes });
+        const sig = Array.isArray(res) ? res[0]?.signature : res?.signature;
+        if (!sig) throw new Error("no signature returned");
+        return sig;
+    }
+    if (typeof activeProvider?.signMessage !== "function") throw new Error("wallet can't sign messages");
+    const res = await activeProvider.signMessage(bytes, "utf8");
+    return res?.signature || res;
+}
+
+// Solana signatures and public keys travel as base58 everywhere else in
+// this codebase, so the server expects base58 too. No dependency needed
+// for 64 bytes.
+function toBase58(bytes) {
+    const ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+    const arr = Array.from(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes));
+    let zeros = 0;
+    while (zeros < arr.length && arr[zeros] === 0) zeros++;
+    // Starts EMPTY, not [0]. Seeding a zero digit is the classic base58
+    // off-by-one: the leading-zero run below already emits one '1' per
+    // zero byte, so a leftover zero digit adds one more on top and
+    // toBase58(all-zero bytes) comes out a character too long.
+    const digits = [];
+    for (let i = zeros; i < arr.length; i++) {
+        let carry = arr[i];
+        for (let j = 0; j < digits.length; j++) {
+            carry += digits[j] << 8;
+            digits[j] = carry % 58;
+            carry = (carry / 58) | 0;
+        }
+        while (carry > 0) { digits.push(carry % 58); carry = (carry / 58) | 0; }
+    }
+    let out = "";
+    for (let i = 0; i < zeros; i++) out += ALPHABET[0];
+    for (let i = digits.length - 1; i >= 0; i--) out += ALPHABET[digits[i]];
+    return out;
+}
+
+/* Returns true once this wallet has a live session. Reuses a stored token
+   when there is one, so the signature popup is a first-connect thing
+   rather than a page-load thing. */
+async function ensurePlayerSession() {
+    if (!walletAddress) return false;
+    if (playerSessionToken) return true;
+
+    const stored = loadStoredSession(walletAddress);
+    if (stored) { playerSessionToken = stored; return true; }
+
+    const challenge = await callGameSave({ op: "nonce", wallet: walletAddress });
+    if (challenge.error || !challenge.message) {
+        console.warn("[web3] couldn't get a sign-in challenge:", challenge.error);
+        showToast("Couldn't start sign-in. Cloud save is off for now.", "error");
+        return false;
+    }
+
+    let signatureB58;
+    try {
+        showToast("✍️ Approve the signature to enable cloud save — it's not a transaction.", "info");
+        signatureB58 = toBase58(await signMessageWithWallet(challenge.message));
+    } catch (e) {
+        // Rejecting is a completely valid choice - the game plays fine
+        // locally without a cloud save, so this must not read as an error.
+        console.info("[web3] sign-in declined or unsupported:", e?.message || e);
+        showToast("Signature skipped — you can still play, progress just won't sync.", "info");
+        return false;
+    }
+
+    const res = await callGameSave({ op: "login", wallet: walletAddress, signature: signatureB58 });
+    if (res.error || !res.token) {
+        console.warn("[web3] sign-in failed:", res.error);
+        showToast("Sign-in failed. Cloud save is off for now.", "error");
+        return false;
+    }
+    playerSessionToken = res.token;
+    storeSession(walletAddress, res.token, res.expiresAt);
+    showToast("🔐 Signed in — your save is now locked to your wallet.", "success");
+    return true;
+}
+
+// A token can go stale mid-session (expired, or revoked server-side).
+// Dropping it here means the next call re-signs instead of silently
+// failing to save for the rest of the session.
+function invalidateSessionIfRejected(err) {
+    if (err === "not_signed_in" || err === "session_expired" || err === "bad_token") {
+        playerSessionToken = null;
+        if (walletAddress) clearStoredSession(walletAddress);
+        return true;
+    }
+    return false;
+}
+
 /* ---------------- Cloud save / load ---------------- */
 
 async function offerCloudLoadIfExists() {
     if (!sb || !walletAddress) return;
-    const { data, error } = await sb
-        .from("players")
-        .select("game_state, updated_at")
-        .eq("wallet_address", walletAddress)
-        .maybeSingle();
 
-    if (error) { console.error("[web3] load check failed:", error); return; }
+    // No session means no cloud save at all - not a silent half-state
+    // where the game loads but never persists.
+    const signedIn = await ensurePlayerSession();
+    if (!signedIn) return;
+
+    const res = await callGameSave({ op: "load", wallet: walletAddress, token: playerSessionToken });
+    if (res.error) {
+        if (invalidateSessionIfRejected(res.error)) return offerCloudLoadIfExists();
+        console.error("[web3] load check failed:", res.error);
+        return;
+    }
+    const data = res.found ? { game_state: res.game_state, updated_at: res.updated_at } : null;
+
     if (!data) {
         await applyTraitRewards(walletAddress, true); // brand-new wallet - eligible for one-time starting bonuses too
         await grantHolderBonuses();
@@ -969,17 +1153,54 @@ async function offerCloudLoadIfExists() {
     announceHolderPerks();
 }
 
+// Writes now go through the game-save function, which requires the
+// session token AND sanity-checks the payload server-side. A direct
+// upsert from the browser is no longer possible at all - the anon role
+// has had its grants on `players` revoked, so this isn't merely the
+// polite path, it's the only one.
+let _saveFailureStreak = 0;
+
 async function saveToCloud() {
     if (!sb || !walletAddress) return;
-    const { error } = await sb.from("players").upsert({
-        wallet_address: walletAddress,
-        display_name: walletSolDomain || null,
+    if (!playerSessionToken && !(await ensurePlayerSession())) return;
+
+    const res = await callGameSave({
+        op: "save",
+        wallet: walletAddress,
+        token: playerSessionToken,
         game_state: state,
         lifetime_earned: state.lifetimeEarned || 0,
         degen_level: state.degenLevel || 1,
-        updated_at: new Date().toISOString(),
+        display_name: walletSolDomain || null,
     });
-    if (error) console.error("[web3] cloud save failed:", error);
+
+    if (!res.error) { _saveFailureStreak = 0; return; }
+
+    if (invalidateSessionIfRejected(res.error)) {
+        // One retry, which will re-sign. Not a loop: the retry passes
+        // through this same branch and a second failure falls through to
+        // the logging below instead of recursing again.
+        if (await ensurePlayerSession()) {
+            const retry = await callGameSave({
+                op: "save", wallet: walletAddress, token: playerSessionToken,
+                game_state: state, lifetime_earned: state.lifetimeEarned || 0,
+                degen_level: state.degenLevel || 1, display_name: walletSolDomain || null,
+            });
+            if (!retry.error) { _saveFailureStreak = 0; return; }
+            res.error = retry.error;
+        }
+    }
+
+    console.error("[web3] cloud save rejected:", res.error);
+    // "Too fast" is expected and harmless - two saves can race when a
+    // manual action lands next to the 30s autosave tick. Never surface it.
+    if (res.error === "saving_too_fast") return;
+    // Everything else is worth telling the player about, but only once per
+    // run of failures - the autosave fires every 30 seconds and a broken
+    // connection would otherwise produce a toast forever.
+    if (_saveFailureStreak++ === 0) {
+        showToast("⚠️ Couldn't sync your progress to the cloud.", "error");
+    }
 }
 
 /* ---------------- Live leaderboard ---------------- */
@@ -991,8 +1212,11 @@ async function renderLeaderboard() {
         box.innerHTML = `<div class="text-gray-500 italic text-xs">Leaderboard not configured yet.</div>`;
         return;
     }
+    // Reads the `leaderboard` VIEW, not the `players` table. The table is
+    // sealed now; the view exposes only these four columns, so a public
+    // leaderboard no longer means publicly readable save files.
     const { data, error } = await sb
-        .from("players")
+        .from("leaderboard")
         .select("wallet_address, display_name, lifetime_earned, degen_level")
         .neq("wallet_address", MASTER_WALLET) // the dev/testing wallet should never show up on a real players' leaderboard
         .order("lifetime_earned", { ascending: false })
@@ -1009,21 +1233,43 @@ async function renderLeaderboard() {
     `).join("");
 }
 
-function subscribeLeaderboardRealtime() {
-    if (!sb || leaderboardChannel) return;
-    leaderboardChannel = sb
-        .channel("players-leaderboard")
-        .on("postgres_changes", { event: "*", schema: "public", table: "players" }, renderLeaderboard)
-        .subscribe();
+/* WHY THIS IS A POLL AND NOT A REALTIME SUBSCRIPTION ANY MORE.
+
+   It used to be `.on("postgres_changes", { table: "players" })`. Realtime
+   enforces RLS: it only delivers a change to a client that could have
+   SELECTed the row itself. Now that the anon role has no read on
+   `players`, that subscription would connect happily, report SUBSCRIBED,
+   and then simply never fire - the worst kind of breakage, because it
+   looks healthy. postgres_changes can't watch the `leaderboard` view
+   either, so the honest replacement is a poll.
+
+   It only runs while the modal is actually open, so it costs nothing the
+   rest of the time. */
+const LEADERBOARD_POLL_MS = 20000;
+let leaderboardPollTimer = null;
+
+function startLeaderboardPolling() {
+    stopLeaderboardPolling();
+    leaderboardPollTimer = setInterval(() => {
+        const modal = document.getElementById("leaderboardModal");
+        if (!modal || modal.classList.contains("hidden")) { stopLeaderboardPolling(); return; }
+        renderLeaderboard();
+    }, LEADERBOARD_POLL_MS);
+}
+
+function stopLeaderboardPolling() {
+    if (leaderboardPollTimer) { clearInterval(leaderboardPollTimer); leaderboardPollTimer = null; }
 }
 
 function openLeaderboard() {
     document.getElementById("leaderboardModal")?.classList.remove("hidden");
     renderLeaderboard();
-    subscribeLeaderboardRealtime();
+    startLeaderboardPolling();
 }
 function closeLeaderboard() {
     document.getElementById("leaderboardModal")?.classList.add("hidden");
+    stopLeaderboardPolling(); // the poll checks this too, but stopping on
+                              // close means no stray request after closing
 }
 
 /* ---------------- Theme preview panel (master wallet only) ---------------- */
