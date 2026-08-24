@@ -294,6 +294,10 @@
 /* The guard counter sits with the attack buttons but reads as its own thing -
    it is defensive, costs meter, and is only live for a moment after a block. */
 .ft-counter { background: linear-gradient(180deg, #d9b3e8 0%, #8f6ac0 100%); width: 52px; height: 52px; font-size: 10px; }
+.ft-throwbtn { background: linear-gradient(180deg, #e8c9a8 0%, #b8823f 100%); width: 52px; height: 52px; font-size: 10px; }
+/* Dimmed until a blocked barrage unlocks it - the JS toggles .ft-ready. */
+.ft-throwbtn:not(.ft-ready) { opacity: 0.38; }
+.ft-throwbtn.ft-ready { box-shadow: inset 1px 1px 0 #fff, inset -1px -1px 0 #4a4a4a, 0 0 10px rgba(232,201,168,0.9); }
 
 /* Landscape on a phone: no room below the canvas, so float the controls
    over its bottom corners instead. */
@@ -316,6 +320,7 @@
     .fight-touch .ft-act { width: 54px; height: 54px; font-size: 10px; }
     .fight-touch .ft-block { width: 46px; height: 46px; }
     .fight-touch .ft-counter { width: 46px; height: 46px; font-size: 9px; }
+    .fight-touch .ft-throwbtn { width: 46px; height: 46px; font-size: 9px; }
     .fight-touch .ft-dpad,
     .fight-touch .ft-actions { pointer-events: auto; }
     .fight-touch .ft-btn { opacity: 0.72; }
