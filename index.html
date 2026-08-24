@@ -105,7 +105,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Local styles (FIXED PATH) -->
     <link rel="stylesheet" href="style.css?v=53">
-    <link rel="stylesheet" href="bonusstage.css?v=17">
+    <link rel="stylesheet" href="bonusstage.css?v=18">
 </head>
 <body class="overflow-x-hidden min-h-screen flex flex-col justify-between">
     <!-- Hand-drawn wobble filter for the chart canvas in Mid Evils mode -
@@ -1239,9 +1239,12 @@
                         <button type="button" class="ft-btn ft-act ft-block" data-fight-key="block" aria-label="Block">BLK</button>
                         <button type="button" class="ft-btn ft-act ft-kick" data-fight-key="kick" aria-label="Kick">KICK</button>
                         <button type="button" class="ft-btn ft-act ft-punch" data-fight-key="punch" aria-label="Punch">PUNCH</button>
-                        <!-- Throw: unblockable, slow, and very punishable if it
-                             whiffs. data-fight-key matches P1_BIND.throwGrab. -->
-                        <button type="button" class="ft-btn ft-act ft-throw" data-fight-key="throwGrab" aria-label="Throw">THROW</button>
+                        <!-- Guard counter. On a keyboard this is Z+X held together;
+                             a touch pad can't express "hold two", so this one button
+                             presses both underlying keys at once (data-fight-keys,
+                             plural - see bindFightTouchPad). Only usable in the beat
+                             after blocking a hit, and it costs guard meter. -->
+                        <button type="button" class="ft-btn ft-act ft-counter" data-fight-keys="punch,kick" aria-label="Guard counter">CNTR</button>
                     </div>
                 </div>
             </div>
@@ -1505,7 +1508,7 @@
 <script src="js/staking.js" defer></script>
 <script src="js/perks.js?v=5" defer></script>
 <script src="js/bonusstage.js?v=23" defer></script>
-<script src="js/fightgame.js?v=55" defer></script>
+<script src="js/fightgame.js?v=56" defer></script>
 <script src="js/mevghosts.js?v=2" defer></script>
 <script src="js/mevsandwich.js?v=11" defer></script>
 <script src="js/conmen-egg.js?v=6" defer></script>
