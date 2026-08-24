@@ -60,8 +60,8 @@ window.FightGame = (function () {
     // Shared per-attack-type numbers - jump/crouch variants borrow their
     // grounded counterpart's values until they get their own tuning.
     const ATTACK_BASE = { punch: 'punch_lo', kick: 'kick_lo' };
-    const DMG = { punch_lo: 5, kick_lo: 8, throw_lo: 12 }; // tuned so continuous unblocked hitting takes ~20-30s to KO, not ~5 hits
-    const HEAVY = new Set(['kick_lo', 'throw_lo']);
+    const DMG = { punch_lo: 5, kick_lo: 8, counter_lo: 10 }; // tuned so continuous unblocked hitting takes ~20-30s to KO, not ~5 hits
+    const HEAVY = new Set(['kick_lo', 'counter_lo']);
     const HS_LT = 5, HS_HV = 9;
 
     /* ============================================================
@@ -113,8 +113,10 @@ window.FightGame = (function () {
         // ends the move anyway, so recovery would be mostly invisible.
         jump_punch:   { startup: 4, active: 8,  recovery: 4,  hitStun: 20, blockStun: 14 },
         jump_kick:    { startup: 6, active: 10, recovery: 4,  hitStun: 24, blockStun: 16 },
-        // The throw: slow to start, unblockable, brutal when it whiffs.
-        throw_lo:     { startup: 7, active: 2,  recovery: 26, hitStun: 32, blockStun: 0  },
+        // The guard counter. Fast, because it is a reversal and has to
+        // beat whatever they were about to do next. Long recovery, so a
+        // wasted one costs you the turn as well as the meter.
+        counter_lo:   { startup: 3, active: 3,  recovery: 20, hitStun: 30, blockStun: 0  },
     };
     function moveData(state) { return MOVES[state] || MOVES[baseAttackKind(state)] || MOVES.punch_lo; }
     function moveDuration(state) {
@@ -122,20 +124,37 @@ window.FightGame = (function () {
         return (m.startup + m.active + m.recovery) * FRAME;
     }
 
-    /* THROWS - the answer to blocking.
-       The game had strike and block and nothing else, which left blocking
-       close to dominant: chip damage and guard break were its only
-       counters and both take five hits to bite. A throw completes the
-       triangle - throw beats block, strike beats throw (it is slow enough
-       to interrupt), block beats strike.
+    /* GUARD COUNTER - Z + X, in the moment right after you block a hit.
 
-       Deliberately sprite-free: it renders with the existing punch frames,
-       so it reads as a hard shove rather than a cinematic grab. It PLAYS
-       correctly today and will LOOK right once there is art for it. */
-    const CPU_THROW_ON_BLOCK = 0.55; // chance the CPU punishes a turtling player with a throw
-    const CPU_THROW_MIXUP   = 0.12; // baseline throw rate so blocking never feels automatically safe
-    const THROW_RANGE = 54;   // px of reach past the body box - you must get close
-    const THROW_KB = 78;      // px of shove, far more than any normal hit
+       WHAT THIS REPLACED. The first version was a standalone unblockable on
+       its own key (C). It worked, but it was an OFFENSIVE option with no
+       escape: once it started the defender had nothing. As a guard counter
+       it becomes a DEFENSIVE option instead, which answers the same problem
+       from the better side - an opponent leaning on you no longer pressures
+       for free, and the player being pressured is the one holding the
+       button. It also removes the need for a throw "tech", because there is
+       nothing to escape from any more.
+
+       WHY THE INPUT DOESN'T CLASH. Z and X are punch and kick, so reading
+       both together would normally need an input buffer - and a buffer adds
+       latency to every single punch. It doesn't here, because the counter
+       is only read while you are IN BLOCKSTUN, a state where normal attacks
+       are already locked out. There is nothing to disambiguate.
+
+       IT COSTS GUARD METER, which is what stops it being free. The meter
+       already decides how long you can keep blocking; now it also decides
+       whether you can hit back out of a block. Spend it to escape pressure
+       or save it to keep guarding - a real decision, built on a system that
+       already existed rather than a new bar nobody asked for.
+
+       STILL SPRITE-FREE: it borrows the punch frames, so it reads as a
+       shove. It PLAYS correctly today and will LOOK right once there is
+       art for it. */
+    const COUNTER_WINDOW = 0.32;      // seconds after blocking a hit to input it
+    const COUNTER_METER_COST = 34;    // roughly a third of a full guard meter
+    const CPU_COUNTER_CHANCE = 0.35;  // how often the CPU counters out of its own block
+    const COUNTER_RANGE = 58;         // px of reach past the body box
+    const COUNTER_KB = 96;            // px of shove - the whole point is "get off me"
 
     /* CANCELS - now only ON HIT.
        A cancel used to open at 40% of the move's duration whether or not it
@@ -150,15 +169,15 @@ window.FightGame = (function () {
         if (typeof state !== 'string') return null;
         // 'jump_punch' / 'crouch_punch' -> 'punch_lo', etc. - so damage and
         // hitbox lookups work the same regardless of variant.
-        if (state === 'throw_lo') return 'throw_lo';
+        if (state === 'counter_lo') return 'counter_lo';
         if (state.endsWith('_punch') || state === 'punch_lo') return 'punch_lo';
         if (state.endsWith('_kick') || state === 'kick_lo') return 'kick_lo';
         return null;
     }
     function isAttackState(state) {
-        return state === 'punch_lo' || state === 'kick_lo' || state === 'jump_punch' || state === 'jump_kick' || state === 'crouch_punch' || state === 'crouch_kick' || state === 'throw_lo';
+        return state === 'punch_lo' || state === 'kick_lo' || state === 'jump_punch' || state === 'jump_kick' || state === 'crouch_punch' || state === 'crouch_kick' || state === 'counter_lo';
     }
-    function isThrowState(state) { return state === 'throw_lo'; }
+    function isCounterState(state) { return state === 'counter_lo'; }
 
     // ---------------- Guard meter, chip damage, guard break ----------------
     // Blocking is free (0 damage) while the guard meter has charge. Each
@@ -832,6 +851,7 @@ window.FightGame = (function () {
             this._strip = null;
             this.atkT = 0; this.atkDur = 0; this.hitReg = false; this.canW = false; this.canT = 0;
             this.stop = 0;   // HITSTOP - freezes BOTH fighters, impact feel only
+            this.counterWindowT = 0;  // seconds left to input a guard counter
             this.stunIsBlock = false; // was that stun from blocking, or from eating it?
             this.stunT = 0;  // HIT/BLOCK STUN - freezes only THIS fighter, in seconds.
                              // The difference between the two is where frame
@@ -894,11 +914,11 @@ window.FightGame = (function () {
                 const ex = this.facing === 1 ? this.x + this._fw - 4 : this.x - 46;
                 return { x: ex, y: this.y + P_H * 0.55, w: 54, h: 28 };
             }
-            if (base === 'throw_lo') {
+            if (base === 'counter_lo') {
                 // Shorter reach than either strike, and tall, because a
                 // throw should mean "I got right up in your face".
-                const ex = this.facing === 1 ? this.x + this._fw - 10 : this.x - (THROW_RANGE - 10);
-                return { x: ex, y: this.y + P_H * 0.25, w: THROW_RANGE, h: P_H * 0.5 };
+                const ex = this.facing === 1 ? this.x + this._fw - 10 : this.x - (COUNTER_RANGE - 10);
+                return { x: ex, y: this.y + P_H * 0.25, w: COUNTER_RANGE, h: P_H * 0.5 };
             }
             return null;
         }
@@ -917,15 +937,27 @@ window.FightGame = (function () {
             if (typeof playSfxFile === 'function') playSfxFile(baseKind === 'punch' ? SFX_PUNCH_WHOOSH : SFX_KICK_WHOOSH, 0.35);
         }
 
-        // Grounded only, on purpose: an air throw would need its own art and
-        // its own escape rules, and neither exists yet.
-        beginThrow() {
-            if (this.blocking || !this.grounded || this.crouching) return;
-            this.state = 'throw_lo'; this.atkT = 0; this.hitReg = false;
+        /* Grounded only, and only out of a block. Returns false when it
+           can't fire, so the caller can tell the difference between "not
+           now" and "not enough meter" instead of the input just vanishing. */
+        beginGuardCounter() {
+            if (!this.grounded || this.guardBroken) return false;
+            if (this.counterWindowT <= 0) return false;          // not fresh off a block
+            if (this.guardMeter < COUNTER_METER_COST) return false;
+
+            this.guardMeter = Math.max(0, this.guardMeter - COUNTER_METER_COST);
+            this.counterWindowT = 0;   // one per block, no double-dipping
+            this.blocking = false;
+            this.crouching = false;
+            this.stunT = 0;            // the counter IS the escape from blockstun
+            this.stunIsBlock = false;
+            this.stop = 0;
+            this.state = 'counter_lo'; this.atkT = 0; this.hitReg = false;
             this.canW = false; this.canT = 0;
             this.fr = 0; this.frT = 0;
-            this.atkDur = moveDuration('throw_lo');
-            if (typeof playSfxFile === 'function') playSfxFile(SFX_PUNCH_WHOOSH, 0.4);
+            this.atkDur = moveDuration('counter_lo');
+            if (typeof playSfxFile === 'function') playSfxFile(SFX_KICK_WHOOSH, 0.5);
+            return true;
         }
 
         // rawDmg has already had counter-hit and combo scaling applied by
@@ -934,7 +966,7 @@ window.FightGame = (function () {
         takeDamage(rawDmg, heavy, isCounterHit, attackState) {
             let dmg;
             const move = attackState ? moveData(attackState) : MOVES.punch_lo;
-            const unblockable = !!(attackState && isThrowState(attackState));
+            const unblockable = !!(attackState && isCounterState(attackState));
 
             /* Stun is applied to the DEFENDER ONLY and is what creates
                frame advantage - see the FRAME DATA note at the top. It runs
@@ -994,6 +1026,11 @@ window.FightGame = (function () {
                 // Blockstun is shorter than hitstun - that gap is what makes
                 // blocking a way to survive rather than a way to win the turn.
                 applyStun(move.blockStun, true);
+                // ...and blocking now also opens the guard-counter window.
+                // Deliberately a touch longer than blockstun so the input
+                // still registers a few frames after guard is released -
+                // demanding a frame-perfect release would be miserable.
+                this.counterWindowT = COUNTER_WINDOW;
                 if (this.guardMeter > 0) {
                     // Free block - guard meter absorbs it instead of health.
                     this.guardMeter = Math.max(0, this.guardMeter - GUARD_COST_PER_BLOCK);
@@ -1063,7 +1100,7 @@ window.FightGame = (function () {
             // The throw has no art of its own. Borrowing the punch strip
             // makes it read as a hard shove, which is close enough to sell
             // the move until a real grab animation exists.
-            if (this.state === 'throw_lo') stateForFrames = 'punch_lo';
+            if (this.state === 'counter_lo') stateForFrames = 'punch_lo';
             if (this.state === 'block') {
                 if (!this.grounded && this.anims.jump_block && this.anims.jump_block.length) stateForFrames = 'jump_block';
                 else if (this.grounded && this.crouching && this.anims.crouch_block && this.anims.crouch_block.length) stateForFrames = 'crouch_block';
@@ -1128,7 +1165,7 @@ window.FightGame = (function () {
     let onKeyDown, onKeyUp;
 
     const HANDLED_KEYS = new Set([
-        'a', 'd', 'w', 's', 'z', 'x', 'c', ' ',
+        'a', 'd', 'w', 's', 'z', 'x', ' ',
         'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Enter', '/',
         'Shift', 'Escape',
     ]);
@@ -1319,9 +1356,9 @@ window.FightGame = (function () {
     function applyKnockback(defender, attacker, blocked) {
         // A throw is not part of a flurry - it is the thing that ENDS one -
         // so it shoves hard and ignores the chain cap entirely.
-        if (isThrowState(attacker.state)) {
+        if (isCounterState(attacker.state)) {
             const dirT = defender.x < attacker.x ? -1 : 1;
-            defender.x = Math.max(STAGE_MARGIN, Math.min(SW - STAGE_MARGIN - defender._fw, defender.x + dirT * THROW_KB));
+            defender.x = Math.max(STAGE_MARGIN, Math.min(SW - STAGE_MARGIN - defender._fw, defender.x + dirT * COUNTER_KB));
             defender.kbChain = 0;
             defender.kbResetT = KB_RESET_SECONDS;
             return true;
@@ -1412,7 +1449,6 @@ window.FightGame = (function () {
             [bind.jump]: !!(rk && rk.cpu_jump), [bind.crouch]: !!(rk && rk.cpu_crouch),
             [bind.punch]: !!(rk && rk.cpu_punch), [bind.kick]: !!(rk && rk.cpu_kick),
             [bind.block]: !!(rk && rk.cpu_block),
-            [bind.throwGrab]: !!(rk && rk.cpu_throw),
         };
         for (const k in next) {
             if (next[k] && !keys[k]) justPressed[k] = true; // rising edge only, same rule as a real keydown
@@ -1430,7 +1466,6 @@ window.FightGame = (function () {
         // Release every virtual key first, then set only what this frame's
         // decision calls for - same shape as a human's actual key state.
         keys[bind.left] = false; keys[bind.right] = false; keys[bind.crouch] = false; keys[bind.block] = false;
-        keys[bind.throwGrab] = false;
 
         ai.attackCooldown = Math.max(0, ai.attackCooldown - dt);
 
@@ -1449,6 +1484,18 @@ window.FightGame = (function () {
 
         if (ai.blockingReact) {
             keys[bind.block] = true;
+            /* The CPU gets the guard counter too, or the mechanic is a
+               one-way privilege: the player could pressure it forever with
+               no risk, which is precisely the problem the counter exists to
+               solve. It holds both attack buttons, exactly as a human does -
+               beginGuardCounter() then applies the same window and the same
+               meter cost, so the AI can't cheat its way past either. */
+            if (cpu.counterWindowT > 0 && cpu.guardMeter >= COUNTER_METER_COST
+                && Math.random() < CPU_COUNTER_CHANCE * dt * 60) {
+                keys[bind.punch] = true; keys[bind.kick] = true;
+            } else {
+                keys[bind.punch] = false; keys[bind.kick] = false;
+            }
             return; // don't also move/attack while committed to a block
         }
 
@@ -1460,20 +1507,7 @@ window.FightGame = (function () {
             } else {
                 ai.moveDir = 0;
                 if (ai.attackCooldown <= 0 && Math.random() < diff.attackChance) {
-                    /* The CPU has to be able to throw, or the player can
-                       simply hold block forever and win every round. Now
-                       that throws exist and beat blocking, an AI that only
-                       strikes would hand the human a free dominant strategy.
-                       So: if they are turtling and we are close enough to
-                       grab, throw them. Otherwise strike as before. */
-                    const inThrowRange = absDist < (cpu._fw + THROW_RANGE * 0.8);
-                    if (target.blocking && inThrowRange && Math.random() < CPU_THROW_ON_BLOCK) {
-                        ai.wantAttack = 'throwGrab';
-                    } else if (inThrowRange && Math.random() < CPU_THROW_MIXUP) {
-                        ai.wantAttack = 'throwGrab'; // occasional mixup so blocking never feels safe
-                    } else {
-                        ai.wantAttack = Math.random() < 0.5 ? 'punch' : 'kick';
-                    }
+                    ai.wantAttack = Math.random() < 0.5 ? 'punch' : 'kick';
                     ai.attackCooldown = diff.attackCooldown;
                 }
             }
@@ -1517,6 +1551,21 @@ window.FightGame = (function () {
 
         // HITSTOP: both fighters frozen, nobody gains anything by it.
         if (f.stop > 0) { f.stop--; return; }
+
+        /* GUARD COUNTER, read here and nowhere else.
+
+           It has to be checked BEFORE the stun gate below, because that
+           gate returns early and would otherwise swallow the input for the
+           entire duration of blockstun - which is exactly when the player
+           is pressing it.
+
+           Both buttons HELD, not justPressed: nobody hits two keys on the
+           same frame, and requiring a simultaneous rising edge would make
+           the move feel broken. Held-together over the window is forgiving
+           and reads the same to a player. */
+        if (f.counterWindowT > 0 && keys[bind.punch] && keys[bind.kick]) {
+            if (f.beginGuardCounter()) return;
+        }
 
         // STUN: carried only by the fighter who was hit. The attacker is
         // already free and acting - that gap IS frame advantage, and it is
@@ -1596,12 +1645,10 @@ window.FightGame = (function () {
 
         // --- attacks: only fire on a genuine key PRESS, mashing required ---
         const canStart = !attacking || (f.canW && f.canT > 0);
-        // Throw is checked first and never cancels into or out of anything:
-        // it has to be a standalone commitment, or it stops being the risky
-        // option that beats blocking and becomes a free combo ender.
-        if (justPressed[bind.throwGrab] && !attacking && f.grounded && !f.crouching) {
-            f.beginThrow();
-        } else if (justPressed[bind.punch] && canStart) {
+        // The guard counter used to live on its own key here. It is now
+        // Z + X out of a block, handled above the stun gate - there is
+        // deliberately no way to throw one out from neutral.
+        if (justPressed[bind.punch] && canStart) {
             f.beginAttack('punch');
         } else if (justPressed[bind.kick]) {
             // Helicopter kick: mashing kick WHILE ALREADY mid-air-kicking (not
@@ -1626,7 +1673,8 @@ window.FightGame = (function () {
         // to earn it back like anyone else who got chipped down.
         if (f.guardBroken) {
             f.guardBreakT -= dt;
-            if (f.hurtT > 0) f.hurtT = Math.max(0, f.hurtT - dt);
+            if (f.counterWindowT > 0) f.counterWindowT = Math.max(0, f.counterWindowT - dt);
+        if (f.hurtT > 0) f.hurtT = Math.max(0, f.hurtT - dt);
             if (f.guardBreakT <= 0) {
                 f.guardBroken = false;
                 f.state = f.grounded ? 'idle' : 'jump';
@@ -1660,7 +1708,7 @@ window.FightGame = (function () {
             // fraction of its duration. Whiffing now means sitting in your
             // own recovery, which is the entire point of having recovery.
             // Throws never cancel into anything.
-            if (!f.canW && f.hitReg && !isThrowState(f.state)) { f.canW = true; f.canT = CANCEL_W; }
+            if (!f.canW && f.hitReg && !isCounterState(f.state)) { f.canW = true; f.canT = CANCEL_W; }
             if (f.atkT >= f.atkDur) {
                 f.state = f.grounded ? 'idle' : 'jump'; f.atkT = 0; f.canW = false; f.fr = 0;
             }
@@ -1897,14 +1945,14 @@ window.FightGame = (function () {
         const shake = new Shake();
         const fx = [];
 
-        const P1_BIND = { left: 'ArrowLeft', right: 'ArrowRight', jump: 'ArrowUp', crouch: 'ArrowDown', punch: 'z', kick: 'x', block: ' ', throwGrab: 'c' };
+        const P1_BIND = { left: 'ArrowLeft', right: 'ArrowRight', jump: 'ArrowUp', crouch: 'ArrowDown', punch: 'z', kick: 'x', block: ' ' };
         // P2 is CPU-only now (see updateCPUInput) - these are just internal
         // dictionary keys the AI sets programmatically, not real keyboard
         // keys, so they're deliberately NOT actual key names anymore. That
         // matters: if these matched P1_BIND's real key strings, a P1 key
         // press would leak into the CPU's virtual input for that frame
         // (they share the same `keys`/`justPressed` objects).
-        const P2_BIND = { left: 'cpu_left', right: 'cpu_right', jump: 'cpu_jump', crouch: 'cpu_crouch', punch: 'cpu_punch', kick: 'cpu_kick', block: 'cpu_block', throwGrab: 'cpu_throw' };
+        const P2_BIND = { left: 'cpu_left', right: 'cpu_right', jump: 'cpu_jump', crouch: 'cpu_crouch', punch: 'cpu_punch', kick: 'cpu_kick', block: 'cpu_block' };
 
         keys = {}; justPressed = {};
         let lastSentInputSnapshot = null;
@@ -1970,7 +2018,6 @@ window.FightGame = (function () {
                         cpu_jump: !!keys[P1_BIND.jump], cpu_crouch: !!keys[P1_BIND.crouch],
                         cpu_punch: !!keys[P1_BIND.punch], cpu_kick: !!keys[P1_BIND.kick],
                         cpu_block: !!keys[P1_BIND.block],
-                        cpu_throw: !!keys[P1_BIND.throwGrab],
                     };
                     const snap = JSON.stringify(outKeys);
                     if (snap !== lastSentInputSnapshot) {
@@ -2077,10 +2124,10 @@ window.FightGame = (function () {
             if (g.phase === 'intro') drawIntro(ctx, g);
             else if (g.phase !== 'playing') drawEnd(ctx, g);
 
-            // C Throw is listed because a move nobody can discover may as
-            // well not exist - and the throw is the whole answer to an
-            // opponent who just holds block.
-            const leg = 'P1: \u2190\u2192 Move  \u2191 Jump  \u2193 Crouch  Z Punch  X Kick  C Throw  Space Block   |   P2: CPU';
+            // Z+X is listed because a move nobody can discover may as well
+            // not exist - and the guard counter is the whole answer to an
+            // opponent leaning on you.
+            const leg = 'P1: \u2190\u2192 Move  \u2191 Jump  \u2193 Crouch  Z Punch  X Kick  Space Block  Z+X Counter   |   P2: CPU';
             ctx.font = "9px 'BonusStagePixel', monospace";
             ctx.fillStyle = '#aaaaaa';
             ctx.textAlign = 'center';
@@ -2132,13 +2179,20 @@ window.FightGame = (function () {
         const pad = document.getElementById('fightTouchPad');
         if (!pad) return;
 
-        pad.querySelectorAll('[data-fight-key]').forEach((el) => {
-            const bindKey = bind[el.getAttribute('data-fight-key')];
+        // data-fight-key for a single key, data-fight-keys="a,b" for a button
+        // that presses several at once. The guard counter needs the plural
+        // form: on a keyboard it is Z and X HELD TOGETHER, and a touch pad
+        // has no way to express "hold two" with one thumb.
+        pad.querySelectorAll('[data-fight-key], [data-fight-keys]').forEach((el) => {
+            const names = (el.getAttribute('data-fight-keys') || el.getAttribute('data-fight-key') || '')
+                .split(',').map((n) => n.trim()).filter(Boolean);
+            const bindKeys = names.map((n) => bind[n]).filter(Boolean);
+            if (!bindKeys.length) return;
             const onDown = (ev) => {
                 ev.preventDefault();   // no scroll, no zoom, no synthetic click
                 ev.stopPropagation();
                 el.classList.add('ft-on');
-                _ftPress(bindKey, true);
+                bindKeys.forEach((k) => _ftPress(k, true));
             };
             // touchend AND touchcancel: an incoming call or the browser
             // reclaiming the gesture fires cancel, and without it the button
@@ -2146,7 +2200,7 @@ window.FightGame = (function () {
             const onUp = (ev) => {
                 ev.preventDefault();
                 el.classList.remove('ft-on');
-                _ftPress(bindKey, false);
+                bindKeys.forEach((k) => _ftPress(k, false));
             };
             el.addEventListener('touchstart', onDown, { passive: false });
             el.addEventListener('touchend', onUp, { passive: false });
