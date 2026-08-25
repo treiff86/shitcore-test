@@ -174,6 +174,97 @@ window.FightGame = (function () {
     const THROW_LAUNCH_VX = 250;        // horizontal fling, px/s
     const THROWN_GROUND_T = 0.45;       // seconds spent on the floor before getting up
 
+    /* IDLE BREATHING - no sprites required.
+
+       A Street Fighter idle bob is usually 2-4 drawn frames. This gets most
+       of that for zero art by SQUASHING the sprite vertically about its own
+       feet, which is a very different thing from sliding the whole sprite up
+       and down: a translate lifts the shoes off the floor and reads as
+       hovering, while a scale anchored at the baseline keeps the feet
+       planted and moves the head and shoulders - which is what breathing
+       actually looks like.
+
+       PHASE IS PER-FIGHTER, and that matters more than the amount. Two
+       characters breathing in perfect sync look like animatronics; a
+       fraction of a cycle apart and they look alive. The offset is derived
+       from the fighter's own start position so it is stable for the whole
+       match rather than jittering frame to frame.
+
+       If a character ever gets a REAL multi-frame idle drawn, this backs off
+       automatically - see draw(). Hand-drawn always wins. */
+    const IDLE_BREATH_AMP = 0.018;    // 1.8% vertical squash - deliberately subtle
+    const IDLE_BREATH_HZ = 0.75;      // slow, roughly a resting breath
+    const WALK_BOB_AMP = 0.010;       // a touch of the same on the walk cycle
+
+    const LAND_RECOVER_T = 0.16;      // seconds of landing-absorb pose
+
+    /* Dizzy skulls - the little cartoon birds that circle a stunned head.
+       Drawn procedurally rather than from a sheet: they are three flat
+       shapes, and drawing them in code means EVERY character gets them the
+       moment they get guard broken, with no extra art to draw. */
+    const SKULL_COUNT = 3;
+    const SKULL_ORBIT_HZ = 0.85;      // laps per second
+    const SKULL_RX = 34;              // horizontal radius of the orbit, px
+    const SKULL_RY = 10;               // vertical - a squashed ellipse reads as perspective
+    const SKULL_SIZE = 17;            // skull width at the front of the orbit
+    const SKULL_DEPTH = 0.34;         // how much smaller/dimmer at the back
+    const SKULL_HEAD_GAP = 2;        // px above the topmost ink of the artwork
+
+    /* One skull, centred on (x, y), `w` px wide. Deliberately built from
+       flat shapes with a dark outline so it stays readable at 9-13px, which
+       is the size these actually render at. */
+    function drawSkullGlyph(ctx, x, y, w) {
+        const r = w / 2;
+        const jawW = w * 0.52;
+        const jawH = w * 0.30;
+
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = 'rgba(20, 12, 28, 0.85)';
+        ctx.lineWidth = Math.max(1, w * 0.09);
+
+        // Jaw first, so the cranium overlaps its top edge.
+        ctx.fillStyle = '#efe9dd';
+        ctx.beginPath();
+        ctx.rect(-jawW / 2, r * 0.28, jawW, jawH);
+        ctx.fill();
+        ctx.stroke();
+
+        // Cranium.
+        ctx.beginPath();
+        ctx.arc(0, 0, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Eye sockets - the single most important detail at this size. Any
+        // smaller than about 26% of the width and they vanish into the fill.
+        const er = r * 0.30;
+        ctx.fillStyle = 'rgba(24, 14, 32, 0.92)';
+        ctx.beginPath();
+        ctx.arc(-r * 0.38, -r * 0.10, er, 0, Math.PI * 2);
+        ctx.arc(r * 0.38, -r * 0.10, er, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Nose + a single tooth gap, drawn only when there are enough pixels
+        // for them to read as anything but noise.
+        if (w >= 10) {
+            ctx.beginPath();
+            ctx.moveTo(0, r * 0.10);
+            ctx.lineTo(-r * 0.13, r * 0.34);
+            ctx.lineTo(r * 0.13, r * 0.34);
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.lineWidth = Math.max(1, w * 0.07);
+            ctx.strokeStyle = 'rgba(24, 14, 32, 0.7)';
+            ctx.beginPath();
+            ctx.moveTo(0, r * 0.30);
+            ctx.lineTo(0, r * 0.30 + jawH);
+            ctx.stroke();
+        }
+        ctx.restore();
+    }
     const COUNTER_WINDOW = 0.32;      // seconds after blocking a hit to input it
     const COUNTER_METER_COST = 34;    // roughly a third of a full guard meter
     const CPU_COUNTER_CHANCE = 0.35;  // how often the CPU counters out of its own block
@@ -319,6 +410,12 @@ window.FightGame = (function () {
             // to punch/hurt frames until their art exists - see _surf().
             throw:    ['assets/fight_game/undead_throw.webp', 3],
             thrown:   ['assets/fight_game/undead_thrown.webp', 2],
+            // Dizzy replaces the reused 'hurt' pose during a guard break -
+            // the most dramatic moment in a round finally looks like one.
+            dizzy:    ['assets/fight_game/undead_dizzy.webp', 2],
+            // Landing recovery: absorb, rise, stand. Without it a fighter
+            // snapped from airborne straight to idle with no weight at all.
+            land:     ['assets/fight_game/undead_land.webp', 3],
             crouch_hurt:  ['assets/fight_game/undead_crouch_hurt.webp', 1],
             jump_block:   ['assets/fight_game/undead_jump_block.webp', 1],
             jump_hurt:    ['assets/fight_game/undead_jump_hurt.webp', 1],
@@ -356,6 +453,64 @@ window.FightGame = (function () {
             jump_hurt:    ['assets/fight_game/skullx_jump_hurt.webp', 1],
         },
     };
+
+    /* SHARED IMPACT FX - not per character.
+       These are the same for everybody, so they load once and are reused by
+       all five fighters. Loading them per character would fetch the same
+       three files five times. They are also NOT put through the character
+       area-normalisation: a spark is not a body, and normalising it against
+       a standing pose would size it by pixel count rather than by how big
+       the hit should feel. They get explicit on-screen heights instead. */
+    const FX_FILES = {
+        spark_big:   ['assets/fight_game/fx_spark_big.webp', 4, 96],
+        spark_small: ['assets/fight_game/fx_spark_small.webp', 4, 68],
+        dust:        ['assets/fight_game/fx_dust.webp', 3, 48],
+    };
+    /* Which spark a hit gets. Only a HEAVY hit that got through cleanly earns
+       the big burst - a guard clash must not read like a clean hit, or
+       blocking looks as rewarding as being hit. Its own function purely so
+       the rule has one home and can be checked directly. */
+    function pickSparkKind(heavy, blocked) {
+        return (heavy && !blocked) ? 'spark_big' : 'spark_small';
+    }
+
+    let fxAnims = null;          // { kind: [canvas, ...] } once loaded
+    let fxAnimsPromise = null;
+
+    function loadFxAnims() {
+        if (fxAnimsPromise) return fxAnimsPromise;
+        fxAnimsPromise = (async () => {
+            const out = {};
+            for (const kind in FX_FILES) {
+                const [path, count, targetH] = FX_FILES[kind];
+                let img;
+                try { img = await loadImage(path); }
+                catch (e) { console.warn('[fightgame] missing fx sprite', path); out[kind] = []; continue; }
+                const cellW = img.width / count, cellH = img.height;
+                const scale = targetH / cellH;
+                const frames = [];
+                for (let i = 0; i < count; i++) {
+                    const c = document.createElement('canvas');
+                    c.width = Math.max(1, Math.round(cellW * scale));
+                    c.height = Math.max(1, Math.round(cellH * scale));
+                    const cx = c.getContext('2d');
+                    /* Smoothing ON. These sheets are painted art being scaled
+                       DOWN by more than half (a 210px spark cell to 96px on
+                       screen), and nearest-neighbour downscaling of painted
+                       art just throws away every other pixel row - the soft
+                       edges of a spark turn into stair-steps. */
+                    cx.imageSmoothingEnabled = true;
+                    cx.imageSmoothingQuality = 'high';
+                    cx.drawImage(img, i * cellW, 0, cellW, cellH, 0, 0, c.width, c.height);
+                    frames.push(c);
+                }
+                out[kind] = frames;
+            }
+            fxAnims = out;
+            return out;
+        })();
+        return fxAnimsPromise;
+    }
 
     const BACKGROUNDS = ['assets/fight_game/bg_prison.webp', 'assets/fight_game/bg_market.webp', 'assets/fight_game/bg_wizard.webp', 'assets/fight_game/bg_skullx.webp', 'assets/fight_game/bg_undead.webp'];
     // Online matches decide the arena once, at room-creation time (see
@@ -670,7 +825,15 @@ window.FightGame = (function () {
 
         // Back to source pixels so every caller stays in source units.
         const inv = 1 / s;
+        /* The highest ink in the whole strip. Poses are exported with wildly
+           different amounts of empty space above the head, so anything that
+           needs to sit ABOVE a character (the dizzy skulls) has to measure
+           the artwork rather than trust the frame's top edge. */
+        let unionTop = Infinity;
+        for (let i = 0; i < frameCount; i++) if (fBot[i] >= 0 && fTop[i] < unionTop) unionTop = fTop[i];
+        if (!isFinite(unionTop)) unionTop = 0;
         return {
+            top: unionTop * inv,
             bottom: unionBottom * inv,
             left: left * inv,
             right: right * inv,
@@ -688,6 +851,7 @@ window.FightGame = (function () {
     function withStripMeta(target, source) {
         if (source) {
             target.footPad = source.footPad;
+            target.headPad = source.headPad;
             target.artW = source.artW;
             target.artCx = source.artCx;
         }
@@ -727,6 +891,7 @@ window.FightGame = (function () {
         // ground and its body on the fighter's collision box, whatever
         // padding this particular export happened to have.
         frames.footPad = art ? Math.round((cellH - 1 - art.bottom) * scale) : 0;
+        frames.headPad = art ? Math.round(art.top * scale) : 0;   // empty space ABOVE the artwork
         frames.artW = art ? Math.round(art.artW * scale) : outW;
         frames.artCx = art ? Math.round(((art.left + art.right) / 2) * scale) : outW / 2;
         return frames;
@@ -883,6 +1048,11 @@ window.FightGame = (function () {
             this._strip = null;
             this.atkT = 0; this.atkDur = 0; this.hitReg = false; this.canW = false; this.canT = 0;
             this.stop = 0;   // HITSTOP - freezes BOTH fighters, impact feel only
+            this.landT = 0;           // >0 while playing the landing-absorb pose
+            this._breathT = 0;
+            // Phase derived from the spawn X so the two fighters are never in
+            // lockstep - synchronised breathing reads as robotic.
+            this._breathPhase = ((x || 0) % 97) / 97 * Math.PI * 2;
             this.counterWindowT = 0;  // seconds left to input a guard counter
             this.blockStreak = 0;     // consecutive blocked hits - unlocks the throw
             this.blockStreakT = 0;    // seconds left before that streak lapses
@@ -1202,6 +1372,18 @@ window.FightGame = (function () {
             if (this.state === 'thrown') {
                 stateForFrames = (this.anims.thrown && this.anims.thrown.length) ? 'thrown' : 'hurt';
             }
+            /* Guard break used to reuse the plain 'hurt' pose, so the single
+               most dramatic moment in a round looked like any other hit.
+               Characters without dizzy art keep the old behaviour. */
+            if (this.guardBroken && this.anims.dizzy && this.anims.dizzy.length) {
+                stateForFrames = 'dizzy';
+            } else if (this.landT > 0 && this.grounded && !isAttackState(this.state)
+                       && this.anims.land && this.anims.land.length) {
+                // The landing-absorb pose, played only while landT is
+                // counting down and only if nothing more important is
+                // happening - an attack must always win the sprite.
+                stateForFrames = 'land';
+            }
             if (this.state === 'block') {
                 if (!this.grounded && this.anims.jump_block && this.anims.jump_block.length) stateForFrames = 'jump_block';
                 else if (this.grounded && this.crouching && this.anims.crouch_block && this.anims.crouch_block.length) stateForFrames = 'crouch_block';
@@ -1215,6 +1397,61 @@ window.FightGame = (function () {
             // fighter's collision box and every hitbox origin mid-animation.
             this._strip = frames;
             return frames[this.fr % frames.length];
+        }
+
+        /* Vertical scale factor for the idle breath. 1 means "draw normally",
+           which is what every state other than a grounded idle/walk gets -
+           an attack or a jump must never be squashed, because their timing
+           is what the whole frame-data system rests on. */
+        breathScale() {
+            if (!this.grounded || this.ko || this.guardBroken) return 1;
+            let amp = 0;
+            if (this.state === 'idle') {
+                // A character with a real multi-frame idle is already
+                // animated; squashing it too would fight the artist.
+                const idleFrames = this.anims && this.anims.idle;
+                if (idleFrames && idleFrames.length > 1) return 1;
+                amp = IDLE_BREATH_AMP;
+            } else if (this.state === 'walk') {
+                amp = WALK_BOB_AMP;
+            } else {
+                return 1;
+            }
+            const t = (this._breathT || 0);
+            return 1 + amp * Math.sin(t * Math.PI * 2 * IDLE_BREATH_HZ + (this._breathPhase || 0));
+        }
+
+        /* Three little skulls orbiting the head while guard-broken - the
+           classic "seeing birds" cue. Called AFTER the sprite has been drawn
+           and after ctx.restore(), so no mirror or breath transform is still
+           on the context and the skulls always orbit the same direction
+           regardless of which way the fighter is facing.
+           `cx` / `topY` are already screen coordinates. */
+        drawDizzySkulls(ctx, cx, topY) {
+            const t = this._breathT || 0;
+            const base = t * Math.PI * 2 * SKULL_ORBIT_HZ + (this._breathPhase || 0);
+            const cy = topY - SKULL_HEAD_GAP;
+
+            // Painter's order: draw the far skulls first so the near ones
+            // overlap them, which is what sells the orbit as a circle rather
+            // than three dots sliding along a line.
+            const order = [];
+            for (let i = 0; i < SKULL_COUNT; i++) {
+                const a = base + (i / SKULL_COUNT) * Math.PI * 2;
+                order.push({ a, depth: (Math.sin(a) + 1) / 2 });   // 0 = far, 1 = near
+            }
+            order.sort((p, q) => p.depth - q.depth);
+
+            ctx.save();
+            for (const s of order) {
+                const scale = 1 - SKULL_DEPTH * (1 - s.depth);
+                const w = SKULL_SIZE * scale;
+                const x = cx + Math.cos(s.a) * SKULL_RX;
+                const y = cy + Math.sin(s.a) * SKULL_RY;
+                ctx.globalAlpha = 0.55 + 0.45 * s.depth;
+                drawSkullGlyph(ctx, x, y, w);
+            }
+            ctx.restore();
         }
 
         draw(ctx, so) {
@@ -1238,17 +1475,46 @@ window.FightGame = (function () {
             const artCx = (strip && strip.artCx != null) ? strip.artCx : img.width / 2;
             const sx = Math.round(bodyCx - artCx + so[0]);
 
+            /* The breath is applied as a scale about the FEET line
+               (sy + img.height), so the shoes stay welded to the floor and
+               only the body rises and falls. Scaling about the sprite's own
+               origin instead would lift the whole character off the ground -
+               the hovering look this is specifically avoiding. */
+            const bs = this.breathScale();
+            const needsBreath = bs !== 1;
+            const footY = sy + img.height;
+
             if (this.facing === -1) {
                 // Mirror about the artwork's own centre, not the frame's -
                 // otherwise a frame with lopsided padding jumps sideways
                 // the moment the fighter turns around.
                 ctx.save();
+                if (needsBreath) { ctx.translate(0, footY); ctx.scale(1, bs); ctx.translate(0, -footY); }
                 ctx.translate(Math.round(bodyCx + artCx + so[0]), sy);
                 ctx.scale(-1, 1);
                 ctx.drawImage(img, 0, 0);
                 ctx.restore();
+            } else if (needsBreath) {
+                ctx.save();
+                ctx.translate(0, footY); ctx.scale(1, bs); ctx.translate(0, -footY);
+                ctx.drawImage(img, sx, sy);
+                ctx.restore();
             } else {
                 ctx.drawImage(img, sx, sy);
+            }
+
+            /* Last, on top of everything and outside every transform above.
+               `sy` is the top of the artwork, so the skulls sit a fixed gap
+               above the head no matter how tall this character's dizzy pose
+               happens to be. */
+            if (this.guardBroken && !this.ko) {
+                /* `sy + headPad` is the top of the actual INK, not of the
+                   frame. Anchoring on the frame instead left the skulls
+                   orbiting empty air a good 60px over the character's head,
+                   because every pose is exported with a different amount of
+                   headroom above the drawing. */
+                const headPad = (strip && strip.headPad) || 0;
+                this.drawDizzySkulls(ctx, bodyCx + so[0], sy + headPad);
             }
         }
     }
@@ -1388,8 +1654,16 @@ window.FightGame = (function () {
         const { landY, onPlatform: landOnPlatform } =
             f.vy >= 0 ? surfaceBelow(cx, prevY) : { landY: arenaGroundY() - P_H, onPlatform: false };
         if (f.y >= landY) {
+            const wasFalling = f.vy;
             f.y = landY; f.vy = 0; f.grounded = true; f.heliT = 0; f.onPlatform = landOnPlatform;
             if (f.state === 'jump_kick') { f.state = 'idle'; f.fr = 0; }
+            /* Landing now has weight: a dust puff at the feet and a short
+               recovery pose. Gated on actually falling fast enough, so
+               walking off a one-pixel lip doesn't kick up a cloud. */
+            if (wasFalling > 260) {
+                f.landT = LAND_RECOVER_T;
+                if (typeof spawnLandingDust === 'function') spawnLandingDust(f);
+            }
             return true; // landed this frame
         }
         return false;
@@ -1812,14 +2086,31 @@ window.FightGame = (function () {
     }
 
     function updateFighterCommon(dt, f) {
+        /* The breath clock runs unconditionally and FIRST. It was originally
+           placed further down and landed inside the guardBroken branch,
+           which early-returns - so it only advanced while a fighter was
+           dizzy and the idle sat frozen mid-breath the rest of the time.
+           It is purely cosmetic, so it should never sit behind a gate. */
+        f._breathT = (f._breathT || 0) + dt;
+        if (f.landT > 0) f.landT = Math.max(0, f.landT - dt);
+
+        /* These three lapse-timers also run unconditionally. They used to sit
+           a few lines below, INSIDE the guardBroken branch that returns early,
+           so they only counted down while a fighter was dizzy: the guard
+           counter window never expired, and a block streak never lapsed, so a
+           throw stayed armed forever off one long-dead block. */
+        if (f.counterWindowT > 0) f.counterWindowT = Math.max(0, f.counterWindowT - dt);
+        if (f.blockStreakT > 0) {
+            f.blockStreakT = Math.max(0, f.blockStreakT - dt);
+            if (f.blockStreakT === 0) f.blockStreak = 0;
+        }
+        if (f.hurtT > 0) f.hurtT = Math.max(0, f.hurtT - dt);
+
         // Guard break countdown - once it expires they're back to normal,
         // guard meter already reset to 0 by triggerGuardBreak() so they have
         // to earn it back like anyone else who got chipped down.
         if (f.guardBroken) {
             f.guardBreakT -= dt;
-            if (f.counterWindowT > 0) f.counterWindowT = Math.max(0, f.counterWindowT - dt);
-        if (f.blockStreakT > 0) { f.blockStreakT = Math.max(0, f.blockStreakT - dt); if (f.blockStreakT === 0) f.blockStreak = 0; }
-        if (f.hurtT > 0) f.hurtT = Math.max(0, f.hurtT - dt);
             if (f.guardBreakT <= 0) {
                 f.guardBroken = false;
                 f.state = f.grounded ? 'idle' : 'jump';
@@ -1858,7 +2149,9 @@ window.FightGame = (function () {
                 f.state = f.grounded ? 'idle' : 'jump'; f.atkT = 0; f.canW = false; f.fr = 0;
             }
         }
-        if (f.hurtT > 0) f.hurtT = Math.max(0, f.hurtT - dt);
+        // (hurtT is decremented at the top of this function now, alongside the
+        // other lapse-timers. Leaving a second decrement here would tick it
+        // twice per frame and halve the hit flash.)
 
         if (heliActive) {
             // Spin through both jump_kick frames fast, resetting hitReg each
@@ -1874,6 +2167,20 @@ window.FightGame = (function () {
             const fpsMap = { idle: 5, walk: 10, punch_lo: 16, kick_lo: 14, block: 1, jump: 1, crouch: 1, jump_punch: 16, jump_kick: 14, crouch_punch: 16, crouch_kick: 14 };
             f._adv(dt, fpsMap[f.state] || 8);
         }
+    }
+
+    /* The fx array lives inside the game loop's closure, so anything outside
+       it that wants to spawn an effect needs a way in. This is set once per
+       match rather than threading the array through every call site. */
+    let _activeFx = null;
+    function spawnLandingDust(f) {
+        if (!_activeFx) return;
+        _activeFx.push({
+            x: f.x + f._fw / 2,
+            y: f.y + P_H - 6,        // at the feet, not the centre of mass
+            kind: 'dust', l: 14, ml: 14,
+            rot: 0, flip: Math.random() < 0.5 ? -1 : 1, heavy: false,
+        });
     }
 
     function resolveHit(attacker, defender, shake, fx) {
@@ -1923,7 +2230,20 @@ window.FightGame = (function () {
             // resolveFighterCollision).
             applyKnockback(defender, attacker, defender.blocking);
 
-            fx.push({ x: hb.x + hb.w / 2, y: hb.y + hb.h / 2, l: heavy ? 9 : 6, ml: heavy ? 9 : 6, heavy });
+            /* A sprite spark instead of the old expanding circle. `kind`
+               picks the sheet, `rot` and `flip` vary it so repeated hits in
+               the same spot don't look stamped, and `l`/`ml` keep the same
+               countdown lifecycle the circle used. Blocked hits get the
+               small spark - a guard clash shouldn't read as a clean hit. */
+            const sparkKind = pickSparkKind(heavy, defender.blocking);
+            fx.push({
+                x: hb.x + hb.w / 2, y: hb.y + hb.h / 2,
+                kind: sparkKind,
+                l: heavy ? 12 : 9, ml: heavy ? 12 : 9,
+                rot: (Math.random() * Math.PI * 2),
+                flip: Math.random() < 0.5 ? -1 : 1,
+                heavy,
+            });
             if (typeof playSfxRandom === 'function') {
                 if (defender.blocking) playSfxRandom(SFX_BLOCKS, 0.5);
                 else if (defender.ko) playSfxRandom(SFX_FINISHERS, 0.7); // this hit just finished them - the KO flag is already set by takeDamage() above
@@ -2116,6 +2436,11 @@ window.FightGame = (function () {
         // saving is on first load, where it matters most - a phone on
         // mobile data opening the fight game for the first time.
         const { p1Key, p2Key } = pickFighterKeys();
+        /* Kicked off here but deliberately NOT awaited: the impact sheets are
+           small and shared, and the match must not sit on a black screen
+           waiting for them. Everything that draws fx checks fxAnims for null
+           and falls back to the old circle burst until they arrive. */
+        loadFxAnims();
         const anims = await loadFightersFor(p1Key, p2Key);
         const bg = await loadArenaBackground(window.fightClubOnlineActive ? window.fightClubOnlineArena : null); // always fresh - depends on whichever theme is active right now, not cached
 
@@ -2123,6 +2448,7 @@ window.FightGame = (function () {
         if (typeof playSfxFile === 'function') playSfxFile('assets/sfx/fight/fight.mp3', 0.7);
         const shake = new Shake();
         const fx = [];
+        _activeFx = fx;   // let spawnLandingDust reach it
 
         const P1_BIND = { left: 'ArrowLeft', right: 'ArrowRight', jump: 'ArrowUp', crouch: 'ArrowDown', punch: 'z', kick: 'x', block: ' ', throwGrab: 'c' };
         // P2 is CPU-only now (see updateCPUInput) - these are just internal
@@ -2289,13 +2615,33 @@ window.FightGame = (function () {
             for (let i = fx.length - 1; i >= 0; i--) {
                 const s = fx[i]; s.l--;
                 if (s.l <= 0) { fx.splice(i, 1); continue; }
-                const t = 1 - s.l / s.ml;
-                ctx.fillStyle = s.heavy ? COL.OR : COL.YL;
-                ctx.globalAlpha = Math.max(0, 1 - t);
-                ctx.beginPath();
-                ctx.arc(s.x + so[0], s.y + so[1], 10 + t * 14, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.globalAlpha = 1;
+                const t = 1 - s.l / s.ml;          // 0 at spawn -> 1 at death
+                const frames = fxAnims && fxAnims[s.kind];
+
+                if (frames && frames.length) {
+                    // Step through the strip over the effect's lifetime.
+                    const fi = Math.min(frames.length - 1, Math.floor(t * frames.length));
+                    const img = frames[fi];
+                    ctx.save();
+                    ctx.translate(s.x + so[0], s.y + so[1]);
+                    if (s.rot) ctx.rotate(s.rot);
+                    if (s.flip === -1) ctx.scale(-1, 1);
+                    // Fade only over the last third - fading from frame one
+                    // makes even a heavy hit look weak.
+                    ctx.globalAlpha = t > 0.66 ? Math.max(0, 1 - (t - 0.66) / 0.34) : 1;
+                    ctx.drawImage(img, -img.width / 2, -img.height / 2);
+                    ctx.restore();
+                    ctx.globalAlpha = 1;
+                } else {
+                    // Fallback to the original circle if the sheets failed to
+                    // load - a missing decoration must never hide a hit.
+                    ctx.fillStyle = s.heavy ? COL.OR : COL.YL;
+                    ctx.globalAlpha = Math.max(0, 1 - t);
+                    ctx.beginPath();
+                    ctx.arc(s.x + so[0], s.y + so[1], 10 + t * 14, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.globalAlpha = 1;
+                }
             }
 
             g.p1.draw(ctx, so);
