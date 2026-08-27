@@ -544,7 +544,7 @@ window.FightGame = (function () {
         return fxAnimsPromise;
     }
 
-    const BACKGROUNDS = ['assets/fight_game/bg_prison.webp', 'assets/fight_game/bg_market.webp', 'assets/fight_game/bg_wizard.webp', 'assets/fight_game/bg_skullx.webp', 'assets/fight_game/bg_undead.webp'];
+    const BACKGROUNDS = ['assets/fight_game/bg_prison.webp', 'assets/fight_game/bg_market.webp', 'assets/fight_game/bg_wizard.webp', 'assets/fight_game/bg_skullx.webp', 'assets/fight_game/bg_undead.webp', 'assets/fight_game/bg_clay.webp'];
     // Online matches decide the arena once, at room-creation time (see
     // onlinelobby.js), so both players load the same image instead of each
     // independently rolling their own - this is what that picks from.
@@ -600,6 +600,24 @@ window.FightGame = (function () {
                 // the ends so you can run off either side and drop.
                 { x1: 535, x2: 845, topY: 378 },
             ],
+        },
+        'assets/fight_game/bg_clay.webp': {
+            /* Clay Stonkz - the Wall St block, molded. Deliberately has NO
+               music entry in FIGHT_ARENA_MUSIC_OVERRIDES (js/audio.js):
+               playFightMusicForBackground() pauses on an arena it does not
+               recognise, so this one is silent until a track exists.
+
+               ground measured off the art at canvas scale. The road runs
+               from the kerb at ~470 down past 520; 490 puts the fighters on
+               the open asphalt in front of the hydrant rather than up on
+               the far pavement.
+
+               No platforms on purpose. The two pavements ARE higher than
+               the road, but only by 32px on the left and 45px on the right
+               - against a 220px fighter that is a kerb, not a ledge, and
+               a ledge you can barely see but keep landing on reads as a
+               bug. Every other arena's platform is 95px+ of real height. */
+            ground: 490,
         },
         'assets/fight_game/bg_skullx.webp': {
             ground: 480,           // throne-room art - estimated from the rug/floor line, no platform (no obvious ledge like some other arenas have) - nudge this if feet look off once it's live
