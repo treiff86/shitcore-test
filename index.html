@@ -46,7 +46,7 @@
          They cost nothing: an attacker cannot serve from those schemes
          without the visitor first installing their extension.
          ============================================================ -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://esm.sh chrome-extension: moz-extension:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: blob: https://image.pollinations.ai; media-src 'self' blob:; connect-src 'self' https://dhoewjzwimvgogckprof.supabase.co wss://dhoewjzwimvgogckprof.supabase.co https://esm.sh https://rpc.ankr.com https://solana-rpc.publicnode.com https://rpc.apechain.com; frame-src https://classicjoy.games; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://esm.sh chrome-extension: moz-extension:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: blob: https://image.pollinations.ai; media-src 'self' blob:; connect-src 'self' https://dhoewjzwimvgogckprof.supabase.co wss://dhoewjzwimvgogckprof.supabase.co https://esm.sh https://rpc.ankr.com https://solana-rpc.publicnode.com https://rpc.apechain.com https://rpc.mainnet.chain.robinhood.com; frame-src https://classicjoy.games; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'">
 
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Shitcore (USDSHT) — The Ultimate L1 for Absolute Rugs</title>
@@ -100,11 +100,11 @@
          losing its styling. -->
     <link rel="stylesheet" href="tailwind.css?v=1">
     <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&family=MedievalSharp&family=UnifrakturMaguntia&family=Special+Elite&family=Rye&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&family=MedievalSharp&family=UnifrakturMaguntia&family=Special+Elite&family=Rye&family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
     <!-- FontAwesome icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Local styles (FIXED PATH) -->
-    <link rel="stylesheet" href="style.css?v=53">
+    <link rel="stylesheet" href="style.css?v=56">
     <link rel="stylesheet" href="bonusstage.css?v=19">
 </head>
 <body class="overflow-x-hidden min-h-screen flex flex-col justify-between">
@@ -865,8 +865,8 @@
                              music, fighter, easter egg and holder perks - so none of
                              them belong under "coming soon" any more. Clay Stonkz is
                              the only one still to land. -->
-                        <div><span class="text-gray-500 uppercase tracking-wide">Unlocks with:</span> Mid Evils NFT &bull; The Conmen NFT &bull; Bitcoin Wizards &bull; SkullX &bull; Genuine Undead &bull; Forever Undead &bull; $MIM SOL/BTC Holders</div>
-                        <div class="text-gray-500"><span class="uppercase tracking-wide">Coming soon:</span> Clay Stonkz</div>
+                        <div><span class="text-gray-500 uppercase tracking-wide">Unlocks with:</span> Mid Evils NFT &bull; The Conmen NFT &bull; Bitcoin Wizards &bull; SkullX &bull; Genuine Undead &bull; Forever Undead &bull; $MIM SOL/BTC Holders &bull; Clay Stonkz</div>
+                        
                     </div>
                 </div>
                 <div class="space-y-6">
@@ -1505,14 +1505,14 @@
 <script src="js/audio.js?v=21" defer></script>
 <script src="js/state.js?v=18" defer></script>
 <script src="js/ui.js?v=8" defer></script>
-<script src="js/markets.js?v=23" defer></script>
+<script src="js/markets.js?v=25" defer></script>
 <script src="js/auditor.js?v=1" defer></script>
 <script src="js/deployer.js?v=5" defer></script>
 <script src="js/volatility.js" defer></script>
 <script src="js/staking.js" defer></script>
 <script src="js/perks.js?v=5" defer></script>
 <script src="js/bonusstage.js?v=23" defer></script>
-<script src="js/fightgame.js?v=61" defer></script>
+<script src="js/fightgame.js?v=62" defer></script>
 <script src="js/mevghosts.js?v=2" defer></script>
 <script src="js/mevsandwich.js?v=11" defer></script>
 <script src="js/conmen-egg.js?v=6" defer></script>
@@ -1520,11 +1520,11 @@
 <script src="js/undead-egg.js?v=3" defer></script>
 <script src="js/midevils-egg.js?v=3" defer></script>
 <script src="js/mcdonalds-egg.js?v=4" defer></script>
-<script src="js/web3.js?v=69" defer></script>
+<script src="js/web3.js?v=70" defer></script>
 <script src="js/wizardpopup.js?v=2" defer></script>
 <script src="js/win95desktop.js?v=6" defer></script>
-<script src="js/btcwallet.js?v=20" defer></script>
-<script src="js/ethwallet.js?v=6" defer></script>
+<script src="js/btcwallet.js?v=21" defer></script>
+<script src="js/ethwallet.js?v=7" defer></script>
 <script src="js/onlinesync.js?v=1" defer></script>
 <script src="js/onlinelobby.js?v=6" defer></script>
 <script type="module" src="js/sns.js?v=7"></script>
