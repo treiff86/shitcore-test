@@ -313,9 +313,15 @@ window.FightGame = (function () {
     // numbers). Once empty, further blocked hits deal chip damage that
     // scales from 1% to 10% of max HP over CHIP_BLOCKS_TO_BREAK more hits,
     // then Guard Break triggers.
+    /* RETUNED from 20 / 5, which put a guard break ten consecutive blocked
+       hits away - five to empty the meter, five more of chip. It worked, but
+       measured against the CPU almost nobody holds block long enough to see
+       it, so the dizzy art and the biggest punish in the game were both
+       effectively unreachable. 25 / 3 makes it seven, which is still a long
+       block string and still something you have to earn. */
     const GUARD_METER_MAX = 100;
-    const GUARD_COST_PER_BLOCK = 20;
-    const CHIP_BLOCKS_TO_BREAK = 5;
+    const GUARD_COST_PER_BLOCK = 25;
+    const CHIP_BLOCKS_TO_BREAK = 3;
     const CHIP_DMG_MIN_PCT = 0.01;
     const CHIP_DMG_MAX_PCT = 0.10;
     const GUARD_BREAK_DURATION = 1.5;   // seconds fully vulnerable after a guard break
@@ -333,6 +339,16 @@ window.FightGame = (function () {
     const VICTORY_FPS = 8;
     const DEFEAT_FPS = 7;
     const INTRO_DURATION = 1.0; // seconds the "FIGHT!" card holds before a round starts
+
+    /* THE KO. The last hit of a match used to play at exactly the same speed
+       as the first, so the moment a round was decided read like any other
+       exchange. Two beats fix it: everything stops dead on the impact frame,
+       spark still hanging in the air, and then the fall plays back slow.
+       Both are pure presentation - the outcome is already decided by the
+       time either one starts. */
+    const KO_FREEZE_T = 0.34;   // seconds absolutely nothing moves
+    const KO_SLOW_T = 1.25;     // seconds of slow motion after the freeze
+    const KO_SLOW_SCALE = 0.32; // how slowly time runs during it
     const HURT_FLASH_T = 0.22;
 
     const COL = {
@@ -402,7 +418,13 @@ window.FightGame = (function () {
             hurt:     ['assets/fight_game/undead_hurt.webp', 1],
             defeat:   ['assets/fight_game/undead_defeat.webp', 4],
             block:    ['assets/fight_game/undead_block.webp', 1],
-            jump:         ['assets/fight_game/undead_jump.webp', 1],
+            // Two airborne poses - a tucked rise and a reaching descent -
+            // cut from the same sheet the landing frames came from, against
+            // a shared crop so the tuck genuinely sits higher than the
+            // descent. Which one shows is decided by vertical velocity, not
+            // by a timer: see the jump branch in _surf(). Characters with a
+            // one-frame jump are unaffected by any of it.
+            jump:         ['assets/fight_game/undead_jump.webp?v=2', 2],
             crouch:       ['assets/fight_game/undead_crouch.webp', 1],
             jump_punch:   ['assets/fight_game/undead_jump_punch.webp', 2],
             jump_kick:    ['assets/fight_game/undead_jump_kick.webp', 2],
@@ -1084,6 +1106,10 @@ window.FightGame = (function () {
             this.guardBroken = false;
             this.guardBreakT = 0;
             this.throwBufT = 0;   // seconds a remembered throw press stays live
+            /* Held through the FIGHT! card, then dropped. Both fighters used
+               to stand in a plain idle for that whole second, so the round
+               did not so much start as simply stop being paused. */
+            this.introPose = true;
             this.timeSinceBlockOrHit = GUARD_REGEN_DELAY; // starts "already recovered"
 
             // Combo scaling
@@ -1370,6 +1396,16 @@ window.FightGame = (function () {
             // which art to draw. Falls back to the plain block pose for any
             // character without the crouch/jump variants.
             let stateForFrames = this.state;
+            /* SQUARING UP. During the FIGHT! card, hold the first frame of
+               the victory strip - every character has one, it is already a
+               planted "come on then" stance, and holding one frame reads as
+               a ready pose rather than as a celebration. `state` is left
+               alone on purpose: this only chooses art, so nothing that keys
+               off state (hitboxes, the frame data) can see it at all. */
+            if (this.introPose && this.anims.victory && this.anims.victory.length) {
+                this._strip = this.anims.victory;
+                return this.anims.victory[0];
+            }
             // The guard counter still borrows the punch strip - it reads as
             // a shove, which is what it is.
             if (this.state === 'counter_lo') stateForFrames = 'punch_lo';
@@ -1407,6 +1443,18 @@ window.FightGame = (function () {
             // canvas width every single frame, which silently changed the
             // fighter's collision box and every hitbox origin mid-animation.
             this._strip = frames;
+
+            /* THE JUMP ARC. A multi-frame jump must not run on a timer: the
+               pose has to match what the body is actually doing, or a
+               fighter reads as descending while still going up. Velocity
+               picks it instead - rising takes the tucked frame, falling
+               takes the reaching one - which also means a short hop and a
+               full-height jump both look right without any tuning.
+               A one-frame jump strip falls through this untouched. */
+            if (stateForFrames === 'jump' && frames.length > 1) {
+                const i = this.vy < 0 ? 0 : Math.min(frames.length - 1, 1);
+                return frames[i];
+            }
             return frames[this.fr % frames.length];
         }
 
@@ -1623,6 +1671,9 @@ window.FightGame = (function () {
             timer: ROUND_T,
             phase: 'intro', // intro | playing | p1win | p2win | draw
             introT: 0,
+            koStarted: false,   // the finish only gets to happen once
+            koFreezeT: 0,       // > 0 means time is stopped dead
+            koSlowT: 0,         // > 0 means time is running slow
             p1Label: (onlineNames && onlineNames.p1) || 'P1',
             p2Label: (onlineNames && onlineNames.p2) || 'P2',
         };
@@ -2516,13 +2567,40 @@ window.FightGame = (function () {
         }
 
         function frameBody(now) {
-            const dt = Math.min((now - lastT) / 1000, 0.05);
+            const rawDt = Math.min((now - lastT) / 1000, 0.05);
             lastT = now;
+
+            /* THE KO CLOCK. Scaling dt is what makes the freeze and the slow
+               motion work everywhere at once - physics, animation, timers,
+               the lot - without a single one of them needing to know this
+               exists. The clocks themselves run on rawDt, or a freeze that
+               sets dt to zero could never end. */
+            let dt = rawDt;
+            if (g.koFreezeT > 0) {
+                g.koFreezeT = Math.max(0, g.koFreezeT - rawDt);
+                dt = 0;
+            } else if (g.koSlowT > 0) {
+                g.koSlowT = Math.max(0, g.koSlowT - rawDt);
+                dt = rawDt * KO_SLOW_SCALE;
+            }
+            const timeStopped = dt === 0;
+
             const so = shake.off(); shake.update();
 
             if (g.phase === 'intro') {
                 g.introT += dt;
-                if (g.introT >= INTRO_DURATION) g.phase = 'playing';
+                /* The full fighter update does NOT run during the intro - no
+                   input, no physics, no timers - so the breath clock is
+                   ticked by hand here. Without it both fighters stand
+                   completely frozen behind the FIGHT! card, which is the
+                   one moment a player is looking straight at them. */
+                g.p1._breathT = (g.p1._breathT || 0) + dt;
+                g.p2._breathT = (g.p2._breathT || 0) + dt;
+                if (g.introT >= INTRO_DURATION) {
+                    g.phase = 'playing';
+                    g.p1.introPose = false; g.p2.introPose = false;
+                    g.p1.fr = 0; g.p2.fr = 0;
+                }
             } else if (g.phase === 'playing') {
                 g.timer -= dt;
                 const p1 = g.p1, p2 = g.p2;
@@ -2562,12 +2640,31 @@ window.FightGame = (function () {
                 updateHumanFighter(dt, p2, P2_BIND);
                 updateFighterCommon(dt, p1);
                 updateFighterCommon(dt, p2);
-                resolveFighterCollision(p1, p2);
+                /* Skipped while time is stopped. This is a positional
+                   correction rather than simulation - it un-stacks the two
+                   bodies by halving the overlap every FRAME, with no dt in
+                   it at all - so during a KO freeze it kept sliding the
+                   loser away from the punch that just landed, which is the
+                   one thing the freeze exists to hold still. */
+                if (!timeStopped) resolveFighterCollision(p1, p2);
 
                 resolveHit(p1, p2, shake, fx);
                 resolveHit(p2, p1, shake, fx);
 
                 if (p1.ko || p2.ko) {
+                    /* Start the freeze on the frame the KO happens, and hold
+                       the transition until it ends. Flipping to the win
+                       phase straight away would replace the fighter who just
+                       got hit with a defeat pose - so the freeze would land
+                       on the wrong frame and the impact it exists to show
+                       would never be on screen. */
+                    if (!g.koStarted) {
+                        g.koStarted = true;
+                        g.koFreezeT = KO_FREEZE_T;
+                        g.koSlowT = KO_SLOW_T;
+                    }
+                }
+                if ((p1.ko || p2.ko) && g.koFreezeT <= 0) {
                     if (p2.ko && !p1.ko) {
                         g.phase = 'p1win'; p1.state = p1.grounded ? 'victory' : 'jump'; p1.fr = 0; p1.hurtT = 0;
                         p2.state = 'defeat'; p2.fr = 0; p2.hurtT = 0;
@@ -2584,7 +2681,12 @@ window.FightGame = (function () {
                     } else if (typeof playMiniGameSound === 'function') {
                         playMiniGameSound('fight_game_over'); // draw - synthesized stinger, no dedicated draw SFX yet
                     }
-                } else if (g.timer <= 0) {
+                } else if (!p1.ko && !p2.ko && g.timer <= 0) {
+                    // Spelled out rather than left as a bare `else`: the
+                    // branch above no longer means "somebody was KO'd", it
+                    // means "somebody was KO'd AND the freeze has finished",
+                    // so a plain else would let a time-out decide a match
+                    // that a KO had already ended.
                     g.timer = 0;
                     if (p1.hp > p2.hp) { g.phase = 'p1win'; p1.state = p1.grounded ? 'victory' : 'jump'; p2.state = 'defeat'; }
                     else if (p2.hp > p1.hp) { g.phase = 'p2win'; p2.state = p2.grounded ? 'victory' : 'jump'; p1.state = 'defeat'; }
@@ -2638,7 +2740,17 @@ window.FightGame = (function () {
             else { ctx.fillStyle = '#222'; ctx.fillRect(0, 0, SW, SH); }
 
             for (let i = fx.length - 1; i >= 0; i--) {
-                const s = fx[i]; s.l--;
+                /* Effects age per FRAME, not per second, so they are the one
+                   thing the dt scaling above cannot slow down on its own -
+                   and a hit spark that vanished on schedule during a KO
+                   freeze would take the impact with it. Hold them while
+                   time is stopped, and age them at the same rate as
+                   everything else while it is slow. */
+                const s = fx[i];
+                if (!timeStopped) {
+                    s.age = (s.age || 0) + (g.koSlowT > 0 ? KO_SLOW_SCALE : 1);
+                    if (s.age >= 1) { s.age -= 1; s.l--; }
+                }
                 if (s.l <= 0) { fx.splice(i, 1); continue; }
                 const t = 1 - s.l / s.ml;          // 0 at spawn -> 1 at death
                 const frames = fxAnims && fxAnims[s.kind];
