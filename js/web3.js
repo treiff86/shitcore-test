@@ -78,6 +78,35 @@ const COSMETIC_THEMES = [
         },
     },
     {
+        /* CLAY STONKZ - Robinhood Chain (an Arbitrum L2 on Ethereum,
+           chain id 4663) plus a Bitcoin Ordinals collection.
+
+           TEST PLAY PREVIEW ONLY for now, exactly the way Genuine Undead
+           started: there is no checkFn, so no real wallet can ever match
+           it and nobody gets perks or a theme they did not earn. The
+           moment the two contract addresses land, the check goes here and
+           nothing else about the theme has to change.
+
+           cssClass is where all the work actually is - see .clay-mode at
+           the bottom of style.css. */
+        id: "claystonkz",
+        label: "Clay Stonkz",
+        cssClass: "clay-mode",
+        toastMsg: "\ud83e\uddf1 Clay Stonkz detected! Everything just got molded.",
+        /* Two chains, one theme - the same shape Skull X already uses.
+           The Robinhood Chain side is the confirmed one: contract
+           0xde0a...1b44, "Clay StonKz" (CLAYZ), ERC-721, 6,969 supply,
+           verified on that chain's Blockscout before wiring. The Bitcoin
+           Ordinals side is the 650-piece Clay Collective. Either counts. */
+        checkFn: async () => {
+            if (typeof window.checkClayStonkzEvmOwnership === 'function'
+                && await window.checkClayStonkzEvmOwnership()) return true;
+            if (typeof window.checkClayCollectiveOwnership === 'function'
+                && await window.checkClayCollectiveOwnership()) return true;
+            return false;
+        },
+    },
+    {
         id: "genuineundead",
         label: "Genuine Undead / Forever Undead",
         cssClass: "undead-mode", // dark terminal-green "hacker" theme, matched to the reference mockup
@@ -183,6 +212,20 @@ const HOLDER_PERKS = [
         lines: "$3,000 holder bonus · +40% capital inflow on every deployment · the Windows 95 desktop · Online Fight Club unlocked",
     },
     {
+        themeId: "claystonkz",
+        name: "Clay Stonkz",
+        cashBonus: 3000,
+        /* Every other perk makes the game SAFER - less heat, rarer
+           crashes, more inflow, a free revival. A stocks collection on a
+           brokerage's own chain should not be another shield, so this one
+           pays out instead: winning trades only, losses untouched. It
+           rewards being right rather than protecting you from being
+           wrong, which is the one shape none of the other five have and
+           the only one that leaves the catastrophe design intact. */
+        tradeWinMult: 1.25,
+        lines: "$3,000 holder bonus \u00b7 +25% profit on every winning Markets trade \u00b7 Online Fight Club unlocked",
+    },
+    {
         themeId: "genuineundead",
         name: "Genuine Undead / Forever Undead",
         cashBonus: 3000,
@@ -245,6 +288,15 @@ function holderCapitalInflowMult() {
 function holderHeatMultiplier() {
     const p = activePerkSet();
     return (p && p.heatMultiplier) || 1;
+}
+
+/* Multiplies a WINNING Markets trade's profit. 1 means no change, which
+   is what every non-Clay-Stonkz theme gets. Read in markets.js at the
+   point the position closes, deliberately not where pnl is computed -
+   an unrealised number on screen should be the honest one. */
+function holderTradeWinMult() {
+    const p = activePerkSet();
+    return (p && p.tradeWinMult) || 1;
 }
 
 function holderHasSecondLife() {
