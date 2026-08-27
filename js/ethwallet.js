@@ -222,6 +222,24 @@ async function checkERC721BalanceViaRPC(contractAddress, rpcUrl) {
 // Confirmed real contract - the older "GU Origins" collection that
 // current-gen Genuine Undead migrated from. Tim confirmed Origins
 // holders who haven't migrated should still count.
+/* ---------------- CLAY STONKZ (Robinhood Chain) ----------------
+   Robinhood Chain is an Arbitrum Orbit L2, chain id 4663, native ETH -
+   so it is plain EVM and the balanceOf() machinery above works on it
+   unchanged. Checked through the direct-RPC path rather than the
+   connected wallet's provider for the same reason ApeChain is: asking a
+   wallet to switch networks just to read a balance throws a
+   network-switch prompt at people who may hold nothing there.
+
+   Contract confirmed on Robinhood Chain's own Blockscout explorer
+   before wiring: "Clay StonKz" (CLAYZ), ERC-721, 6,969 supply. */
+const ROBINHOOD_CHAIN_RPC = 'https://rpc.mainnet.chain.robinhood.com'; // public, chain ID 4663
+const CLAY_STONKZ_CONTRACT = '0xde0acefc89d4cf5f4ce45a4fb8a51aa355091b44';
+
+window.checkClayStonkzEvmOwnership = async function () {
+    if (typeof ethWalletAddress === 'undefined' || !ethWalletAddress) return false;
+    return await checkERC721BalanceViaRPC(CLAY_STONKZ_CONTRACT, ROBINHOOD_CHAIN_RPC);
+};
+
 const GU_ORIGINS_CONTRACT = '0x209e639a0ec166ac7a1a4ba41968fa967db30221'; // Ethereum mainnet, confirmed via Etherscan/Rarible
 
 // NOT YET CONFIRMED - placeholders. The v3 deployer address Tim gave me
