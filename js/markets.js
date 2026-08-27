@@ -207,6 +207,89 @@ function resolvePendingCatastrophe() {
     updateUI();
 }
 
+
+/* ---------------- THE CLAY PRICE LINE ----------------
+   A prompt cannot do this one: the line is live data, redrawn several
+   times a second, so there is no image to generate. It has to be DRAWN
+   as clay, which means drawing it the way a rolled snake of clay
+   actually looks - not one stroke but four, laid on top of each other.
+
+   Bottom to top: the shadow it casts on the chart well, the shaded
+   underside of the roll, the body, and the lit crest along the top.
+   That stack is what makes a flat 2px polyline read as a round tube
+   lying on a surface.
+
+   Two details that matter more than they sound:
+
+   - SMOOTHED, not straight. lineTo() between samples gives sharp
+     corners, and clay does not do sharp corners - a rolled snake bends.
+     Midpoint quadratic smoothing curves through the data without
+     moving it.
+   - The wobble is derived from x, NOT from Math.random(). Random would
+     re-roll every frame and the line would shimmer like TV static.
+     Deriving it from position means the same x always gets the same
+     nudge, so it sits still and reads as an uneven hand-rolled surface
+     rather than noise. */
+const CLAY_LINE_W = 7;
+
+function clayWobble(x) {
+    // Two out-of-phase sines: under 2px total, and never repeating on a
+    // period short enough for the eye to find it.
+    return Math.sin(x * 0.07) * 1.1 + Math.sin(x * 0.021 + 1.7) * 0.7;
+}
+
+function clayLinePath(ctx, pts, dy) {
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0], pts[0][1] + clayWobble(pts[0][0]) + dy);
+    for (let i = 1; i < pts.length - 1; i++) {
+        const cx = pts[i][0], cy = pts[i][1] + clayWobble(pts[i][0]) + dy;
+        const nx = pts[i + 1][0], ny = pts[i + 1][1] + clayWobble(pts[i + 1][0]) + dy;
+        ctx.quadraticCurveTo(cx, cy, (cx + nx) / 2, (cy + ny) / 2);
+    }
+    const last = pts[pts.length - 1];
+    ctx.lineTo(last[0], last[1] + clayWobble(last[0]) + dy);
+}
+
+function drawClayPriceLine(ctx, pts) {
+    if (!pts || pts.length < 2) return;
+    ctx.save();
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+
+    // 1. the shadow the roll throws onto the well beneath it. Drawn with
+    //    shadowBlur rather than ctx.filter so it works everywhere.
+    ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+    ctx.lineWidth = CLAY_LINE_W;
+    ctx.shadowColor = 'rgba(0,0,0,0.55)';
+    ctx.shadowBlur = 7;
+    ctx.shadowOffsetY = 5;
+    clayLinePath(ctx, pts, 0);
+    ctx.stroke();
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetY = 0;
+
+    // 2. the shaded underside of the tube
+    ctx.strokeStyle = '#4a8720';
+    ctx.lineWidth = CLAY_LINE_W;
+    clayLinePath(ctx, pts, 1.6);
+    ctx.stroke();
+
+    // 3. the body
+    ctx.strokeStyle = '#8ee04a';
+    ctx.lineWidth = CLAY_LINE_W;
+    clayLinePath(ctx, pts, 0);
+    ctx.stroke();
+
+    // 4. the lit crest, thin and riding high on the roll
+    ctx.strokeStyle = 'rgba(226,255,180,0.85)';
+    ctx.lineWidth = CLAY_LINE_W * 0.30;
+    clayLinePath(ctx, pts, -CLAY_LINE_W * 0.24);
+    ctx.stroke();
+
+    ctx.restore();
+}
+
 function processActiveTrade(currentPrice) {
     if (activeTrade.pendingCatastrophe) {
         resolvePendingCatastrophe();
@@ -236,6 +319,18 @@ function closePosition() {
         resolvePendingCatastrophe();
         checkProgressions();
         return;
+    }
+
+    /* Clay Stonkz holders get more out of a winning trade. Applied HERE,
+       at settlement, rather than where pnl is computed - the number
+       ticking on screen during an open position stays the honest
+       unrealised one, and only what actually lands in the wallet is
+       boosted. Losses are deliberately untouched: the perk rewards being
+       right, it does not soften being wrong.
+       holderTradeWinMult() returns 1 for every other theme. */
+    const winMult = (typeof holderTradeWinMult === 'function') ? holderTradeWinMult() : 1;
+    if (activeTrade.pnl > 0 && winMult !== 1) {
+        activeTrade.pnl = activeTrade.pnl * winMult;
     }
 
     state.cash += (activeTrade.margin + activeTrade.pnl);
@@ -451,6 +546,7 @@ function renderChart() {
 
     const skullxActive = document.body.classList.contains('skullx-mode');
     const undeadActive = document.body.classList.contains('undead-mode');
+    const clayActive = document.body.classList.contains('clay-mode');
     if (skullxActive) {
         // Skull X gets its own bar-style chart to match the reference
         // mockup - solid teal bars instead of a line, no painter-tip
@@ -498,18 +594,24 @@ function renderChart() {
             ctx.restore();
         }
 
-        ctx.save();
-        if (undeadActive) {
-            // Real glow on the line itself, not just the fill underneath.
-            ctx.shadowColor = '#2ecc71';
-            ctx.shadowBlur = 10;
+        if (clayActive) {
+            // Clay Stonkz: the price line is a rolled snake of clay laid
+            // on the chart well, not a stroke. See drawClayPriceLine.
+            drawClayPriceLine(ctx, points);
+        } else {
+            ctx.save();
+            if (undeadActive) {
+                // Real glow on the line itself, not just the fill underneath.
+                ctx.shadowColor = '#2ecc71';
+                ctx.shadowBlur = 10;
+            }
+            ctx.strokeStyle = lineColor;
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            points.forEach(([x, y], i) => { if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); });
+            ctx.stroke();
+            ctx.restore();
         }
-        ctx.strokeStyle = lineColor;
-        ctx.lineWidth = 2.5;
-        ctx.beginPath();
-        points.forEach(([x, y], i) => { if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); });
-        ctx.stroke();
-        ctx.restore();
     }
 
     // Dashed entry-price reference line for the active leveraged position
