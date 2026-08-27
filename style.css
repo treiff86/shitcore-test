@@ -265,7 +265,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     background-color: #3a2418 !important;
     background-image: url('assets/medieval-wood-fill.webp') !important;
     background-repeat: repeat !important;
-    background-size: 140px 140px !important;
+    background-size: var(--clay-grain-size) !important;
 }
 
 /* Medieval-styled scrollbar for every scrollable box on the page while
@@ -350,7 +350,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     background-color: #3a2418 !important;
     background-image: url('assets/medieval-wood-fill.webp') !important;
     background-repeat: repeat !important;
-    background-size: 140px 140px !important;
+    background-size: var(--clay-grain-size) !important;
 }
 
 /* Perk shop rows get an aged-parchment scroll look instead of reusing
@@ -533,7 +533,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
     background-color: #3a2418 !important;
     background-image: url('assets/medieval-wood-fill.webp') !important;
     background-repeat: repeat !important;
-    background-size: 140px 140px !important;
+    background-size: var(--clay-grain-size) !important;
 }
 
 /* Character painting in the corner of the price chart, built from two
@@ -1616,3 +1616,596 @@ body.win95-mode nav button[class*="border-blue-500"] {
 .undead-mode ::-webkit-scrollbar-thumb:hover {
     background: #2ecc71;
 }
+
+/* ============================================================
+   CLAY STONKZ  -  .clay-mode
+   ============================================================
+   Robinhood Chain's acid lime is the ground; every panel, button and
+   chip on top of it is a slab of modelling clay pressed into shape.
+
+   WHY THIS THEME IS BUILT DIFFERENTLY FROM THE OTHER FOUR.
+   Mid Evils and Conmen re-skin the site with photographic tiles -
+   parchment, wood, stone - so every new surface needs another image.
+   Clay is a MATERIAL, not a picture: the whole look is radius, bevel
+   and grain, and all three of those are cheaper and sharper in CSS
+   than in a texture. So there are no image assets here at all. Two
+   consequences worth knowing:
+     - a surface nobody has styled yet still comes out looking like
+       clay, because the shared shadow stacks below do the work;
+     - it costs nothing in page weight, on a page that already ships
+       several megabytes of sprites.
+   Hand-sculpted texture tiles can be dropped in later on top of this
+   without unpicking any of it - see --clay-grain.
+
+   THE GRAIN is an inline SVG feTurbulence, not a file. CSP allows
+   `data:` under img-src, which is what a CSS background-image is
+   checked against, so this needs no network request and no asset.
+   ============================================================ */
+
+.clay-mode {
+    /* Ground and slab colours. Lime is Robinhood Chain's own; the
+       panels are the olive you get when you press dark clay thin. */
+    --clay-ground: #a9e80f;
+    --clay-ground-deep: #8cc40a;
+    --clay-panel: #465a2e;
+    --clay-panel-hi: #556b38;
+    --clay-panel-2: #3a4c26;
+    --clay-inset: #232e1a;
+    --clay-inset-2: #1a2313;
+    --clay-ink: #f4f7ea;
+    --clay-ink-dim: #c8d6ae;
+    --clay-lime: #8ee04a;
+    --clay-lime-deep: #63b52b;
+    --clay-pink: #ef3a9b;
+    --clay-pink-deep: #c11f77;
+    --clay-amber: #f5a623;
+    --clay-red: #e0533d;
+    --clay-radius: 20px;
+    --clay-radius-sm: 12px;
+
+    /* SCULPTED, not synthesised. This started as an inline feTurbulence
+       and it worked, but procedural noise is uniform by nature and clay
+       is not - real clay has thumb presses in some places and none in
+       others. These three are photographs of pressed clay, verified
+       seamless before use (wrap-edge difference measures 1.1-1.4x each
+       tile's own internal neighbour difference, i.e. within its noise).
+
+       clay-marks is the grain layer: a height field of fingerprints and
+       tool scrapes on mid grey, which is exactly what soft-light wants -
+       it perturbs luminance and leaves hue alone, so the same layer can
+       sit over the lime button and the olive slab without greying
+       either. */
+    --clay-grain: url('assets/clay-marks.webp');
+    --clay-base-tex: url('assets/clay-base.webp');
+    --clay-panel-tex: url('assets/clay-panel.webp');
+    --clay-grain-size: 560px 560px;
+
+    /* THE THREE SHADOW STACKS everything else is built from.
+       raised  - a slab sitting proud of the surface behind it
+       pressed - a hollow pushed INTO the surface
+       chip    - a small raised lozenge (buttons, pills) */
+    --clay-raised:
+        inset 0 2px 0 rgba(255,255,255,0.16),
+        inset 0 -4px 8px rgba(0,0,0,0.34),
+        0 6px 0 rgba(0,0,0,0.20),
+        0 12px 22px -8px rgba(0,0,0,0.45);
+    --clay-pressed:
+        inset 0 5px 12px rgba(0,0,0,0.55),
+        inset 0 -2px 0 rgba(255,255,255,0.05);
+    --clay-chip:
+        inset 0 2px 0 rgba(255,255,255,0.30),
+        inset 0 -3px 5px rgba(0,0,0,0.28),
+        0 4px 0 rgba(0,0,0,0.22),
+        0 7px 12px -5px rgba(0,0,0,0.4);
+
+    background-color: var(--clay-ground) !important;
+    background-image:
+        var(--clay-grain),
+        var(--clay-base-tex),
+        radial-gradient(ellipse at 15% 0%, rgba(255,255,255,0.26), transparent 55%),
+        radial-gradient(ellipse at 85% 100%, rgba(0,0,0,0.16), transparent 60%);
+    /* The lime slab is drawn LARGE (900px) so the ground reads as one
+       continuous surface rather than as wallpaper, with the smaller marks
+       tile over it. Two repeats at different periods never line up, which
+       is what stops the eye finding the grid. */
+    background-size: var(--clay-grain-size), 900px 900px, auto, auto;
+    background-blend-mode: soft-light, normal, normal, normal;
+    background-attachment: fixed, fixed, fixed, fixed;
+}
+
+/* Fredoka is the closest thing on Google Fonts to lettering pressed
+   out of a clay roll - uniform stroke, generous round terminals, no
+   sharp corners anywhere. The whole theme falls apart in Inter. */
+.clay-mode,
+.clay-mode * {
+    font-family: 'Fredoka', 'Baloo 2', ui-rounded, 'Inter', sans-serif !important;
+    letter-spacing: 0.1px;
+}
+
+/* Clay does not glow. The neon utilities are the one thing in the base
+   design that fights the material hardest, so they are switched off
+   rather than restyled. */
+.clay-mode .neon-glow-green,
+.clay-mode .neon-glow-amber,
+.clay-mode .neon-glow-red,
+.clay-mode [class*="shadow-"] {
+    text-shadow: none !important;
+}
+
+/* ---- the slabs ------------------------------------------------- */
+/* Main content panels. The border is deliberately removed rather than
+   recoloured: a 1px line is the single most un-clay thing on screen,
+   because real clay has an edge with depth instead of an outline. */
+.clay-mode [class*="bg-[#0C0F16]"],
+.clay-mode [class*="bg-[#10141D]"],
+.clay-mode [class*="bg-[#121926]"],
+.clay-mode [class*="bg-[#0b0f19]"] {
+    background-color: var(--clay-panel) !important;
+    background-image: var(--clay-grain), var(--clay-panel-tex) !important;
+    background-blend-mode: soft-light, normal !important;
+    background-size: var(--clay-grain-size), 620px 620px !important;
+    border-color: transparent !important;
+    border-width: 0 !important;
+    border-radius: var(--clay-radius) !important;
+    box-shadow: var(--clay-raised) !important;
+}
+
+/* Inset panels - the ones the base design already uses as "sunken"
+   areas (chart wells, instruction cards, list rows). Pressed IN, so
+   the eye reads a hollow scooped out of the slab above. */
+.clay-mode [class*="bg-[#070A0F]"],
+.clay-mode [class*="bg-[#090d16]"],
+.clay-mode [class*="bg-[#070b12]"],
+.clay-mode [class*="bg-[#0a0e14]"],
+.clay-mode [class*="bg-[#090C12]"],
+.clay-mode .mc-inset-panel {
+    background-color: var(--clay-inset) !important;
+    background-image: var(--clay-grain), var(--clay-panel-tex) !important;
+    background-blend-mode: soft-light, normal !important;
+    background-size: var(--clay-grain-size), 620px 620px !important;
+    border-color: transparent !important;
+    border-width: 0 !important;
+    border-radius: var(--clay-radius-sm) !important;
+    box-shadow: var(--clay-pressed) !important;
+}
+
+/* Mid-tone surfaces (rows, sub-cards) - raised, but shallower, so a
+   card inside a card still reads as stacked clay rather than as one
+   flat sheet. */
+.clay-mode [class*="bg-[#1C212E]"],
+.clay-mode [class*="bg-[#252E3E]"] {
+    background-color: var(--clay-panel-hi) !important;
+    background-image: var(--clay-grain), var(--clay-panel-tex) !important;
+    background-blend-mode: soft-light, normal !important;
+    background-size: var(--clay-grain-size), 620px 620px !important;
+    border-color: transparent !important;
+    border-radius: var(--clay-radius-sm) !important;
+    box-shadow:
+        inset 0 2px 0 rgba(255,255,255,0.14),
+        inset 0 -3px 6px rgba(0,0,0,0.28),
+        0 3px 0 rgba(0,0,0,0.18) !important;
+}
+
+/* ---- header, nav, footer --------------------------------------- */
+/* The trailing [class] is load-bearing. header and nav carry
+   bg-[#090C12] / bg-[#070A0F] utility classes, so the inset rule above
+   matches them at specificity (0,2,0). Class and attribute selectors
+   share a column, so neither a later position in the file nor a plain
+   `.clay-mode header` (0,1,1) nor even `body.clay-mode header` (0,1,2)
+   can beat it - only another attribute selector can. Without this the
+   entire top of the page rendered as one dark pressed trough instead of
+   the raised green strip the design calls for. */
+.clay-mode header[class],
+.clay-mode nav[class],
+.clay-mode footer[class] {
+    background-color: var(--clay-panel) !important;
+    background-image: var(--clay-grain), var(--clay-panel-tex) !important;
+    background-blend-mode: soft-light, normal !important;
+    background-size: var(--clay-grain-size), 620px 620px !important;
+    border-color: transparent !important;
+    border-width: 0 !important;
+    box-shadow:
+        inset 0 2px 0 rgba(255,255,255,0.14),
+        0 5px 0 rgba(0,0,0,0.18),
+        0 10px 18px -8px rgba(0,0,0,0.4) !important;
+}
+.clay-mode header[class] { border-radius: 0 0 var(--clay-radius) var(--clay-radius) !important; }
+.clay-mode footer[class] { border-radius: var(--clay-radius) var(--clay-radius) 0 0 !important; }
+
+/* ---- text ------------------------------------------------------ */
+.clay-mode,
+.clay-mode p,
+.clay-mode span,
+.clay-mode div,
+.clay-mode li,
+.clay-mode td,
+.clay-mode th,
+.clay-mode label {
+    color: var(--clay-ink);
+}
+.clay-mode h1,
+.clay-mode h2,
+.clay-mode h3,
+.clay-mode h4,
+.clay-mode .font-black {
+    color: #ffffff !important;
+    text-shadow: 0 2px 0 rgba(0,0,0,0.30) !important;
+}
+.clay-mode .text-gray-400,
+.clay-mode .text-gray-500,
+.clay-mode .text-slate-400,
+.clay-mode .text-slate-500 {
+    color: var(--clay-ink-dim) !important;
+}
+
+/* Semantic colours survive, in clay tones. Green still means up and
+   red still means down - recolouring those to fit a palette would
+   make the numbers lie. */
+.clay-mode .text-green-400,
+.clay-mode .text-emerald-400,
+.clay-mode .text-emerald-300 { color: #b6f24f !important; }
+.clay-mode .text-red-400,
+.clay-mode .text-rose-400,
+.clay-mode .text-rose-300 { color: #ff8b7a !important; }
+.clay-mode .text-amber-400,
+.clay-mode .text-amber-500,
+.clay-mode .text-yellow-400 { color: #ffc65c !important; }
+.clay-mode .text-cyan-400,
+.clay-mode .text-blue-400,
+.clay-mode .text-purple-400,
+.clay-mode .text-purple-300 { color: #f7a8d8 !important; }
+
+/* ---- buttons --------------------------------------------------- */
+/* Every button becomes a pressed lozenge, and every button physically
+   moves when clicked: the raised shadow collapses and the button drops
+   into its own footprint. That press is most of what sells "clay" -
+   a slab that does not move when you push it reads as a picture of
+   clay rather than the material. */
+.clay-mode button,
+.clay-mode .btn,
+.clay-mode a[class*="rounded"] {
+    border-color: transparent !important;
+    border-radius: var(--clay-radius-sm) !important;
+    box-shadow: var(--clay-chip) !important;
+    text-shadow: 0 1px 0 rgba(0,0,0,0.25) !important;
+    transition: transform 0.06s ease, box-shadow 0.06s ease !important;
+}
+.clay-mode button:active,
+.clay-mode .btn:active {
+    transform: translateY(4px) !important;
+    box-shadow:
+        inset 0 3px 7px rgba(0,0,0,0.45),
+        0 0 0 rgba(0,0,0,0) !important;
+}
+
+/* Default / neutral buttons */
+.clay-mode button {
+    background-color: var(--clay-panel-hi) !important;
+    background-image: var(--clay-grain) !important;
+    background-size: var(--clay-grain-size) !important;
+    background-blend-mode: soft-light !important;
+    color: var(--clay-ink) !important;
+}
+.clay-mode button:hover { background-color: #5f7740 !important; }
+
+/* The two loud ones from the mockup: lime for up, magenta for down. */
+.clay-mode [class*="bg-green-"],
+.clay-mode [class*="bg-emerald-"],
+.clay-mode [class*="from-green-"],
+.clay-mode [class*="from-emerald-"] {
+    background-color: var(--clay-lime) !important;
+    background-image: var(--clay-grain) !important;
+    background-size: var(--clay-grain-size) !important;
+    background-blend-mode: soft-light !important;
+    color: #1c2b0d !important;
+    text-shadow: 0 1px 0 rgba(255,255,255,0.25) !important;
+}
+.clay-mode [class*="bg-green-"]:hover,
+.clay-mode [class*="bg-emerald-"]:hover { background-color: #a1ef60 !important; }
+
+.clay-mode [class*="bg-red-"],
+.clay-mode [class*="bg-rose-"],
+.clay-mode [class*="bg-pink-"],
+.clay-mode [class*="from-red-"],
+.clay-mode [class*="from-rose-"] {
+    background-color: var(--clay-pink) !important;
+    background-image: var(--clay-grain) !important;
+    background-size: var(--clay-grain-size) !important;
+    background-blend-mode: soft-light !important;
+    color: #ffffff !important;
+}
+.clay-mode [class*="bg-red-"]:hover,
+.clay-mode [class*="bg-rose-"]:hover,
+.clay-mode [class*="bg-pink-"]:hover { background-color: #ff5cb0 !important; }
+
+.clay-mode [class*="bg-amber-"],
+.clay-mode [class*="bg-yellow-"],
+.clay-mode [class*="from-amber-"] {
+    background-color: var(--clay-amber) !important;
+    background-image: var(--clay-grain) !important;
+    background-size: var(--clay-grain-size) !important;
+    background-blend-mode: soft-light !important;
+    color: #3a2205 !important;
+}
+.clay-mode [class*="bg-purple-"],
+.clay-mode [class*="bg-blue-"],
+.clay-mode [class*="bg-cyan-"],
+.clay-mode [class*="bg-indigo-"] {
+    background-color: #b45ea8 !important;
+    background-image: var(--clay-grain) !important;
+    background-size: var(--clay-grain-size) !important;
+    background-blend-mode: soft-light !important;
+    color: #ffffff !important;
+}
+
+/* ---- pills, chips and badges ----------------------------------- */
+/* Anything already fully rounded in the base design is a tag - the
+   LVL chip, LIVE DRAIN, the chain label. They get the chip bevel at a
+   smaller scale so they read as pressed-out beads. */
+.clay-mode .rounded-full {
+    border-color: transparent !important;
+    box-shadow:
+        inset 0 1px 0 rgba(255,255,255,0.28),
+        inset 0 -2px 3px rgba(0,0,0,0.25),
+        0 2px 0 rgba(0,0,0,0.18) !important;
+}
+
+/* ---- inputs ---------------------------------------------------- */
+.clay-mode input,
+.clay-mode select,
+.clay-mode textarea {
+    background-color: var(--clay-inset) !important;
+    background-image: var(--clay-grain) !important;
+    background-size: var(--clay-grain-size) !important;
+    background-blend-mode: soft-light !important;
+    border-color: transparent !important;
+    border-radius: var(--clay-radius-sm) !important;
+    box-shadow: var(--clay-pressed) !important;
+    color: var(--clay-ink) !important;
+}
+.clay-mode input::placeholder,
+.clay-mode textarea::placeholder { color: #93a37c !important; }
+
+/* Range sliders - the track is a groove scored into the clay. */
+.clay-mode input[type="range"] {
+    background-color: var(--clay-inset-2) !important;
+    box-shadow: inset 0 3px 6px rgba(0,0,0,0.6) !important;
+    border-radius: 999px !important;
+}
+
+/* ---- progress bars and meters ---------------------------------- */
+/* Bars are the classic tell: a flat fill inside a flat trough looks
+   like a web page in the middle of a clay one. Trough pressed in,
+   fill raised out. */
+.clay-mode progress,
+.clay-mode .bg-gray-700,
+.clay-mode .bg-gray-800,
+.clay-mode .bg-slate-700,
+.clay-mode .bg-slate-800 {
+    background-color: var(--clay-inset) !important;
+    border-radius: 999px !important;
+    box-shadow: var(--clay-pressed) !important;
+}
+
+/* ---- canvases -------------------------------------------------- */
+/* The chart and the fight game draw their own pixels, so they cannot
+   be restyled - but the well they sit in can, and rounding plus an
+   inset shadow is what stops a rectangle of untouched canvas reading
+   as a hole cut in the theme. */
+.clay-mode canvas {
+    border-radius: var(--clay-radius-sm) !important;
+    box-shadow: var(--clay-pressed) !important;
+    background-color: var(--clay-inset) !important;
+}
+
+/* ---- modals ---------------------------------------------------- */
+.clay-mode [class*="fixed"][class*="inset-0"] > div {
+    border-radius: var(--clay-radius) !important;
+}
+
+/* ---- scrollbars ------------------------------------------------ */
+.clay-mode ::-webkit-scrollbar { width: 12px; height: 12px; }
+.clay-mode ::-webkit-scrollbar-track {
+    background: var(--clay-inset);
+    border-radius: 999px;
+    box-shadow: inset 0 2px 5px rgba(0,0,0,0.5);
+}
+.clay-mode ::-webkit-scrollbar-thumb {
+    background: var(--clay-lime);
+    border-radius: 999px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.35);
+}
+.clay-mode ::-webkit-scrollbar-thumb:hover { background: #a1ef60; }
+
+/* ---- toast bubbles --------------------------------------------- */
+/* These have light backgrounds of their own, so the theme's cream
+   text would vanish into them. */
+.clay-mode #toastBubble,
+.clay-mode #toastBubble *,
+.clay-mode #toastBubbleConmen,
+.clay-mode #toastBubbleConmen *,
+.clay-mode #mcdEggBubble,
+.clay-mode #mcdEggBubble * {
+    color: #201a10 !important;
+    text-shadow: none !important;
+}
+
+/* ---- Font Awesome ---------------------------------------------- */
+/* The blanket font-family rule at the top of this theme hijacks the icon
+   font the same way Mid Evils and Conmen both did: Font Awesome maps
+   characters to glyphs, so forcing Fredoka onto an <i class="fa-solid">
+   leaves an empty box where the icon was. Restoring FA per icon style is
+   the fix, and it has to be per style because solid/regular/brands are
+   three different faces and weights. */
+.clay-mode .fa-solid,
+.clay-mode .fas {
+    font-family: "Font Awesome 6 Free" !important;
+    font-weight: 900 !important;
+}
+.clay-mode .fa-regular,
+.clay-mode .far {
+    font-family: "Font Awesome 6 Free" !important;
+    font-weight: 400 !important;
+}
+.clay-mode .fa-brands,
+.clay-mode .fab {
+    font-family: "Font Awesome 6 Brands" !important;
+    font-weight: 400 !important;
+}
+
+/* ---- named components ------------------------------------------ */
+/* These carry their own classes rather than the bg-[#hex] utilities, so
+   none of the selectors above reach them. They are exactly the same set
+   Mid Evils and Conmen each had to enumerate; the list was taken from
+   those two themes rather than found by eye, so nothing they cover is
+   missed here. */
+.clay-mode .perk-row,
+.clay-mode .pool-card,
+.clay-mode #ySocialFeedPanel,
+.clay-mode [class*="bg-[#1B2130]"] {
+    background: var(--clay-inset) !important;
+    background-image: var(--clay-grain), var(--clay-panel-tex) !important;
+    background-blend-mode: soft-light, normal !important;
+    background-size: var(--clay-grain-size), 620px 620px !important;
+    border-color: transparent !important;
+    border-width: 0 !important;
+    border-radius: var(--clay-radius-sm) !important;
+    box-shadow: var(--clay-pressed) !important;
+}
+
+/* The wager/leverage cluster is a raised control block sitting on the
+   orderbook slab, not a hollow - it holds the buttons rather than being
+   scooped out for them. */
+.clay-mode #wagerControlPanel {
+    background: var(--clay-panel-2) !important;
+    background-image: var(--clay-grain), var(--clay-panel-tex) !important;
+    background-blend-mode: soft-light, normal !important;
+    background-size: var(--clay-grain-size), 620px 620px !important;
+    border-color: transparent !important;
+    border-radius: var(--clay-radius-sm) !important;
+    box-shadow:
+        inset 0 2px 0 rgba(255,255,255,0.12),
+        inset 0 -3px 6px rgba(0,0,0,0.3) !important;
+}
+
+/* The toxicity slider's track, same groove as the range inputs above. */
+.clay-mode #toxicityTaxSlider {
+    background-color: var(--clay-inset-2) !important;
+    box-shadow: inset 0 3px 6px rgba(0,0,0,0.6) !important;
+    border-radius: 999px !important;
+}
+
+/* Remaining semantic text colours the first pass did not name. Same
+   rule as before: up stays green, down stays red - only the shade moves
+   so it reads against olive clay instead of near-black. */
+.clay-mode .text-green-500 { color: #b6f24f !important; }
+.clay-mode .text-red-500,
+.clay-mode .text-rose-500 { color: #ff8b7a !important; }
+.clay-mode .text-fuchsia-400 { color: #ffa2e0 !important; }
+
+/* ---- the leftover hairlines ------------------------------------ */
+/* Two kinds of #1A2232 border survive the panel rules above: dividers
+   (border-t on a transparent wrapper - the stat strip under the chart,
+   the MEV locked notice) and the odd panel whose fill is not one of the
+   greys enumerated earlier. Dividers are not deleted, they are re-cut:
+   a scored groove is how you divide clay, so the line becomes a dark
+   score with a light lip under it rather than a 1px web border. */
+.clay-mode [class*="border-[#1A2232]"],
+.clay-mode [class*="border-[#121721]"] {
+    border-color: rgba(0,0,0,0.22) !important;
+}
+
+/* The fight-game well and anything else on the darkest base fill. */
+.clay-mode [class*="bg-[#040609]"] {
+    background-color: var(--clay-inset-2) !important;
+    background-image: var(--clay-grain), var(--clay-panel-tex) !important;
+    background-blend-mode: soft-light, normal !important;
+    background-size: var(--clay-grain-size), 620px 620px !important;
+    border-color: transparent !important;
+    border-radius: var(--clay-radius-sm) !important;
+    box-shadow: var(--clay-pressed) !important;
+}
+
+/* ---- decorative watermarks ------------------------------------- */
+/* The giant "RUG" behind the lore panel is text-[#1C212E]/5 - a 5% alpha
+   whisper by design. The blanket white-heading rule above caught it by
+   its font-black class and turned it into solid white type sitting on
+   top of the paragraph it is meant to sit behind. Anything marked both
+   select-none and pointer-events-none is decoration, not content, so it
+   is pressed into the slab as a faint stamp instead. */
+.clay-mode .select-none.pointer-events-none,
+.clay-mode .pointer-events-none.select-none {
+    color: rgba(0,0,0,0.10) !important;
+    text-shadow: 0 1px 0 rgba(255,255,255,0.06) !important;
+}
+
+/* ---- lettering pressed out of clay ------------------------------ */
+/* WHY THIS IS CSS AND NOT AN ALPHABET OF IMAGES.
+   The obvious route is to generate a clay alphabet and build a webfont
+   from it, and it does not work: an OpenType font stores OUTLINES, not
+   pixels, so converting photographs of clay letters into a font throws
+   the clay away and leaves flat silhouettes - the exact thing being
+   chased is the first thing lost. Colour fonts (COLRv1/OT-SVG) can hold
+   texture but are a heavy pipeline with patchy support, and either way
+   an image alphabet cannot letter text that does not exist yet: the
+   price ticker, the chain feed, a player's name.
+
+   So the letters are shaped by the font (Fredoka's terminals are
+   already round) and MOLDED by the shadow stack below. Live text stays
+   live - selectable, searchable, any size, any string.
+
+   Deliberately NOT background-clip:text with the clay tile. That fill
+   needs `color: transparent`, which silently destroys contrast for
+   anything reading the computed colour (screen readers included), and
+   at heading size the texture is barely legible anyway. What actually
+   reads as clay is the round terminal, the extruded edge and the shadow
+   the letter casts on the slab under it - all three of which are here. */
+
+.clay-mode h1,
+.clay-mode h2,
+.clay-mode h3,
+.clay-mode h4,
+.clay-mode .font-black,
+.clay-mode .mc-title-accent {
+    color: #fbfdf4 !important;
+    /* Read bottom-up: a dark lip under the top edge, then four stacked
+       offsets that build the extruded side wall, then the shadow the
+       whole letter throws onto the panel. The side-wall colours darken
+       as they descend so the extrusion turns away from the light rather
+       than reading as a flat drop shadow. */
+    text-shadow:
+        0 -1px 0 rgba(0,0,0,0.22),
+        0 1px 0 #a8bd7e,
+        0 2px 0 #7d9256,
+        0 3px 0 #5c6f3c,
+        0 4px 0 #41512a,
+        0 7px 9px rgba(0,0,0,0.38) !important;
+    letter-spacing: 0.3px;
+}
+
+/* Button labels get the same treatment at a quarter of the depth. A
+   button is already a raised lozenge, so a deep extrusion on top of a
+   deep bevel reads as mush - this is just enough to stop the label
+   looking printed on. */
+.clay-mode button,
+.clay-mode .btn {
+    text-shadow:
+        0 1px 0 rgba(255,255,255,0.22),
+        0 2px 0 rgba(0,0,0,0.28),
+        0 3px 4px rgba(0,0,0,0.25) !important;
+}
+
+/* The two brand buttons are light fills, so a white top lip vanishes
+   into them - their letters are cut INTO the clay instead of raised
+   out of it, which is what a stamped lozenge should look like anyway. */
+.clay-mode [class*="bg-green-"],
+.clay-mode [class*="bg-emerald-"],
+.clay-mode [class*="bg-amber-"],
+.clay-mode [class*="bg-yellow-"] {
+    text-shadow:
+        0 -1px 0 rgba(0,0,0,0.30),
+        0 1px 0 rgba(255,255,255,0.45) !important;
+}
+
+/* Body copy is left alone on purpose. An 11px chain-feed line with a
+   4px extrusion under it is not clay, it is unreadable. */
