@@ -461,3 +461,43 @@ window.checkBitcoinWizardsOwnership = async function () {
 window.checkMimRuneHolding = async function () {
     return await checkOrdiscanRune("MAGICINTERNETMONEY");
 };
+
+/* ---------------- CLAY COLLECTIVE (Bitcoin Ordinals) ----------------
+   The Ordinals half of Clay Stonkz - a separate 650-piece collection
+   from the 6,969 on Robinhood Chain, but both count toward the same
+   theme, the way Skull X's Bitcoin and Ethereum sides already do.
+
+   HONEST ABOUT WHAT IS CONFIRMED. Two of the three checks below work
+   today; the third is a placeholder and is written as one rather than
+   as a guess:
+     - collectionName on the wallet's own inscriptions. Free, no API
+       call, and it is a field Xverse documents per inscription.
+     - Ordiscan's collection tagging by slug, the check that confirmed
+       Bitcoin Wizards. Slug taken from the marketplace URL.
+     - the parent inscription ID, which is the only one of the three
+       that cannot be spoofed by a name. Nobody publishes it for this
+       collection yet, so it stays null and is skipped - exactly how
+       GENUINE_UNDEAD_V3_CONTRACT is handled in ethwallet.js. Fill it
+       in and this becomes the primary check with no other changes. */
+const CLAY_COLLECTIVE_PARENT_ID = null; // TODO: long-form parent inscription id, once confirmed
+const CLAY_COLLECTIVE_SLUGS = ['clay-collective', 'clay-stonkz', 'claystonkz'];
+
+window.checkClayCollectiveOwnership = async function () {
+    if (typeof btcWalletAddress === 'undefined' || !btcWalletAddress) return false;
+
+    const inscriptions = await getMyInscriptions();
+    const named = inscriptions.some((i) => {
+        const parentIds = [];
+        if (i.parentInscriptionId) parentIds.push(i.parentInscriptionId);
+        if (i.parent) parentIds.push(i.parent);
+        if (Array.isArray(i.parents)) parentIds.push(...i.parents);
+        if (CLAY_COLLECTIVE_PARENT_ID && parentIds.includes(CLAY_COLLECTIVE_PARENT_ID)) return true;
+        return !!(i.collectionName && /clay\s*(collective|stonkz)/i.test(i.collectionName));
+    });
+    if (named) return true;
+
+    for (const slug of CLAY_COLLECTIVE_SLUGS) {
+        if (await checkOrdiscanCollection(slug)) return true;
+    }
+    return false;
+};
