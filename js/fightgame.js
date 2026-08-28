@@ -308,6 +308,12 @@ window.FightGame = (function () {
     function isAttackState(state) {
         return state === 'punch_lo' || state === 'kick_lo' || state === 'jump_punch' || state === 'jump_kick' || state === 'crouch_punch' || state === 'crouch_kick' || state === 'counter_lo' || state === 'throw_lo';
     }
+    /* The two states the round-over branch owns. Nothing that merely
+       decorates a fighter mid-fight may overwrite these: after the KO the
+       winner and loser are animated by their own dedicated clocks and the
+       usual per-frame timers stop running, so any decoration that latches
+       here latches for good. */
+    function isRoundOverState(state) { return state === 'victory' || state === 'defeat'; }
     function isCounterState(state) { return state === 'counter_lo'; }
     function isThrowState(state) { return state === 'throw_lo'; }
 
@@ -1609,10 +1615,26 @@ window.FightGame = (function () {
             if (this.guardBroken && this.anims.dizzy && this.anims.dizzy.length) {
                 stateForFrames = 'dizzy';
             } else if (this.landT > 0 && this.grounded && !isAttackState(this.state)
+                       && !isRoundOverState(this.state)
                        && this.anims.land && this.anims.land.length) {
-                // The landing-absorb pose, played only while landT is
-                // counting down and only if nothing more important is
-                // happening - an attack must always win the sprite.
+                /* The landing-absorb pose, played only while landT is
+                   counting down and only if nothing more important is
+                   happening - an attack must always win the sprite, and so
+                   must the celebration or the collapse at the end of a
+                   round.
+
+                   THE ROUND-OVER EXCLUSION IS NOT TIDYING. Once the round
+                   ends the update path changes: the win branch runs its own
+                   small loop and never calls updateFighterCommon, which is
+                   the only thing that counts landT down. So a winner who
+                   was in the air when the KO landed falls, sets landT on
+                   touchdown, and then sits at landT = LAND_RECOVER_T
+                   forever - drawing frame 0 of the landing strip, frozen in
+                   a deep crouch, for the whole win screen, while `state`
+                   reads 'victory' the entire time. Same for the loser's
+                   collapse. Only a character with land art could hit this,
+                   which is why it appeared the moment Clay's landing strip
+                   shipped and nobody else's. */
                 stateForFrames = 'land';
             }
             if (this.state === 'block') {
@@ -3002,6 +3024,16 @@ window.FightGame = (function () {
             } else {
                 const winner = g.phase === 'p1win' ? g.p1 : (g.phase === 'p2win' ? g.p2 : null);
                 const loser = g.phase === 'p1win' ? g.p2 : (g.phase === 'p2win' ? g.p1 : null);
+                /* This branch does NOT call updateFighterCommon, so every
+                   countdown timer stops here. landT is the one that has
+                   teeth: it gates a sprite override, so a frozen landT
+                   freezes the pose. _surf() now refuses to draw the landing
+                   over a victory or a defeat, which is the real fix - this
+                   keeps the clock honest as well, so nothing else that
+                   comes to depend on landT can latch the same way. */
+                for (const f of [winner, loser]) {
+                    if (f && f.landT > 0) f.landT = Math.max(0, f.landT - dt);
+                }
                 if (winner) {
                     if (!winner.grounded) {
                         // Was mid-air when they won - fall to the floor for
