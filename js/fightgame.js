@@ -422,11 +422,16 @@ window.FightGame = (function () {
         // a character supply its own idle instead of borrowing walk[0].
         undead: {
             idle:     ['assets/fight_game/undead_idle.webp', 1],
-            walk:     ['assets/fight_game/undead_walk.webp', 2],
+            /* The ?v= on a sprite path is a cache-bust, not decoration. The
+               filename never changes when art is replaced, so without it a
+               returning player keeps the strip their browser already has -
+               and the frame count in this file would then disagree with the
+               image, slicing the old sheet into the wrong number of cells. */
+            walk:     ['assets/fight_game/undead_walk.webp?v=2', 4],
             victory:  ['assets/fight_game/undead_victory.webp?v=2', 5],
-            punch_lo: ['assets/fight_game/undead_punch_lo.webp', 2],
+            punch_lo: ['assets/fight_game/undead_punch_lo.webp?v=2', 3],
             kick_lo:  ['assets/fight_game/undead_kick_lo.webp?v=2', 1],
-            hurt:     ['assets/fight_game/undead_hurt.webp', 1],
+            hurt:     ['assets/fight_game/undead_hurt.webp?v=2', 2],
             defeat:   ['assets/fight_game/undead_defeat.webp', 4],
             block:    ['assets/fight_game/undead_block.webp', 1],
             // Two airborne poses - a tucked rise and a reaching descent -
@@ -439,7 +444,7 @@ window.FightGame = (function () {
             crouch:       ['assets/fight_game/undead_crouch.webp', 1],
             jump_punch:   ['assets/fight_game/undead_jump_punch.webp', 2],
             jump_kick:    ['assets/fight_game/undead_jump_kick.webp', 2],
-            crouch_kick:  ['assets/fight_game/undead_crouch_kick.webp', 1],
+            crouch_kick:  ['assets/fight_game/undead_crouch_kick.webp?v=2', 3],
             crouch_punch: ['assets/fight_game/undead_crouch_punch.webp', 2],
             // Dedicated poses for blocking/getting hit while crouching or
             // airborne. Any character without these four falls back to
@@ -453,6 +458,12 @@ window.FightGame = (function () {
             // to punch/hurt frames until their art exists - see _surf().
             throw:    ['assets/fight_game/undead_throw.webp', 3],
             thrown:   ['assets/fight_game/undead_thrown.webp', 2],
+            /* THE FIRST TAUNT IN THE GAME. Four frames, played once across
+               TAUNT_T by its own progress clock rather than the shared frame
+               counter - the window is shorter than one step at the idle
+               rate, so on the shared counter only frame 0 would ever be
+               drawn. Same treatment the landing needed. */
+            taunt:    ['assets/fight_game/undead_taunt.webp', 4],
             // Dizzy replaces the reused 'hurt' pose during a guard break -
             // the most dramatic moment in a round finally looks like one.
             dizzy:    ['assets/fight_game/undead_dizzy.webp', 2],
@@ -536,8 +547,8 @@ window.FightGame = (function () {
             kick_lo:  ['assets/fight_game/clay_kick_lo.webp', 3],
             // Airborne. jump is one pose, so the velocity-driven two-frame
             // arc in _surf() passes it through untouched.
-            jump:         ['assets/fight_game/clay_jump.webp', 1],
-            jump_punch:   ['assets/fight_game/clay_jump_punch.webp', 1],
+            jump:         ['assets/fight_game/clay_jump.webp?v=2', 2],
+            jump_punch:   ['assets/fight_game/clay_jump_punch.webp?v=2', 2],
             jump_kick:    ['assets/fight_game/clay_jump_kick.webp', 2],
             jump_hurt:    ['assets/fight_game/clay_jump_hurt.webp', 1],
             jump_block:   ['assets/fight_game/clay_jump_block.webp', 1],
@@ -579,7 +590,7 @@ window.FightGame = (function () {
                already built and already tested, and the key is inert for
                any character without a strip, so this line is the whole
                switch. Same arrangement as the clay impact bursts above. */
-            // taunt: ['assets/fight_game/clay_taunt.webp', 3],
+            taunt:        ['assets/fight_game/clay_taunt.webp', 4],
         },
     };
 
@@ -1096,8 +1107,23 @@ window.FightGame = (function () {
         // The standing reference. Its scale is set the old way - artwork
         // height to P_H - so standing characters come out exactly the size
         // they already were, and nothing about the game's feel shifts.
-        const refKey = (measured.walk && measured.walk.art) ? 'walk'
-                     : ((measured.idle && measured.idle.art) ? 'idle' : null);
+        /* THE SIZE REFERENCE IS THE IDLE POSE WHEN THERE IS ONE.
+
+           Everything else about a character is scaled to match this strip,
+           so it needs to be the most stable thing they have. A walk cycle
+           is not that: it is several poses, its median silhouette shifts
+           when the art is redrawn, and redrawing it therefore resizes every
+           OTHER pose the character owns. Measured when Genuine Undead's
+           2-frame walk was replaced with a 4-frame one: idle fell 230 ->
+           188, victory 250 -> 205, taking a hit 222 -> 168. Nothing about
+           those three poses had changed.
+
+           A dedicated idle strip is a single canonical standing pose and
+           does not move. Characters without one still fall back to the walk,
+           exactly as before - so this only affects the two who have an idle
+           file of their own. */
+        const refKey = (measured.idle && measured.idle.art) ? 'idle'
+                     : ((measured.walk && measured.walk.art) ? 'walk' : null);
         const ref = refKey ? measured[refKey] : null;
         const refScale = ref ? (P_H / ref.art.artH) : 1;
         // Target lit-pixel count for this character, in on-screen pixels.
@@ -1140,7 +1166,27 @@ window.FightGame = (function () {
             const m = measured[state];
             if (!m) { anims[state] = []; continue; }
             let scale = refScale;
-            if (steady && m.art && !NOT_STANDING.has(state)) {
+            if (m.art && refKey === 'idle' && state === 'walk') {
+                /* THE WALK CYCLE IS THE REFERENCE POSE IN MOTION, so it
+                   takes the reference scale rather than being matched on
+                   lit-pixel count.
+
+                   A proper walk alternates contact frames (both limbs
+                   spread) with passing frames (one leg and one arm hidden
+                   behind the body). The passing frames are genuinely
+                   thinner - that is what makes the walk read - so matching
+                   AREA scales them up to compensate and the character grows
+                   as he sets off. Measured when Genuine Undead's 4-frame
+                   walk landed: idle 234px, walk 274px. He got 17% taller by
+                   moving. His other nineteen strips all sit within a few
+                   percent of the idle's density, so this is the one place
+                   the assumption breaks.
+
+                   Only reachable for a character with a dedicated idle
+                   strip - without one the walk IS the reference and this
+                   changes nothing. */
+                scale = refScale;
+            } else if (steady && m.art && !NOT_STANDING.has(state)) {
                 // Every standing pose at the same scale, so the character
                 // is one size no matter what he is doing.
                 scale = refScale;
