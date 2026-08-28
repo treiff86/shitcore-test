@@ -85,16 +85,35 @@ function testSkullXEgg() {
 // `medieval-mode`. Checking for the wrong one here would silently fall
 // through to Conmen's egg while on the Mid Evils theme - which is exactly
 // the kind of bug that looks like "the button is broken".
+/* THE TEST BUTTON'S DISPATCHER.
+
+   A table rather than an if/else chain, because the chain ended in a bare
+   `else` that called Conmen's hook - so ANY theme without a branch of its own
+   silently fired the Conmen egg instead of its own. Clay hit exactly that:
+   his egg shipped, the button was pressed under the Clay theme, and the
+   Conmen soldier popped up. A missing entry here is now a no-op you can see,
+   not another character's easter egg.
+
+   Conmen stays as the fallback only for the DEFAULT skin, which is what it
+   has always been - it is reached when no theme class is on <body> at all,
+   not when a theme simply forgot to register. */
+const THEME_EGG_TESTS = [
+    ['skullx-mode',   'testSkullXEgg'],
+    ['undead-mode',   'testUndeadEgg'],
+    ['medieval-mode', 'testMidEvilsEgg'],
+    ['conmen-mode',   'testConmenEgg'],
+    ['clay-mode',     'testClayEgg'],
+];
+
 function testThemeEasterEgg() {
-    if (document.body.classList.contains('skullx-mode') && typeof testSkullXEgg === 'function') {
-        testSkullXEgg();
-    } else if (document.body.classList.contains('undead-mode') && typeof testUndeadEgg === 'function') {
-        testUndeadEgg();
-    } else if (document.body.classList.contains('medieval-mode') && typeof testMidEvilsEgg === 'function') {
-        testMidEvilsEgg();
-    } else if (typeof testConmenEgg === 'function') {
-        testConmenEgg();
+    for (const [cls, fn] of THEME_EGG_TESTS) {
+        if (!document.body.classList.contains(cls)) continue;
+        if (typeof window[fn] === 'function') { window[fn](); return; }
+        console.warn(`[easter egg] ${cls} is active but ${fn}() does not exist - nothing to show.`);
+        return;
     }
+    // No theme class at all: the default skin, which uses the Conmen egg.
+    if (typeof testConmenEgg === 'function') testConmenEgg();
 }
 
 function closeSkullXLauncher() {
