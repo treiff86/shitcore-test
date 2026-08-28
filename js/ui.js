@@ -91,8 +91,12 @@ function showToast(message, type = "info", imageSrc = null) {
     const isMedieval = document.body.classList.contains('medieval-mode');
     const isConmen = document.body.classList.contains('conmen-mode');
     const isUndead = document.body.classList.contains('undead-mode');
-    const activeId = isMedieval ? 'toastMedieval' : (isConmen ? 'toastConmen' : (isUndead ? 'toastUndead' : 'toastDefault'));
-    const allToastIds = ['toastMedieval', 'toastConmen', 'toastUndead', 'toastDefault'];
+    const isClay = document.body.classList.contains('clay-mode');
+    const activeId = isMedieval ? 'toastMedieval'
+        : (isConmen ? 'toastConmen'
+        : (isUndead ? 'toastUndead'
+        : (isClay ? 'toastClay' : 'toastDefault')));
+    const allToastIds = ['toastMedieval', 'toastConmen', 'toastUndead', 'toastClay', 'toastDefault'];
 
     const toast = document.getElementById(activeId);
     allToastIds.filter(id => id !== activeId).forEach(id => {
@@ -119,6 +123,19 @@ function showToast(message, type = "info", imageSrc = null) {
         bubble.style.borderColor = borderColors[type] || borderColors.info;
         bubble.style.boxShadow = `0 0 18px ${glowColors[type] || glowColors.info}, 0 0 4px ${glowColors[type] || glowColors.info} inset`;
         document.querySelector('#toastUndead .absolute').style.borderColor = borderColors[type] || borderColors.info;
+    } else if (isClay) {
+        document.getElementById('toastMessageClay').innerText = message;
+        /* The bubble is a slab of pale clay, so the type colour never
+           changes - dark ink on light clay stays dark ink on light clay.
+           What carries info/success/error is the RIM, the way a coloured
+           edge would be pressed into the clay. Set on both the bubble and
+           its tail so the tail does not stay the previous state's colour. */
+        const rim = { info: '#8a9a6a', success: '#4f8f22', error: '#c2402f' };
+        const c = rim[type] || rim.info;
+        const bubble = document.getElementById('toastBubbleClay');
+        const tail = document.getElementById('toastBubbleClayTail');
+        if (bubble) bubble.style.setProperty('--clay-toast-rim', c);
+        if (tail) tail.style.setProperty('--clay-toast-rim', c);
     } else {
         document.getElementById('toastMessageDefault').innerText = message;
         const icon = document.getElementById('toastIconDefault');
