@@ -104,7 +104,7 @@
     <!-- FontAwesome icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Local styles (FIXED PATH) -->
-    <link rel="stylesheet" href="style.css?v=56">
+    <link rel="stylesheet" href="style.css?v=57">
     <link rel="stylesheet" href="bonusstage.css?v=19">
 </head>
 <body class="overflow-x-hidden min-h-screen flex flex-col justify-between">
@@ -975,6 +975,20 @@
         </div>
     </div>
 
+    <!-- Clay Stonkz toast - same slide-up-from-bottom-left character
+         treatment as Mid Evils/Conmen/Undead, with a bubble molded out of
+         pale clay instead of the flat white one. The bubble's own look
+         lives in style.css under .clay-mode so it uses the same bevel
+         tokens as every other surface in the theme rather than a second
+         hardcoded copy of them. -->
+    <div id="toastClay" class="fixed bottom-0 left-6 z-50 hidden flex items-end gap-2 max-w-md">
+        <img src="assets/clay-pfp.webp" alt="" class="w-48 h-auto flex-shrink-0 drop-shadow-2xl">
+        <div id="toastBubbleClay" class="px-4 py-3 rounded-2xl text-sm font-semibold mb-6 relative">
+            <span id="toastMessageClay">Default Alert State</span>
+            <div id="toastBubbleClayTail" class="absolute -bottom-[9px] left-6 w-4 h-4" style="transform: rotate(45deg);"></div>
+        </div>
+    </div>
+
     <!-- McDonald's mini-game promo popup - random interval, only when the Bonus
          Stage is actually available (see js/mcdonalds-egg.js). Clicking the
          bubble opens the mini-game. -->
@@ -1504,7 +1518,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.3/dist/umd/supabase.js" defer></script>
 <script src="js/audio.js?v=21" defer></script>
 <script src="js/state.js?v=18" defer></script>
-<script src="js/ui.js?v=8" defer></script>
+<script src="js/ui.js?v=9" defer></script>
 <script src="js/markets.js?v=25" defer></script>
 <script src="js/auditor.js?v=1" defer></script>
 <script src="js/deployer.js?v=5" defer></script>
@@ -1520,7 +1534,7 @@
 <script src="js/undead-egg.js?v=3" defer></script>
 <script src="js/midevils-egg.js?v=3" defer></script>
 <script src="js/mcdonalds-egg.js?v=4" defer></script>
-<script src="js/web3.js?v=70" defer></script>
+<script src="js/web3.js?v=71" defer></script>
 <script src="js/wizardpopup.js?v=2" defer></script>
 <script src="js/win95desktop.js?v=6" defer></script>
 <script src="js/btcwallet.js?v=21" defer></script>
