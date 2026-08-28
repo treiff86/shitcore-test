@@ -70,6 +70,13 @@ function _clayEggHide() {
     }
 }
 
+/* Manual test hook for the "Easter Egg" button (master wallet only, see
+   web3.js). Skips both the clay-mode check and the random schedule so it
+   fires the instant you click, the same way every other theme's hook does. */
+function testClayEgg() {
+    _clayEggShow();
+}
+
 function _clayEggTick() {
     if (_clayEggAvailable() && !_clayEggCornerBusy()) _clayEggShow();
     setTimeout(_clayEggTick, _clayEggRandomGap());
