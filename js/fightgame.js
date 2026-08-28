@@ -513,26 +513,26 @@ window.FightGame = (function () {
            in the air in frame 4 and on the floor in frame 5 - it is part
            of those frames, not a separate sprite.
 
-           Missing only `land`, the landing-absorb pose - worth one frame,
-           not three - and the optional taunt below. Everything else the
-           engine can ask for, he has his own art for. */
+           COMPLETE apart from the optional taunt below: twenty-two
+           strips, which is every state the engine can ask for. The only
+           other fighter at this coverage is Genuine Undead. */
         clay: {
             idle:     ['assets/fight_game/clay_idle.webp', 1],
             block:    ['assets/fight_game/clay_block.webp', 1],
-            hurt:     ['assets/fight_game/clay_hurt.webp', 1],
-            dizzy:    ['assets/fight_game/clay_dizzy.webp', 1],
+            hurt:     ['assets/fight_game/clay_hurt.webp', 2],
+            dizzy:    ['assets/fight_game/clay_dizzy.webp', 2],
             // The moving actions - the ones a player watches most. Every
             // sheet was cut to a SHARED baseline and lined up on the feet
             // rather than on the bounding box, so the punch extends
             // without the body sliding backwards under it.
-            walk:     ['assets/fight_game/clay_walk.webp', 2],
-            punch_lo: ['assets/fight_game/clay_punch_lo.webp', 2],
+            walk:     ['assets/fight_game/clay_walk.webp', 6],
+            punch_lo: ['assets/fight_game/clay_punch_lo.webp', 3],
             kick_lo:  ['assets/fight_game/clay_kick_lo.webp', 3],
             // Airborne. jump is one pose, so the velocity-driven two-frame
             // arc in _surf() passes it through untouched.
             jump:         ['assets/fight_game/clay_jump.webp', 1],
             jump_punch:   ['assets/fight_game/clay_jump_punch.webp', 1],
-            jump_kick:    ['assets/fight_game/clay_jump_kick.webp', 1],
+            jump_kick:    ['assets/fight_game/clay_jump_kick.webp', 2],
             jump_hurt:    ['assets/fight_game/clay_jump_hurt.webp', 1],
             jump_block:   ['assets/fight_game/clay_jump_block.webp', 1],
             // Crouching. The sweep was briefly mistaken for a jump kick -
@@ -541,8 +541,16 @@ window.FightGame = (function () {
             // pose has no ground contact at all, which is what separates
             // it from the three jump sheets above.
             crouch:       ['assets/fight_game/clay_crouch.webp', 1],
-            crouch_punch: ['assets/fight_game/clay_crouch_punch.webp', 1],
-            crouch_kick:  ['assets/fight_game/clay_crouch_kick.webp', 1],
+            crouch_punch: ['assets/fight_game/clay_crouch_punch.webp', 2],
+            /* COMPOSITE, not a fresh render. Frame 1 is his own crouch
+               stance and frame 2 is the sweep that was already here - the
+               two measure within a pixel of each other on screen, so they
+               cut together without a height pop. It is a real improvement
+               over the single frame: the leg used to sit extended through
+               the whole startup, and now the coiled stance covers it.
+               Replace with a proper two-frame render when there are
+               credits for one. */
+            crouch_kick:  ['assets/fight_game/clay_crouch_kick.webp', 2],
             crouch_block: ['assets/fight_game/clay_crouch_block.webp', 1],
             crouch_hurt:  ['assets/fight_game/clay_crouch_hurt.webp', 1],
             // Round bookends. victory[0] is also the round-START stance,
@@ -556,6 +564,9 @@ window.FightGame = (function () {
                floor beside him. Clay is the second character to have
                either, after Genuine Undead; everyone else still falls
                back to punch and hit frames while the move plays. */
+            // Absorb, rise, stand. Plays once across LAND_RECOVER_T on its
+            // own clock - see the note in _surf().
+            land:     ['assets/fight_game/clay_land.webp', 3],
             throw:    ['assets/fight_game/clay_throw.webp', 3],
             thrown:   ['assets/fight_game/clay_thrown.webp', 2],
             /* Uncomment the moment the art exists - the taunt STATE is
