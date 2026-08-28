@@ -1528,6 +1528,18 @@ function renderThemePreviewButtons() {
 }
 
 function previewTheme(themeId) {
+    /* TEST Play only, and hard-gated here rather than by hiding the
+       button. Preview grants no perks by design - activePerkSet() checks
+       ownsThemeId() on top of the active theme, so a preview is a look and
+       nothing more - but it DOES apply the theme's body class, and body
+       classes were being used elsewhere as if they were proof of
+       ownership (see openBonusStage below). Keeping preview inside TEST
+       Play removes the whole category of "the preview let me in". */
+    const inTestPlay = (typeof isTestPlayMode !== 'undefined') && isTestPlayMode;
+    if (!inTestPlay) {
+        console.warn('[web3] previewTheme() is TEST Play only.');
+        return;
+    }
     clearCosmeticThemes(); // also exits Win95 desktop if it was active
     window.activePreviewThemeId = themeId || null; // read by fightgame.js for themes with no cssClass, like Genuine Undead
     if (!themeId) {
@@ -1578,9 +1590,28 @@ function openBonusStage() {
     // - TEST Play users get it via the Theme Preview override applying
     // the same body classes. Hard-gating here (not just hiding the
     // button) closes off calling this directly from the console.
-    const themeUnlocked = document.body.classList.contains('medieval-mode') || document.body.classList.contains('conmen-mode');
-    if (!themeUnlocked) {
-        console.warn('[bonusstage] openBonusStage() blocked - neither medieval-mode nor conmen-mode is active on <body> right now.');
+    /* A BODY CLASS IS NOT A GATE. This used to read
+           document.body.classList.contains('medieval-mode') || ...'conmen-mode'
+       which is one console line away from free money:
+           document.body.classList.add('medieval-mode'); openBonusStage();
+       and the stage pays WIN_CASH_REWARD ($2,500) through window.addCash()
+       with no cooldown and no per-session cap. That cash lands in
+       state.lifetimeEarned, which saveToCloud() posts as the public
+       leaderboard score - so a cosmetic CSS class was buying a real,
+       repeatable, server-recorded number.
+
+       The intent behind the original line was right and is preserved
+       exactly: real Mid Evils/Conmen holders get this in LIVE, and TEST
+       Play gets it while previewing. Only the EVIDENCE changed - from "is
+       a class present" to "did an on-chain ownership check actually
+       pass", which is what ownedThemesList records and ownsThemeId()
+       reads. TEST Play is already master-wallet gated in choosePlayMode(),
+       so it is not a way in either. */
+    const inTestPlay = (typeof isTestPlayMode !== 'undefined') && isTestPlayMode;
+    const reallyOwns = (typeof ownsThemeId === 'function')
+        && (ownsThemeId('midevils') || ownsThemeId('conmen'));
+    if (!inTestPlay && !reallyOwns) {
+        console.warn('[bonusstage] openBonusStage() blocked - no verified Mid Evils or Conmen ownership, and not in TEST Play.');
         if (typeof showToast === 'function') showToast("Mini-game needs Mid Evils or Conmen active first.", "error");
         return;
     }
