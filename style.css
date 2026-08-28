@@ -2209,3 +2209,47 @@ body.win95-mode nav button[class*="border-blue-500"] {
 
 /* Body copy is left alone on purpose. An 11px chain-feed line with a
    4px extrusion under it is not clay, it is unreadable. */
+
+/* ---- the Clay Stonkz toast ------------------------------------- */
+/* A speech bubble pressed out of pale clay. Deliberately NOT the olive
+   panel colour: a toast has to out-rank the page behind it, and an olive
+   bubble on olive slabs disappears. Pale clay against the dark panels and
+   the lime ground is the loudest thing the theme can do without leaving
+   the material.
+
+   The rim colour is a custom property set by showToast() per message type
+   (see js/ui.js) rather than a fixed border, so info/success/error read as
+   a coloured edge pressed into the clay while the ink stays dark on light
+   - which is the only way a light bubble stays readable in all three
+   states. */
+.clay-mode #toastBubbleClay {
+    --clay-toast-rim: #8a9a6a;
+    background-color: #e9e6d5 !important;
+    background-image: var(--clay-grain) !important;
+    background-size: var(--clay-grain-size) !important;
+    background-blend-mode: soft-light !important;
+    color: #21261a !important;
+    border: 3px solid var(--clay-toast-rim) !important;
+    border-radius: 22px !important;
+    box-shadow:
+        inset 0 2px 0 rgba(255,255,255,0.65),
+        inset 0 -4px 8px rgba(0,0,0,0.16),
+        0 5px 0 rgba(0,0,0,0.18),
+        0 12px 20px -8px rgba(0,0,0,0.45) !important;
+}
+/* The blanket white-heading and extruded-lettering rules would both land
+   on this light bubble and make the text unreadable. Dark ink, flat. */
+.clay-mode #toastBubbleClay,
+.clay-mode #toastBubbleClay * {
+    color: #21261a !important;
+    text-shadow: none !important;
+}
+.clay-mode #toastBubbleClayTail {
+    background-color: #e9e6d5 !important;
+    border-left: 3px solid var(--clay-toast-rim) !important;
+    border-bottom: 3px solid var(--clay-toast-rim) !important;
+}
+/* He gets the same slide-up entrance the other three characters have. */
+#toastClay img {
+    animation: toastCharSlideUp 0.45s ease-out;
+}
