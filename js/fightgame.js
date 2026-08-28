@@ -484,6 +484,30 @@ window.FightGame = (function () {
             jump_block:   ['assets/fight_game/skullx_jump_block.webp', 1],
             jump_hurt:    ['assets/fight_game/skullx_jump_hurt.webp', 1],
         },
+        /* Clay Stonkz - the Robinhood Chain / BTC ordinals community (see
+           COSMETIC_THEMES "claystonkz" in web3.js). PARTIAL ROSTER: only
+           four poses are drawn so far. Everything else resolves to the idle
+           pose through the final fallback at the end of _surf(), which is
+           safe but static - so he is deliberately NOT in OPPONENT_KEYS
+           below. A Clay holder who picks him knows the art is in progress;
+           a Reiffer player who never asked for him must not be handed a
+           half-drawn opponent.
+
+           Still to draw, in this order: kick_lo (3), punch_lo (3),
+           walk (4), then jump / crouch / victory (3) / defeat (3).
+
+           The cap-off pose is wired as `dizzy`, NOT as hurt. Hurt plays on
+           every connecting hit - dozens a round - and a cap popping off and
+           straight back on each time would read as a rendering bug. A guard
+           break happens once or twice a match and holds for a full second,
+           which is exactly the moment a lost cap should sell. It also picks
+           up the floating skulls for free. */
+        clay: {
+            idle:     ['assets/fight_game/clay_idle.webp', 1],
+            block:    ['assets/fight_game/clay_block.webp', 1],
+            hurt:     ['assets/fight_game/clay_hurt.webp', 1],
+            dizzy:    ['assets/fight_game/clay_dizzy.webp', 1],
+        },
     };
 
     /* SHARED IMPACT FX - not per character.
@@ -1619,8 +1643,18 @@ window.FightGame = (function () {
         return k;
     }
 
-    const FIGHTER_KEYS = ['reiffer', 'conmen', 'wizard', 'undead', 'skullx'];
+    const FIGHTER_KEYS = ['reiffer', 'conmen', 'wizard', 'undead', 'skullx', 'clay'];
     const isRealFighter = (k) => typeof k === 'string' && FIGHTER_KEYS.indexOf(k) !== -1;
+
+    /* Who can be handed to you as a random opponent.
+       FIGHTER_KEYS is the security allow-list - "is this a real character
+       at all" - and every entry there is safe to LOAD. This is a narrower
+       question: "is this character finished enough to put in front of
+       someone who didn't ask for them". Clay Stonkz currently has four
+       poses, so choosing him is a decision his own holders get to make
+       while the art is in progress, and one nobody else has made for them.
+       Move him into this list the moment kick/punch/walk exist. */
+    const OPPONENT_KEYS = ['reiffer', 'conmen', 'wizard', 'undead', 'skullx'];
 
     /* Decides who is fighting, BEFORE any art is downloaded.
        This used to happen inside newGame() - after all five characters had
@@ -1646,7 +1680,7 @@ window.FightGame = (function () {
         if (!isRealFighter(p2Key)) {
             // Local/solo: P1 matches the active theme, P2 is a random pick
             // from the rest - unchanged behaviour, just decided earlier.
-            const pool = FIGHTER_KEYS.filter(k => k !== p1Key);
+            const pool = OPPONENT_KEYS.filter(k => k !== p1Key);
             p2Key = pool[Math.floor(Math.random() * pool.length)];
         }
         return { p1Key, p2Key };
