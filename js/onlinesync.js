@@ -46,7 +46,7 @@ let fightSyncPingTimer = null;
    has always transmitted it, so copying the payload wholesale carried it
    anyway - but rebuilding from an incomplete template would have quietly
    deleted throws from online play. */
-const FIGHT_SYNC_EMPTY_KEYS = { cpu_left: false, cpu_right: false, cpu_jump: false, cpu_crouch: false, cpu_punch: false, cpu_kick: false, cpu_block: false, cpu_throw: false };
+const FIGHT_SYNC_EMPTY_KEYS = { cpu_left: false, cpu_right: false, cpu_jump: false, cpu_crouch: false, cpu_punch: false, cpu_kick: false, cpu_block: false, cpu_throw: false, cpu_taunt: false };
 let fightSyncRemoteKeys = { ...FIGHT_SYNC_EMPTY_KEYS };
 
 // Snapshot for the TEST-mode debug button (see checkFightSyncStatus in
