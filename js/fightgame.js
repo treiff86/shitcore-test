@@ -206,7 +206,12 @@ window.FightGame = (function () {
     const IDLE_BREATH_HZ = 0.75;      // slow, roughly a resting breath
     const WALK_BOB_AMP = 0.010;       // a touch of the same on the walk cycle
 
-    const LAND_RECOVER_T = 0.16;      // seconds of landing-absorb pose
+    /* Seconds of landing-absorb pose. Raised from 0.16 once the landing
+       actually played more than its first frame - 0.16s split three ways
+       is 53ms each, too fast to read as absorb/rise/stand. Purely
+       cosmetic either way: nothing gates input or physics on landT, so a
+       longer window costs no responsiveness. */
+    const LAND_RECOVER_T = 0.26;
 
     /* Dizzy skulls - the little cartoon birds that circle a stunned head.
        Drawn procedurally rather than from a sheet: they are three flat
@@ -485,35 +490,79 @@ window.FightGame = (function () {
             jump_hurt:    ['assets/fight_game/skullx_jump_hurt.webp', 1],
         },
         /* Clay Stonkz - the Robinhood Chain / BTC ordinals community (see
-           COSMETIC_THEMES "claystonkz" in web3.js). PARTIAL ROSTER: only
-           four poses are drawn so far. Everything else resolves to the idle
-           pose through the final fallback at the end of _surf(), which is
-           safe but static - so he is deliberately NOT in OPPONENT_KEYS
-           below. A Clay holder who picks him knows the art is in progress;
-           a Reiffer player who never asked for him must not be handed a
-           half-drawn opponent.
+           COSMETIC_THEMES "claystonkz" in web3.js).
 
-           Still to draw, in this order: kick_lo (3), punch_lo (3),
-           walk (4), then jump / crouch / victory (3) / defeat (3).
+           COMPLETE, and then some: sixteen strips, which is more than
+           Reiffer, Conmen or MIM Wizard ship with. He is in OPPONENT_KEYS
+           now - he went in the moment `defeat` existed, because a KO with
+           no defeat pose leaves a fighter standing in their idle, and that
+           reads as a bug to whoever just won.
 
-           The cap-off pose is wired as `dizzy`, NOT as hurt. Hurt plays on
-           every connecting hit - dozens a round - and a cap popping off and
-           straight back on each time would read as a rendering bug. A guard
-           break happens once or twice a match and holds for a full second,
-           which is exactly the moment a lost cap should sell. It also picks
-           up the floating skulls for free. */
+           Two deliberate choices worth not "fixing":
+
+           The cap-off pose is `dizzy`, NOT hurt. Hurt plays on every
+           connecting hit - dozens a round - and a cap popping off and
+           straight back on each time would read as a rendering bug. A
+           guard break happens once or twice a match and holds for a full
+           second, which is exactly the moment a lost cap should sell. It
+           picks up the floating skulls for free.
+
+           `defeat` runs five frames and CLAMPS on the last one (see
+           DEFEAT_FPS in the round-end block), so the collapse plays once
+           and he stays down. The cap that flies off in frame 3 is still
+           in the air in frame 4 and on the floor in frame 5 - it is part
+           of those frames, not a separate sprite.
+
+           Missing only `land`, the landing-absorb pose - worth one frame,
+           not three - and the optional taunt below. Everything else the
+           engine can ask for, he has his own art for. */
         clay: {
             idle:     ['assets/fight_game/clay_idle.webp', 1],
             block:    ['assets/fight_game/clay_block.webp', 1],
             hurt:     ['assets/fight_game/clay_hurt.webp', 1],
             dizzy:    ['assets/fight_game/clay_dizzy.webp', 1],
-            // The three moving actions - the ones a player watches most.
-            // Each sheet's frames were cut to a SHARED baseline and lined
-            // up on the feet rather than on the bounding box, so the punch
-            // extends without the body sliding backwards.
+            // The moving actions - the ones a player watches most. Every
+            // sheet was cut to a SHARED baseline and lined up on the feet
+            // rather than on the bounding box, so the punch extends
+            // without the body sliding backwards under it.
             walk:     ['assets/fight_game/clay_walk.webp', 2],
             punch_lo: ['assets/fight_game/clay_punch_lo.webp', 2],
             kick_lo:  ['assets/fight_game/clay_kick_lo.webp', 3],
+            // Airborne. jump is one pose, so the velocity-driven two-frame
+            // arc in _surf() passes it through untouched.
+            jump:         ['assets/fight_game/clay_jump.webp', 1],
+            jump_punch:   ['assets/fight_game/clay_jump_punch.webp', 1],
+            jump_kick:    ['assets/fight_game/clay_jump_kick.webp', 1],
+            jump_hurt:    ['assets/fight_game/clay_jump_hurt.webp', 1],
+            jump_block:   ['assets/fight_game/clay_jump_block.webp', 1],
+            // Crouching. The sweep was briefly mistaken for a jump kick -
+            // it is not: the supporting foot is planted flat on the floor
+            // and the trailing leg carries the motion arc. An airborne
+            // pose has no ground contact at all, which is what separates
+            // it from the three jump sheets above.
+            crouch:       ['assets/fight_game/clay_crouch.webp', 1],
+            crouch_punch: ['assets/fight_game/clay_crouch_punch.webp', 1],
+            crouch_kick:  ['assets/fight_game/clay_crouch_kick.webp', 1],
+            crouch_block: ['assets/fight_game/clay_crouch_block.webp', 1],
+            crouch_hurt:  ['assets/fight_game/clay_crouch_hurt.webp', 1],
+            // Round bookends. victory[0] is also the round-START stance,
+            // held through the FIGHT! card - so this is what stops him
+            // being the only fighter who does not square up.
+            victory:  ['assets/fight_game/clay_victory.webp', 6],
+            defeat:   ['assets/fight_game/clay_defeat.webp', 5],
+            /* THE THROW. `throw` is the thrower - reach, grip, release -
+               and `thrown` is the victim: airborne and tumbling with the
+               cap coming off, then flat on his back with the cap on the
+               floor beside him. Clay is the second character to have
+               either, after Genuine Undead; everyone else still falls
+               back to punch and hit frames while the move plays. */
+            throw:    ['assets/fight_game/clay_throw.webp', 3],
+            thrown:   ['assets/fight_game/clay_thrown.webp', 2],
+            /* Uncomment the moment the art exists - the taunt STATE is
+               already built and already tested, and the key is inert for
+               any character without a strip, so this line is the whole
+               switch. Same arrangement as the clay impact bursts above. */
+            // taunt: ['assets/fight_game/clay_taunt.webp', 3],
         },
     };
 
@@ -528,13 +577,39 @@ window.FightGame = (function () {
         spark_big:   ['assets/fight_game/fx_spark_big.webp', 4, 96],
         spark_small: ['assets/fight_game/fx_spark_small.webp', 4, 68],
         dust:        ['assets/fight_game/fx_dust.webp', 3, 48],
+        /* PER-CHARACTER IMPACT. Hitting a sculpted clay bear with a 16-bit
+           pixel spark is the one place the two art styles collide on
+           screen. These are the clay versions - chunks and crumbs rather
+           than pixel shards - and they are used ONLY when the fighter
+           being hit is Clay Stonkz.
+
+           They are optional on purpose. loadFxAnims already survives a
+           missing file (it warns and stores an empty list), and
+           pickSparkKind below refuses to choose a variant with no frames,
+           so this whole feature sits inert until the two sheets exist and
+           then switches itself on with no further code change. */
+        // Uncomment these two lines the moment fx_clay_big.webp and
+        // fx_clay_small.webp exist. Left commented only so the game does
+        // not fetch two files that are not there yet - the selection
+        // logic below is already live and already tested, so this is the
+        // entire switch.
+        // clay_spark_big:   ['assets/fight_game/fx_clay_big.webp', 4, 96],
+        // clay_spark_small: ['assets/fight_game/fx_clay_small.webp', 4, 68],
     };
     /* Which spark a hit gets. Only a HEAVY hit that got through cleanly earns
        the big burst - a guard clash must not read like a clean hit, or
        blocking looks as rewarding as being hit. Its own function purely so
        the rule has one home and can be checked directly. */
-    function pickSparkKind(heavy, blocked) {
-        return (heavy && !blocked) ? 'spark_big' : 'spark_small';
+    function pickSparkKind(heavy, blocked, defenderKey) {
+        const base = (heavy && !blocked) ? 'spark_big' : 'spark_small';
+        // A character-specific burst, but only if its art actually loaded.
+        // Falling back to the shared spark is always correct; drawing an
+        // empty frame list would silently show no impact at all.
+        if (defenderKey) {
+            const variant = defenderKey + '_' + base;
+            if (fxAnims && fxAnims[variant] && fxAnims[variant].length) return variant;
+        }
+        return base;
     }
 
     let fxAnims = null;          // { kind: [canvas, ...] } once loaded
@@ -682,6 +757,18 @@ window.FightGame = (function () {
     // How far BELOW a platform's surface a falling fighter can still be
     // caught by it. Without a tolerance a fast fall can step clean past a
     // ledge between two frames and land on the floor instead.
+    /* THE TAUNT. Not a mechanic - personality, which is the whole point
+       of giving six communities their own fighter. It has no hitbox, no
+       hurtbox change and no damage, and ANY other input cancels it
+       instantly, so it can never cost anybody a round. The cooldown only
+       stops it being mashed into a strobe.
+
+       It is gated on the character actually having taunt art: without it
+       the key does nothing at all, rather than freezing the fighter in a
+       pose-less pause for three quarters of a second. */
+    const TAUNT_T = 0.75;             // seconds the taunt plays
+    const TAUNT_CD = 1.5;             // seconds before it can be used again
+
     const LAND_TOLERANCE = 26;
 
     // Arenas used to allow exactly ONE jumpable platform. This returns a
@@ -1060,6 +1147,8 @@ window.FightGame = (function () {
         // swing from 83px to 315px between Reiffer's own animation frames.
         const stand = (anims.walk && anims.walk.length) ? anims.walk : anims.idle;
         anims._bodyW = Math.max(70, Math.min(260, Math.round((stand && stand.artW) || 90)));
+        // Who this set belongs to, so per-character effects can ask.
+        anims._key = key;
 
         // PLACEHOLDERS for anything not defined above in FIGHTER_ANIM_FILES -
         // replace the corresponding FIGHTER_ANIM_FILES entry with a real
@@ -1130,6 +1219,8 @@ window.FightGame = (function () {
             this.atkT = 0; this.atkDur = 0; this.hitReg = false; this.canW = false; this.canT = 0;
             this.stop = 0;   // HITSTOP - freezes BOTH fighters, impact feel only
             this.landT = 0;           // >0 while playing the landing-absorb pose
+            this.tauntT = 0;          // >0 while taunting
+            this.tauntCd = 0;         // >0 while the taunt is on cooldown
             this._breathT = 0;
             // Phase derived from the spawn X so the two fighters are never in
             // lockstep - synchronised breathing reads as robotic.
@@ -1504,6 +1595,35 @@ window.FightGame = (function () {
                 const i = this.vy < 0 ? 0 : Math.min(frames.length - 1, 1);
                 return frames[i];
             }
+
+            /* THE LANDING - same idea as the jump above: driven by the
+               clock that owns it, not by the shared frame counter.
+
+               It has to be. During a landing `state` is still 'idle', so
+               the counter runs at the IDLE rate - 5fps, one frame every
+               0.2s - while the entire landing window is LAND_RECOVER_T.
+               And _adv() cycles modulo the CURRENT state's strip, which
+               for idle is one frame, so `fr` could only ever be 0 anyway.
+               Measured before this went in: nine frames of landing drawn,
+               every single one of them land[0]. Genuine Undead's second
+               and third landing frames had never once reached the screen.
+
+               Progress across landT plays the strip exactly once and
+               clamps on the last frame, so absorb -> rise -> stand reads
+               in order however long the window is. A one-frame landing
+               strip falls through this untouched. */
+            /* The taunt runs on its own clock too, for the same reason
+               the landing does: its window is shorter than the shared
+               frame counter's step at the idle rate. Progress across
+               tauntT plays the strip exactly once, whatever its length. */
+            if (stateForFrames === 'taunt' && frames.length > 1) {
+                const p = 1 - Math.max(0, Math.min(1, this.tauntT / TAUNT_T));
+                return frames[Math.min(frames.length - 1, Math.floor(p * frames.length))];
+            }
+            if (stateForFrames === 'land' && frames.length > 1) {
+                const p = 1 - Math.max(0, Math.min(1, this.landT / LAND_RECOVER_T));
+                return frames[Math.min(frames.length - 1, Math.floor(p * frames.length))];
+            }
             return frames[this.fr % frames.length];
         }
 
@@ -1640,7 +1760,7 @@ window.FightGame = (function () {
     let onKeyDown, onKeyUp;
 
     const HANDLED_KEYS = new Set([
-        'a', 'd', 'w', 's', 'z', 'x', 'c', ' ',
+        'a', 'd', 'w', 's', 'z', 'x', 'c', 't', ' ',
         'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Enter', '/',
         'Shift', 'Escape',
     ]);
@@ -1657,11 +1777,15 @@ window.FightGame = (function () {
        FIGHTER_KEYS is the security allow-list - "is this a real character
        at all" - and every entry there is safe to LOAD. This is a narrower
        question: "is this character finished enough to put in front of
-       someone who didn't ask for them". Clay Stonkz currently has four
-       poses, so choosing him is a decision his own holders get to make
-       while the art is in progress, and one nobody else has made for them.
-       Move him into this list the moment kick/punch/walk exist. */
-    const OPPONENT_KEYS = ['reiffer', 'conmen', 'wizard', 'undead', 'skullx'];
+       someone who didn't ask for them".
+
+       Clay Stonkz was held out of this list while he was a partial
+       roster. He is in it now: sixteen strips, including the two that
+       actually decided it - `defeat`, because a KO with no defeat pose
+       leaves a fighter standing in their idle, and `victory`, whose
+       first frame is the round-start stance every other fighter holds
+       through the FIGHT! card. */
+    const OPPONENT_KEYS = ['reiffer', 'conmen', 'wizard', 'undead', 'skullx', 'clay'];
 
     /* Decides who is fighting, BEFORE any art is downloaded.
        This used to happen inside newGame() - after all five characters had
@@ -1981,6 +2105,7 @@ window.FightGame = (function () {
             [bind.punch]: !!(rk && rk.cpu_punch), [bind.kick]: !!(rk && rk.cpu_kick),
             [bind.block]: !!(rk && rk.cpu_block),
             [bind.throwGrab]: !!(rk && rk.cpu_throw),
+            [bind.taunt]: !!(rk && rk.cpu_taunt),
         };
         for (const k in next) {
             if (next[k] && !keys[k]) justPressed[k] = true; // rising edge only, same rule as a real keydown
@@ -2224,10 +2349,39 @@ window.FightGame = (function () {
             }
 
             if (f.grounded) {
-                f.state = f.crouching ? 'crouch' : (f.vx !== 0 ? 'walk' : 'idle');
+                /* A running taunt OWNS the state until it ends or gets
+                   cancelled. Without this guard the taunt was set below
+                   and then wiped by this very line on the next frame -
+                   it started, charged its cooldown, and was gone before
+                   it drew twice. Anything the player actually presses
+                   still cancels it a few lines down, so holding a
+                   direction does not leave them stuck posing. */
+                if (f.tauntT <= 0) {
+                    f.state = f.crouching ? 'crouch' : (f.vx !== 0 ? 'walk' : 'idle');
+                }
             } else {
                 f.state = 'jump';
             }
+        }
+
+        /* THE TAUNT, handled before attacks so that pressing anything
+           else while taunting reads as "cancel and do that instead"
+           rather than being swallowed. Any of the six action inputs, or
+           any movement, drops it on the spot - a taunt must never be the
+           reason somebody ate a combo. Getting hit ends it too, because
+           the hurt branch overwrites `state` on its own. */
+        if (f.state === 'taunt') {
+            const wantsOut = justPressed[bind.punch] || justPressed[bind.kick]
+                || justPressed[bind.jump] || justPressed[bind.throwGrab]
+                || keys[bind.block] || keys[bind.left] || keys[bind.right]
+                || keys[bind.crouch];
+            if (wantsOut) { f.tauntT = 0; f.state = 'idle'; f.fr = 0; }
+        } else if (justPressed[bind.taunt] && f.grounded && f.tauntCd <= 0
+                   && !attacking && !f.crouching && !f.blocking
+                   && (f.state === 'idle' || f.state === 'walk')
+                   && f.anims.taunt && f.anims.taunt.length) {
+            f.state = 'taunt'; f.fr = 0; f.vx = 0;
+            f.tauntT = TAUNT_T; f.tauntCd = TAUNT_T + TAUNT_CD;
         }
 
         // --- attacks: only fire on a genuine key PRESS, mashing required ---
@@ -2262,6 +2416,11 @@ window.FightGame = (function () {
            It is purely cosmetic, so it should never sit behind a gate. */
         f._breathT = (f._breathT || 0) + dt;
         if (f.landT > 0) f.landT = Math.max(0, f.landT - dt);
+        if (f.tauntCd > 0) f.tauntCd = Math.max(0, f.tauntCd - dt);
+        if (f.tauntT > 0) {
+            f.tauntT = Math.max(0, f.tauntT - dt);
+            if (f.tauntT === 0 && f.state === 'taunt') { f.state = 'idle'; f.fr = 0; }
+        }
 
         /* These three lapse-timers also run unconditionally. They used to sit
            a few lines below, INSIDE the guardBroken branch that returns early,
@@ -2405,7 +2564,8 @@ window.FightGame = (function () {
                the same spot don't look stamped, and `l`/`ml` keep the same
                countdown lifecycle the circle used. Blocked hits get the
                small spark - a guard clash shouldn't read as a clean hit. */
-            const sparkKind = pickSparkKind(heavy, defender.blocking);
+            const sparkKind = pickSparkKind(heavy, defender.blocking,
+                                            defender.anims && defender.anims._key);
             fx.push({
                 x: hb.x + hb.w / 2, y: hb.y + hb.h / 2,
                 kind: sparkKind,
@@ -2620,14 +2780,14 @@ window.FightGame = (function () {
         const fx = [];
         _activeFx = fx;   // let spawnLandingDust reach it
 
-        const P1_BIND = { left: 'ArrowLeft', right: 'ArrowRight', jump: 'ArrowUp', crouch: 'ArrowDown', punch: 'z', kick: 'x', block: ' ', throwGrab: 'c' };
+        const P1_BIND = { left: 'ArrowLeft', right: 'ArrowRight', jump: 'ArrowUp', crouch: 'ArrowDown', punch: 'z', kick: 'x', block: ' ', throwGrab: 'c', taunt: 't' };
         // P2 is CPU-only now (see updateCPUInput) - these are just internal
         // dictionary keys the AI sets programmatically, not real keyboard
         // keys, so they're deliberately NOT actual key names anymore. That
         // matters: if these matched P1_BIND's real key strings, a P1 key
         // press would leak into the CPU's virtual input for that frame
         // (they share the same `keys`/`justPressed` objects).
-        const P2_BIND = { left: 'cpu_left', right: 'cpu_right', jump: 'cpu_jump', crouch: 'cpu_crouch', punch: 'cpu_punch', kick: 'cpu_kick', block: 'cpu_block', throwGrab: 'cpu_throw' };
+        const P2_BIND = { left: 'cpu_left', right: 'cpu_right', jump: 'cpu_jump', crouch: 'cpu_crouch', punch: 'cpu_punch', kick: 'cpu_kick', block: 'cpu_block', throwGrab: 'cpu_throw', taunt: 'cpu_taunt' };
 
         keys = {}; justPressed = {};
         let lastSentInputSnapshot = null;
@@ -2721,6 +2881,7 @@ window.FightGame = (function () {
                         cpu_punch: !!keys[P1_BIND.punch], cpu_kick: !!keys[P1_BIND.kick],
                         cpu_block: !!keys[P1_BIND.block],
                         cpu_throw: !!keys[P1_BIND.throwGrab],
+                        cpu_taunt: !!keys[P1_BIND.taunt],
                     };
                     const snap = JSON.stringify(outKeys);
                     if (snap !== lastSentInputSnapshot) {
@@ -2884,7 +3045,12 @@ window.FightGame = (function () {
             // Z+X is listed because a move nobody can discover may as well
             // not exist - and the guard counter is the whole answer to an
             // opponent leaning on you.
-            const leg = 'P1: \u2190\u2192 Move  \u2191 Jump  \u2193 Crouch  Z Punch  X Kick  Space Block  Z+X Counter  C Throw   |   P2: CPU';
+            /* The taunt is only listed when the fighter on screen can
+               actually do it - a key that does nothing is worse than no
+               key at all. */
+            const canTaunt = g.p1 && g.p1.anims && g.p1.anims.taunt && g.p1.anims.taunt.length;
+            const leg = 'P1: \u2190\u2192 Move  \u2191 Jump  \u2193 Crouch  Z Punch  X Kick  Space Block  Z+X Counter  C Throw'
+                + (canTaunt ? '  T Taunt' : '') + '   |   P2: CPU';
             ctx.font = "9px 'BonusStagePixel', monospace";
             ctx.fillStyle = '#aaaaaa';
             ctx.textAlign = 'center';
