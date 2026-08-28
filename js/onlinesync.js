@@ -40,7 +40,13 @@ let fightSyncLastRemoteInputAt = 0;
 let fightSyncConnectedAt = 0;
 let fightSyncOnPeerLeft = null;
 let fightSyncPingTimer = null;
-const FIGHT_SYNC_EMPTY_KEYS = { cpu_left: false, cpu_right: false, cpu_jump: false, cpu_crouch: false, cpu_punch: false, cpu_kick: false, cpu_block: false };
+/* Must list EVERY key updateRemoteInput() in fightgame.js reads, because
+   the receiver now rebuilds the remote key state from this shape rather
+   than trusting the payload's own. cpu_throw was missing here: the sender
+   has always transmitted it, so copying the payload wholesale carried it
+   anyway - but rebuilding from an incomplete template would have quietly
+   deleted throws from online play. */
+const FIGHT_SYNC_EMPTY_KEYS = { cpu_left: false, cpu_right: false, cpu_jump: false, cpu_crouch: false, cpu_punch: false, cpu_kick: false, cpu_block: false, cpu_throw: false };
 let fightSyncRemoteKeys = { ...FIGHT_SYNC_EMPTY_KEYS };
 
 // Snapshot for the TEST-mode debug button (see checkFightSyncStatus in
@@ -60,9 +66,34 @@ function getFightSyncStatus() {
 // tab's presence drops (closed the page, lost connection, etc.) so the
 // caller can end the match gracefully instead of leaving someone stuck
 // fighting a frozen opponent.
+/* The shared per-match secret, handed over by onlinelobby.js once the
+   database has confirmed this tab is actually one of the two players.
+   Null means "not armed yet" - see the note in startOnlineMatch. */
+let fightSyncSecret = null;
+let fightSyncRejected = 0;   // broadcasts dropped for a bad signature
+
+function setFightSyncSecret(secret) {
+    fightSyncSecret = secret || null;
+}
+
+/* A broadcast is trusted only if it carries the match secret. Once the
+   secret is armed, anything unsigned or wrongly signed is dropped and
+   counted - which is what a stranger's forged input looks like from the
+   inside. Before it is armed we accept, so the first frames of a match
+   are never lost to a round trip. */
+function fightSyncTrusted(payload) {
+    if (!fightSyncSecret) return true;
+    if (payload && payload.s === fightSyncSecret) return true;
+    fightSyncRejected++;
+    return false;
+}
+
+function getFightSyncRejectedCount() { return fightSyncRejected; }
+
 function startFightSync(roomId, onPeerLeft) {
     stopFightSync(); // clean up any leftover channel from a previous match first
     if (!sb || !roomId) return null;
+    fightSyncRejected = 0;
     fightSyncOnPeerLeft = onPeerLeft || null;
     fightSyncPeerPresent = false;
     fightSyncLastPingMs = null;
@@ -76,15 +107,26 @@ function startFightSync(roomId, onPeerLeft) {
     });
 
     channel.on('broadcast', { event: 'input' }, ({ payload }) => {
+        if (!fightSyncTrusted(payload)) return;   // not from your opponent
         if (payload && payload.keys) {
-            fightSyncRemoteKeys = payload.keys;
+            /* Only the keys the game actually reads are copied across.
+               Spreading the payload wholesale let a remote peer put any
+               property it liked onto the object updateRemoteInput()
+               reads. Rebuilding it from a fixed shape means a forged
+               message can, at absolute worst, hold a real button down. */
+            const src = payload.keys;
+            const next = { ...FIGHT_SYNC_EMPTY_KEYS };
+            for (const k in next) next[k] = !!src[k];
+            fightSyncRemoteKeys = next;
             fightSyncLastRemoteInputAt = Date.now();
         }
     });
     channel.on('broadcast', { event: 'ping' }, ({ payload }) => {
-        channel.send({ type: 'broadcast', event: 'pong', payload: { t: payload.t } });
+        if (!fightSyncTrusted(payload)) return;
+        channel.send({ type: 'broadcast', event: 'pong', payload: { t: payload.t, s: fightSyncSecret } });
     });
     channel.on('broadcast', { event: 'pong' }, ({ payload }) => {
+        if (!fightSyncTrusted(payload)) return;   // or the latency readout is forgeable too
         fightSyncLastPingMs = Math.round(performance.now() - payload.t);
     });
     channel.on('presence', { event: 'sync' }, () => {
@@ -109,7 +151,7 @@ function startFightSync(roomId, onPeerLeft) {
     // a one-time reading, and so a silently-dead connection eventually
     // shows itself (no pongs coming back).
     fightSyncPingTimer = setInterval(() => {
-        if (fightSyncChannel) fightSyncChannel.send({ type: 'broadcast', event: 'ping', payload: { t: performance.now() } });
+        if (fightSyncChannel) fightSyncChannel.send({ type: 'broadcast', event: 'ping', payload: { t: performance.now(), s: fightSyncSecret } });
     }, 2000);
 
     return channel;
@@ -117,7 +159,7 @@ function startFightSync(roomId, onPeerLeft) {
 
 function sendFightSyncInput(keysSnapshot) {
     if (!fightSyncChannel) return;
-    fightSyncChannel.send({ type: 'broadcast', event: 'input', payload: { keys: keysSnapshot } });
+    fightSyncChannel.send({ type: 'broadcast', event: 'input', payload: { keys: keysSnapshot, s: fightSyncSecret } });
 }
 
 function getFightSyncRemoteKeys() {
@@ -129,5 +171,8 @@ function stopFightSync() {
     if (fightSyncChannel) { try { sb && sb.removeChannel(fightSyncChannel); } catch (e) {} fightSyncChannel = null; }
     fightSyncPeerPresent = false;
     fightSyncOnPeerLeft = null;
+    // A secret belongs to ONE match. Carrying it into the next one would
+    // arm the filter against the new opponent and drop all their input.
+    fightSyncSecret = null;
 }
 window.addEventListener('pagehide', stopFightSync);
