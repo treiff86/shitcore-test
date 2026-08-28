@@ -1098,6 +1098,35 @@ window.FightGame = (function () {
         // Every other pose is scaled to match it.
         const targetArea = ref ? (ref.art.artArea * refScale * refScale) : 0;
 
+        /* WHY SOME CHARACTERS OPT OUT OF AREA SCALING.
+
+           Area scaling sizes every pose so its lit-pixel count matches the
+           standing pose. That is right when every pose is drawn from the
+           same angle - all five pixel-art fighters are pure side views, so
+           their silhouettes have similar density and it holds them steady.
+
+           It falls apart when the angle changes between poses. Clay Stonkz
+           is rendered art: his idle is a broad three-quarter stance and his
+           walk is a narrow profile, so at the same real size the idle has
+           far more lit pixels. Matching AREA therefore shrinks it. Measured
+           on the finished sheets: idle 195px, walk 226px, taking a hit
+           237px - he grew by a fifth when he got punched and stood 13%
+           shorter than Skull X while doing nothing.
+
+           So for those characters the standing poses take the reference
+           scale directly, which renders them all at exactly P_H. Poses that
+           are SUPPOSED to be lower - crouching, floored, landing - keep
+           area scaling, because those genuinely are not standing height.
+
+           This is opt-in per character. The five that ship fine on area
+           scaling are not touched by it. */
+        const STEADY_HEIGHT_KEYS = new Set(['clay']);
+        const NOT_STANDING = new Set([
+            'crouch', 'crouch_punch', 'crouch_kick', 'crouch_block', 'crouch_hurt',
+            'defeat', 'thrown', 'land',
+        ]);
+        const steady = STEADY_HEIGHT_KEYS.has(key) && ref;
+
         // PASS 2 - render each strip at the scale that makes its pixel area
         // match the standing pose.
         const anims = {};
@@ -1105,7 +1134,11 @@ window.FightGame = (function () {
             const m = measured[state];
             if (!m) { anims[state] = []; continue; }
             let scale = refScale;
-            if (m.art && targetArea > 0 && m.art.artArea > 0) {
+            if (steady && m.art && !NOT_STANDING.has(state)) {
+                // Every standing pose at the same scale, so the character
+                // is one size no matter what he is doing.
+                scale = refScale;
+            } else if (m.art && targetArea > 0 && m.art.artArea > 0) {
                 scale = Math.sqrt(targetArea / m.art.artArea);
                 // Guard on the RESULT, not the factor - see the note on
                 // POSE_MIN_H. Only trips when a measurement has genuinely
