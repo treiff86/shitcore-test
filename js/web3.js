@@ -394,6 +394,32 @@ let isMimWizardHolder = false; // real $MIM / Bitcoin Wizard ownership - drives 
 // handlers. It deliberately applies NOTHING - see the branch below for
 // why that matters. Every other caller - including LIVE Play, which is
 // meant to be indistinguishable from a real connection - leaves it true.
+/* Is a Theme Preview currently up?
+
+   THE RACE THIS EXISTS FOR. Entering TEST PLAY does two things back to
+   back: it kicks off applyCosmeticThemes() - which is async, because it
+   talks to Solana, Bitcoin and now Robinhood Chain - and then immediately
+   opens the Theme Preview panel. So the normal order of events is:
+
+     1. the ownership re-check goes out over the network
+     2. the user picks a theme in Theme Preview
+     3. the re-check comes back, seconds later
+
+   At step 3 the re-check knows nothing about step 2, because previewTheme()
+   sets window.activePreviewThemeId and the body class but deliberately does
+   NOT set activeThemeId - a preview is not an ownership claim. The re-check
+   therefore saw "no theme is worn" and helpfully cleaned up, wiping the
+   selection the user had just made and dropping the page back to the plain
+   dark look. It also kicked anyone previewing the Wizard straight out of
+   the Win95 desktop.
+
+   An ownership re-check has no business overruling a preview in either
+   direction: a preview is explicitly a "show me this anyway" and is master
+   -wallet only. So it is left completely alone. */
+function previewIsProtected() {
+    try { return !!window.activePreviewThemeId; } catch (e) { return false; }
+}
+
 async function applyCosmeticThemes(addr, showChoiceIfMultiple = true) {
     const owned = [];
     for (const theme of COSMETIC_THEMES) {
@@ -435,7 +461,10 @@ async function applyCosmeticThemes(addr, showChoiceIfMultiple = true) {
     }
 
     if (owned.length === 0) {
-        clearCosmeticThemes(); // nothing owned anymore (e.g. wallet disconnected) - back to the standard look, not whatever was applied before
+        // Nothing owned anymore (e.g. wallet disconnected) - back to the
+        // standard look, not whatever was applied before. A PREVIEW is
+        // exempt: see previewIsProtected() for why.
+        if (!previewIsProtected()) clearCosmeticThemes();
         return;
     }
     // Ask before applying, even with exactly one match - holding a
@@ -460,8 +489,12 @@ async function applyCosmeticThemes(addr, showChoiceIfMultiple = true) {
            A re-check is not a choice. It only has three honest jobs: leave a
            still-owned choice alone, drop a choice you no longer qualify for,
            and never invent one. */
-        const stillOwned = owned.some((t) => t.id === activeThemeId);
-        if (!stillOwned) clearCosmeticThemes();
+        if (previewIsProtected()) return;
+        // Only a genuinely WORN theme can be dropped here, and only when
+        // this wallet no longer owns it.
+        if (activeThemeId && !owned.some((t) => t.id === activeThemeId)) {
+            clearCosmeticThemes();
+        }
         return;
     }
     renderThemeChoiceButtons();
