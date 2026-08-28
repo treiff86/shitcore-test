@@ -507,6 +507,13 @@ window.FightGame = (function () {
             block:    ['assets/fight_game/clay_block.webp', 1],
             hurt:     ['assets/fight_game/clay_hurt.webp', 1],
             dizzy:    ['assets/fight_game/clay_dizzy.webp', 1],
+            // The three moving actions - the ones a player watches most.
+            // Each sheet's frames were cut to a SHARED baseline and lined
+            // up on the feet rather than on the bounding box, so the punch
+            // extends without the body sliding backwards.
+            walk:     ['assets/fight_game/clay_walk.webp', 2],
+            punch_lo: ['assets/fight_game/clay_punch_lo.webp', 2],
+            kick_lo:  ['assets/fight_game/clay_kick_lo.webp', 3],
         },
     };
 
