@@ -3036,11 +3036,28 @@ window.FightGame = (function () {
                 }
                 if (winner) {
                     if (!winner.grounded) {
-                        // Was mid-air when they won - fall to the floor for
-                        // real instead of freezing the victory pose in
-                        // mid-jump. Victory animation only starts once
-                        // they've actually landed.
-                        applyGravity(winner, dt, false);
+                        /* Was mid-air when they won - fall to the floor for
+                           real instead of freezing the victory pose in
+                           mid-jump. Victory animation only starts once
+                           they've actually landed.
+
+                           THE FALL RUNS ON rawDt, NOT dt, AND THE ARC IS
+                           CUT SHORT. Both matter, and together they were
+                           the whole visible bug. A KO starts 0.34s of
+                           frozen time and then 1.25s at a third speed -
+                           drama aimed at the loser's collapse - and the
+                           winner's descent was being dragged through all of
+                           it. Worse, a winner still RISING finished the
+                           upward half of the jump first. Measured: 1.6s to
+                           2.0s of the plain jump pose, scowling, while the
+                           WINS banner was already up. Players read that as
+                           "the victory pose never plays", because for the
+                           two seconds they are looking at it, it doesn't.
+                           So: stop any upward motion the instant the round
+                           is over, and let the landing happen at real
+                           speed. The freeze still lands its beat. */
+                        if (winner.vy < 0) winner.vy = 0;
+                        applyGravity(winner, timeStopped ? 0 : rawDt, false);
                         if (winner.grounded) { winner.state = 'victory'; winner.fr = 0; winner.frT = 0; }
                     } else {
                         winner.frT += dt;
