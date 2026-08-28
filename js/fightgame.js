@@ -1852,16 +1852,51 @@ window.FightGame = (function () {
             defender.kbResetT = KB_RESET_SECONDS;
             return true;
         }
+        const dist = blocked ? KB_ON_BLOCK : KB_ON_HIT;
         if (defender.kbChain >= KB_MAX_CHAIN) {
             defender.kbResetT = KB_RESET_SECONDS; // still refresh the timer - the flurry is ongoing
+            shoveAttackerBack(attacker, defender, dist);   // see the note below
             return false;
         }
         defender.kbChain++;
         defender.kbResetT = KB_RESET_SECONDS;
         const dir = defender.x < attacker.x ? -1 : 1;
-        const dist = blocked ? KB_ON_BLOCK : KB_ON_HIT;
-        defender.x = Math.max(STAGE_MARGIN, Math.min(SW - STAGE_MARGIN - defender._fw, defender.x + dir * dist));
+        const want = defender.x + dir * dist;
+        const landed = Math.max(STAGE_MARGIN, Math.min(SW - STAGE_MARGIN - defender._fw, want));
+        // Whatever the wall refused to absorb, in px.
+        const unspent = Math.abs(want - landed);
+        defender.x = landed;
+        if (unspent > 0) shoveAttackerBack(attacker, defender, unspent);
         return true;
+    }
+
+    /* CORNER PUSHBACK - the fix for the corner infinite.
+
+       Every normal in this game is plus on hit: punch_lo is 4/3/9 with 19
+       frames of hitstun (+8), kick_lo is +7, crouch punch +8. That is
+       fine, and deliberate, WHILE the defender is sliding away - the
+       attacker drifts out of range and has to walk back in, which is the
+       rhythm the whole game is built on.
+
+       Two situations stop the defender sliding: they are against the wall,
+       or they have taken KB_MAX_CHAIN nudges and planted. In either case
+       nothing separates the two bodies at all, so a plus-on-hit move
+       re-hits before its victim can ever act. Measured in a real match
+       with the defender cornered and a scripted attacker mashing one
+       button: 90 of 100 HP gone in five seconds, and ZERO actionable
+       frames out of 301 - not a hard combo, a literal infinite, and one
+       any player finds by accident.
+
+       Fighting games have solved this the same way since the nineties:
+       the push the defender cannot take is given to the ATTACKER instead.
+       Nobody is glued to anybody. Frame data, damage, hitstun, the chain
+       cap and the feel of a normal combo are all untouched - the only
+       thing that changes is the case where the defender genuinely cannot
+       move, which is exactly the case that was broken. */
+    function shoveAttackerBack(attacker, defender, dist) {
+        if (!attacker || !dist) return;
+        const dir = attacker.x < defender.x ? -1 : 1;   // away from the defender
+        attacker.x = Math.max(STAGE_MARGIN, Math.min(SW - STAGE_MARGIN - attacker._fw, attacker.x + dir * dist));
     }
 
     // Ticks the "have they been left alone long enough to recover" timer.
