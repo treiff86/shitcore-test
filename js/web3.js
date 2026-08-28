@@ -387,11 +387,13 @@ let isUndeadHolder = false; // real Genuine Undead / Forever Undead ownership - 
 let isMidEvilsHolder = false; // real Mid Evils ownership - same idea, gates the Mid Evils easter egg (js/midevils-egg.js)
 let isMimWizardHolder = false; // real $MIM / Bitcoin Wizard ownership - drives the capital-inflow perk in deployer.js
 
-// showChoiceIfMultiple=false is used specifically for the master wallet's
-// TEST Play path, where Theme Preview is about to open right after and
-// would just fight with this modal for attention. Every other caller -
-// including LIVE Play, which is deliberately meant to be indistinguishable
-// from a real connection - leaves it true.
+// showChoiceIfMultiple=false is the QUIET RE-CHECK: re-read what this
+// wallet owns without putting a modal in front of anyone. It is used by
+// the master wallet's TEST Play path (Theme Preview opens right after and
+// would fight this modal for attention) and by both wallet-disconnect
+// handlers. It deliberately applies NOTHING - see the branch below for
+// why that matters. Every other caller - including LIVE Play, which is
+// meant to be indistinguishable from a real connection - leaves it true.
 async function applyCosmeticThemes(addr, showChoiceIfMultiple = true) {
     const owned = [];
     for (const theme of COSMETIC_THEMES) {
@@ -442,7 +444,24 @@ async function applyCosmeticThemes(addr, showChoiceIfMultiple = true) {
     // === false is the "quiet re-check" path (e.g. disconnecting a wallet),
     // which should never pop up a modal on its own.
     if (!showChoiceIfMultiple) {
-        applyTheme(owned[0]); // baseline pick; caller has its own way to let them override (Theme Preview)
+        /* THIS USED TO CALL applyTheme(owned[0]), and owned[0] is simply
+           whichever collection sits first in COSMETIC_THEMES - Mid Evils.
+           So the "quiet" path was the loudest thing in the file: it applied
+           a theme nobody had chosen, and always the same one. Two ways that
+           bit:
+
+             - entering TEST PLAY dropped you straight into Mid Evils before
+               the Theme Preview panel had even opened;
+             - and because this also runs when a wallet DISCONNECTS, picking
+               Clay Stonkz and then unplugging a second wallet silently threw
+               you back to Mid Evils - moving your holder perks with it, since
+               activePerkThemeId() follows the worn theme.
+
+           A re-check is not a choice. It only has three honest jobs: leave a
+           still-owned choice alone, drop a choice you no longer qualify for,
+           and never invent one. */
+        const stillOwned = owned.some((t) => t.id === activeThemeId);
+        if (!stillOwned) clearCosmeticThemes();
         return;
     }
     renderThemeChoiceButtons();
@@ -637,7 +656,10 @@ function choosePlayMode(mode) {
     document.getElementById("playModeModal")?.classList.add("hidden");
     if (mode === "test") {
         isTestPlayMode = true;
-        applyCosmeticThemes(walletAddress, false); // real theme still applies as a baseline; Theme Preview (below) is what actually lets you override it, so skip the separate dual-choice popup here
+        // Detects what this wallet owns but applies nothing - openThemePreview()
+        // a few lines down is what actually lets you choose, and being
+        // dumped into a theme before that panel opens was the bug.
+        applyCosmeticThemes(walletAddress, false);
         document.getElementById("themePreviewBtn")?.classList.remove("hidden");
         document.getElementById("bonusStageBtn")?.classList.remove("hidden");
         document.getElementById("audioToggleBtn")?.classList.remove("hidden");
