@@ -1668,10 +1668,12 @@ function getActiveFighterKey() {
     if (c.contains('conmen-mode')) return 'conmen';
     if (c.contains('skullx-mode')) return 'skullx';
     if (c.contains('undead-mode')) return 'undead';
+    if (c.contains('clay-mode')) return 'clay';
     // Mid Evils fights as Reiffer, the default - it needs no branch here,
     // it just falls through to the return below.
     if (window.activePreviewThemeId === 'genuineundead') return 'undead';
     if (window.activePreviewThemeId === 'skullx') return 'skullx';
+    if (window.activePreviewThemeId === 'claystonkz') return 'clay';
     return 'reiffer';
 }
 
