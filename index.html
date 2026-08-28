@@ -1001,6 +1001,22 @@
     </div>
 
 
+    <!-- Clay Stonkz easter egg - random interval while the Clay theme is
+         active (see js/clay-egg.js). Clicking the bubble opens the game on
+         the site that hosts it, in a new tab; deliberately a link and not an
+         embed, see the note at the top of that file. -->
+    <div id="clayEggPopup" class="fixed bottom-0 left-6 z-[60] hidden flex items-end gap-2 max-w-md" style="pointer-events: auto;">
+        <img src="assets/clay-zelda-pfp.webp" alt="" class="w-40 h-auto flex-shrink-0 drop-shadow-2xl">
+        <div id="clayEggBubble" onclick="openClayEgg()" role="link" tabindex="0"
+             onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openClayEgg();}"
+             class="px-4 py-3 rounded-2xl text-sm font-semibold mb-6 relative cursor-pointer"
+             style="background:#e8e2d2;color:#2b2418;border:3px solid #8a9a6a;box-shadow:0 10px 24px -12px rgba(0,0,0,.6);">
+            chart's cooked. go play something older than your bags <span style="text-decoration:underline;text-underline-offset:2px;">&rarr;</span>
+            <div class="absolute -bottom-[9px] left-6 w-4 h-4"
+                 style="background:#e8e2d2;border-left:3px solid #8a9a6a;border-bottom:3px solid #8a9a6a;transform: rotate(45deg);"></div>
+        </div>
+    </div>
+
     <!-- Generic alert modal -->
     <div id="customAlertModal" class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 hidden p-4">
         <div class="bg-[#0C0F16] border border-rose-500/40 max-w-md w-full p-6 rounded-xl shadow-2xl text-center space-y-4">
@@ -1526,7 +1542,7 @@
 <script src="js/staking.js" defer></script>
 <script src="js/perks.js?v=5" defer></script>
 <script src="js/bonusstage.js?v=23" defer></script>
-<script src="js/fightgame.js?v=74" defer></script>
+<script src="js/fightgame.js?v=76" defer></script>
 <script src="js/mevghosts.js?v=2" defer></script>
 <script src="js/mevsandwich.js?v=11" defer></script>
 <script src="js/conmen-egg.js?v=6" defer></script>
@@ -1534,6 +1550,7 @@
 <script src="js/undead-egg.js?v=3" defer></script>
 <script src="js/midevils-egg.js?v=3" defer></script>
 <script src="js/mcdonalds-egg.js?v=4" defer></script>
+<script src="js/clay-egg.js?v=1" defer></script>
 <script src="js/web3.js?v=74" defer></script>
 <script src="js/wizardpopup.js?v=2" defer></script>
 <script src="js/win95desktop.js?v=6" defer></script>
