@@ -387,6 +387,49 @@
     box-shadow: 0 2px 6px rgba(0,0,0,0.4);
 }
 
+/* Clay Stonkz easter egg - same popup mechanics as Conmen below, clay
+   palette. Sits in the SAME corner slot as Conmen's rather than stepping
+   left the way Skull X / Undead / Mid Evils do: those four step aside from
+   each other defensively, but this one is gated on clay-mode, which is
+   mutually exclusive with every theme class that could show another egg. */
+#clayEggPopup {
+    position: fixed;
+    right: 24px;
+    bottom: -14px;
+    z-index: 90;
+    cursor: pointer;
+    width: 110px;
+    opacity: 0;
+    transform: translateY(16px) scale(0.9);
+    transition: opacity 0.35s ease, transform 0.35s ease;
+    pointer-events: none;
+    filter: drop-shadow(0 8px 18px rgba(0,0,0,0.65)) drop-shadow(0 2px 6px rgba(0,0,0,0.5));
+}
+#clayEggPopup.show {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    pointer-events: auto;
+}
+#clayEggPopup img {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+#clayEggPopup .clay-egg-tag {
+    position: absolute;
+    top: -10px;
+    right: -6px;
+    background: #e8e2d2;
+    color: #2b2418;
+    border: 2px solid #8a9a6a;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 800;
+    padding: 2px 7px;
+    white-space: nowrap;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+}
+
 /* Skull X easter egg - same popup/launcher mechanics as Conmen above
    (see js/skullx-egg.js), teal palette instead of gray to match the
    Skull X site theme. Sits a bit further left than Conmen's so the two
