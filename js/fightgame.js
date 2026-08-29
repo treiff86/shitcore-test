@@ -1152,11 +1152,25 @@ window.FightGame = (function () {
 
            This is opt-in per character. The five that ship fine on area
            scaling are not touched by it. */
-        const STEADY_HEIGHT_KEYS = new Set(['clay']);
-        const NOT_STANDING = new Set([
-            'crouch', 'crouch_punch', 'crouch_kick', 'crouch_block', 'crouch_hurt',
-            'defeat', 'thrown', 'land',
-        ]);
+        const STEADY_HEIGHT_KEYS = new Set(['clay', 'skullx', 'wizard']);
+        /* WHY THIS SET IS NOW EMPTY FOR A STEADY CHARACTER.
+
+           It used to send the low poses back through area scaling, on the
+           reasoning that a crouch is not standing height so it should not be
+           forced to one. That reasoning was half right and the half it got
+           wrong is the visible one: area scaling does not make a pose LOWER,
+           it makes it BIGGER. A crouching body has fewer lit pixels than a
+           standing one, so matching pixel counts scales the whole character
+           up - he ducks and grows a size. Measured on Clay: the landing pose
+           came out 28% larger than his idle, and getting hit in mid-air was
+           worse.
+
+           A pose that is drawn lower IS lower. The reference scale keeps the
+           body the same size and lets the artwork put the head where it
+           belongs, which is the whole point. It only works if every one of
+           that character's strips is drawn at one body scale - which is
+           exactly what opting into STEADY_HEIGHT_KEYS asserts. */
+        const NOT_STANDING = new Set([]);
         const steady = STEADY_HEIGHT_KEYS.has(key) && ref;
 
         // PASS 2 - render each strip at the scale that makes its pixel area
