@@ -660,6 +660,43 @@
     box-shadow: 0 0 30px rgba(46,204,113,0.25);
 }
 
+/* Clay Stonkz launcher - same window mechanics as Undead's above, clay and
+   olive instead of terminal green. The embed wrap mirrors .undead-embed-wrap
+   exactly so the swap from intro to game does not move anything. */
+.clay-titlebar {
+    background: linear-gradient(180deg, #6d7a4e 0%, #23200f 100%) !important;
+}
+.clay-launcher-bg {
+    background: #14120a !important;
+}
+.clay-launcher-bg .conmen-launcher-inner {
+    background: linear-gradient(160deg, #1e1b10 0%, #14120a 100%);
+}
+.clay-launcher-bg .conmen-launcher-inner h2 {
+    color: #cdd8a6;
+    text-shadow: 0 0 10px rgba(138,154,106,0.45);
+}
+.clay-launcher-btn {
+    background: linear-gradient(180deg, #cdd8a6 0%, #6d7a4e 100%) !important;
+    color: #1b1a0c !important;
+}
+.clay-embed-wrap {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.clay-embed-wrap.hidden { display: none !important; }
+.clay-embed-wrap iframe {
+    max-width: 100%;
+    max-height: 100%;
+    width: 800px;
+    height: 600px;
+    border: none;
+    box-shadow: 0 0 30px rgba(205,216,166,0.22);
+}
+
 /* Full-screen Win95 window - same bevel language as the Bonus Stage
    window, just scaled up to take over the viewport instead of sitting
    in a centered dialog. */
@@ -696,6 +733,17 @@
     align-items: center;
     justify-content: center;
 }
+
+/* THE INTRO'S OWN display MUST LOSE TO .hidden.
+
+   `display: flex` below and Tailwind's `.hidden { display: none }` are both
+   single-class selectors, so specificity is tied and source order decides -
+   and this file is linked after tailwind.css, so flex won. Every launcher
+   that swaps its intro out for an embedded game therefore drew BOTH: the
+   character and blurb on the left, the running game beside it. Undead's and
+   Mid Evils' have done this since they shipped; the class was being added
+   correctly the whole time, it just had no effect. */
+.conmen-launcher-inner.hidden { display: none !important; }
 
 .conmen-launcher-inner {
     width: 100%;
