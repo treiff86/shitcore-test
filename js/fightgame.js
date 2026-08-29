@@ -1152,7 +1152,76 @@ window.FightGame = (function () {
 
            This is opt-in per character. The five that ship fine on area
            scaling are not touched by it. */
-        const STEADY_HEIGHT_KEYS = new Set(['clay', 'skullx', 'wizard']);
+        const STEADY_HEIGHT_KEYS = new Set(['clay', 'skullx', 'wizard', 'reiffer', 'conmen']);
+
+        /* HOW TALL EACH POSE SHOULD READ, as a fraction of the character's
+           standing height. 1.0 - the default for anything not listed - means
+           "however tall the artwork itself is", which is right when a
+           character's sheets were all exported at one scale.
+
+           They often were not. Reiffer's block was exported in a 662px cell
+           and his walk in a 300px one; Conmen's block is 240px against a
+           668px walk. On one shared scale that would draw his guard at a
+           third of his own height.
+
+           Clay, Skull X and the Wizard had the same problem and it was fixed
+           by resampling their sheets - fine there, because those sheets are
+           big. Reiffer's and Conmen's are small (300px and 240px cells), and
+           upscaling a 240px block to 668px only to draw it back down at 213
+           would soften it for nothing. A number here costs no pixels at all,
+           so these two are corrected in code instead.
+
+           Every value below was set by eye against a contact sheet of that
+           character's poses on one floor line, then checked. Four automatic
+           anchors were tried first - head band, eye whites, cap, face colour
+           - and every one of them moved with the camera angle rather than
+           with the character, so none of them could be trusted. */
+        const POSE_HEIGHT = {
+            /* CLAY. Every one of his sheets was exported to the same 860px
+               cell whatever the pose, so a deep crouch was stretched to the
+               height of a standing bear - he ducked and grew a size.
+
+               These eleven numbers were derived by resampling his sheets and
+               checking them against a contact sheet. Shipping them AS
+               resampled art turned out to be a mistake: the fix then lived
+               half in the code and half in eleven image files, and when only
+               the code half reached the site he crouched huge again. A number
+               here cannot half-arrive. */
+            clay: {
+                crouch: 0.78, crouch_block: 0.78, crouch_hurt: 0.80,
+                crouch_kick: 0.78, crouch_punch: 0.80,
+                land: 0.90, jump_hurt: 0.82, jump_block: 0.86, jump_kick: 0.86,
+                defeat: 0.86, thrown: 0.86,
+            },
+            reiffer: {
+                punch_lo: 0.93,
+                kick_lo: 0.88,
+                block: 0.80,
+                hurt: 0.88,
+                victory: 0.99,
+                crouch: 0.76,
+                crouch_punch: 0.77,
+                crouch_kick: 0.73,
+                jump: 0.80,
+                jump_punch: 0.65,
+                jump_kick: 0.86,
+                defeat: 0.90
+            },
+            conmen: {
+                punch_lo: 1.02,
+                kick_lo: 1.10,
+                block: 1.02,
+                hurt: 1.00,
+                victory: 1.13,
+                crouch: 0.74,
+                crouch_punch: 0.74,
+                crouch_kick: 0.81,
+                jump: 0.84,
+                jump_punch: 0.83,
+                jump_kick: 0.83,
+                defeat: 0.92
+            },
+        };
         /* WHY THIS SET IS NOW EMPTY FOR A STEADY CHARACTER.
 
            It used to send the low poses back through area scaling, on the
@@ -1180,6 +1249,17 @@ window.FightGame = (function () {
             const m = measured[state];
             if (!m) { anims[state] = []; continue; }
             let scale = refScale;
+            /* A pose with an entry in POSE_HEIGHT is placed directly: take
+               the reference scale, then correct for the fact that this
+               strip's cell is a different size from the reference's, and
+               finally ask for the fraction of standing height the pose
+               should actually occupy. Identical in effect to resampling the
+               sheet by that factor, without touching a pixel. */
+            const want = steady && POSE_HEIGHT[key] && POSE_HEIGHT[key][state];
+            if (want && m.img && ref.img && m.img.height > 0) {
+                anims[state] = renderStrip(m, refScale * want * (ref.img.height / m.img.height));
+                continue;
+            }
             if (m.art && refKey === 'idle' && state === 'walk') {
                 /* THE WALK CYCLE IS THE REFERENCE POSE IN MOTION, so it
                    takes the reference scale rather than being matched on
