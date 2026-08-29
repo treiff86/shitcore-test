@@ -105,7 +105,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Local styles (FIXED PATH) -->
     <link rel="stylesheet" href="style.css?v=57">
-    <link rel="stylesheet" href="bonusstage.css?v=20">
+    <link rel="stylesheet" href="bonusstage.css?v=21">
 </head>
 <body class="overflow-x-hidden min-h-screen flex flex-col justify-between">
     <!-- Hand-drawn wobble filter for the chart canvas in Mid Evils mode -
@@ -1426,6 +1426,40 @@
         </div>
     </div>
 
+    <!-- Clay Stonkz easter egg: same full-screen launcher pattern as Genuine
+         Undead's - the game is embedded in the window rather than linked out,
+         and the iframe is only built when the button is actually pressed. -->
+    <div id="clayLauncherOverlay" class="fixed inset-0 bg-black hidden z-[110]">
+        <div class="win95-window-full">
+            <div class="win95-titlebar clay-titlebar">
+                <span class="win95-title"><i class="fa-solid fa-hat-wizard"></i> CLAY_STONKZ.EGG</span>
+                <div class="win95-controls">
+                    <button class="win95-btn" disabled title="Minimize (not implemented)">_</button>
+                    <button class="win95-btn" disabled title="Maximize (not implemented)"><i class="fa-regular fa-square"></i></button>
+                    <button class="win95-btn win95-close" onclick="closeClayLauncher()" title="Close">&times;</button>
+                </div>
+            </div>
+            <div class="win95-menubar">
+                <span>File</span><span>Edit</span><span>View</span><span>Help</span>
+            </div>
+            <div class="win95-content-full clay-launcher-bg">
+                <div id="clayLauncherIntro" class="conmen-launcher-inner">
+                    <img src="assets/clay-zelda-pfp.webp" alt="">
+                    <h2>Down Bad, Level 1</h2>
+                    <p>Chart's cooked, the bags are heavy and the exit is a long way down. Clay found something older, slower and considerably more honest than anything on this page. Go on then.</p>
+                    <button type="button" class="conmen-launcher-btn clay-launcher-btn" onclick="openClayEmbed()">
+                        <i class="fa-solid fa-play"></i> Touch grass
+                    </button>
+                </div>
+                <div id="clayEmbedWrap" class="clay-embed-wrap hidden"></div>
+            </div>
+            <div class="win95-statusbar">
+                <span class="win95-statusfield">Ready</span>
+                <span class="win95-statusfield">Clay Stonkz Exclusive</span>
+            </div>
+        </div>
+    </div>
+
     <div id="midevilsEggPopup" onclick="openMidEvilsLauncher()">
         <span class="midevils-egg-tag">psst...</span>
         <img src="assets/midevils-easteregg.webp" alt="">
@@ -1544,7 +1578,7 @@
 <script src="js/undead-egg.js?v=3" defer></script>
 <script src="js/midevils-egg.js?v=3" defer></script>
 <script src="js/mcdonalds-egg.js?v=4" defer></script>
-<script src="js/clay-egg.js?v=3" defer></script>
+<script src="js/clay-egg.js?v=4" defer></script>
 <script src="js/web3.js?v=74" defer></script>
 <script src="js/wizardpopup.js?v=2" defer></script>
 <script src="js/win95desktop.js?v=6" defer></script>
