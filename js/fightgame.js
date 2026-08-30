@@ -56,6 +56,17 @@ window.FightGame = (function () {
     const HELI_ADD_PER_MASH = 0.45;  // each mash press adds this much float time
     const HELI_GRAVITY_MULT = 0.18;  // fraction of normal gravity while active
     const HELI_FRAME_FPS = 10;       // spin frame-cycle rate
+    /* THE SPIN BELONGS TO ONE FIGHTER. It used to be granted to anyone whose
+       jump_kick strip happened to have 2+ frames, which quietly handed it to
+       Clay and Genuine Undead the moment their two-frame kicks landed. It is
+       Reiffer's move. */
+    const HELI_OWNER = 'reiffer';
+    /* AND IT CANNOT WIN A ROUND ON ITS OWN. The spin resets its hit flag every
+       cycle, which is what lets it hit more than once - and with nothing
+       stopping it, a player who just held kick could ride one jump into a KO.
+       Six connected hits and the spin drops out, so it stays a strong
+       opener rather than the whole match. */
+    const HELI_MAX_HITS = 6;
 
     // Shared per-attack-type numbers - jump/crouch variants borrow their
     // grounded counterpart's values until they get their own tuning.
@@ -376,15 +387,24 @@ window.FightGame = (function () {
             victory:  ['assets/bonus_stage/reiffer_victory.webp', 6],
             punch_lo: ['assets/bonus_stage/reiffer_punch_lo.webp?v=2', 3],
             kick_lo:  ['assets/bonus_stage/reiffer_kick_lo.webp?v=3', 3],
-            hurt:     ['assets/bonus_stage/hit.webp', 1],
+            /* His hit reaction has its own file now rather than the Bonus
+               Stage's shared hit.webp - that sheet is still used by the
+               Bonus Stage, so replacing it there would have changed a
+               second game nobody asked me to touch. */
+            hurt:     ['assets/fight_game/reiffer_hurt.webp', 2],
             defeat:   ['assets/bonus_stage/midevils_defeat.webp?v=3', 3],
             block:    ['assets/fight_game/reiffer_block.webp', 1],
-            jump:         ['assets/fight_game/reiffer_jump.webp', 1],
+            jump:         ['assets/fight_game/reiffer_jump.webp?v=2', 2],
             crouch:       ['assets/fight_game/reiffer_crouch.webp', 1],
             jump_punch:   ['assets/fight_game/reiffer_jump_punch.webp', 1],
-            jump_kick:    ['assets/fight_game/reiffer_jump_kick.webp', 2], // also doubles as the helicopter-kick loop, see updateHumanFighter
-            crouch_kick:  ['assets/fight_game/reiffer_crouch_kick.webp', 1],
-            crouch_punch: ['assets/fight_game/reiffer_crouch_punch.webp', 1],
+            // Five frames of spin - this is the helicopter kick's loop, and
+            // Reiffer is now the only fighter who has it. See HELI_OWNER.
+            jump_kick:    ['assets/fight_game/reiffer_jump_kick.webp?v=2', 5],
+            crouch_kick:  ['assets/fight_game/reiffer_crouch_kick.webp?v=2', 3],
+            crouch_punch: ['assets/fight_game/reiffer_crouch_punch.webp?v=2', 3],
+            dizzy:        ['assets/fight_game/reiffer_dizzy.webp', 2],
+            land:         ['assets/fight_game/reiffer_land.webp', 2],
+            taunt:        ['assets/fight_game/reiffer_taunt.webp', 3],
         },
         conmen: {
             walk:     ['assets/bonus_stage/conmen_walk.webp', 4],
@@ -430,7 +450,7 @@ window.FightGame = (function () {
             walk:     ['assets/fight_game/undead_walk.webp?v=2', 4],
             victory:  ['assets/fight_game/undead_victory.webp?v=2', 5],
             punch_lo: ['assets/fight_game/undead_punch_lo.webp?v=2', 3],
-            kick_lo:  ['assets/fight_game/undead_kick_lo.webp?v=2', 1],
+            kick_lo:  ['assets/fight_game/undead_kick_lo.webp?v=3', 3],
             hurt:     ['assets/fight_game/undead_hurt.webp?v=2', 2],
             defeat:   ['assets/fight_game/undead_defeat.webp', 4],
             block:    ['assets/fight_game/undead_block.webp', 1],
@@ -1197,15 +1217,18 @@ window.FightGame = (function () {
                 punch_lo: 0.93,
                 kick_lo: 0.88,
                 block: 0.80,
-                hurt: 0.88,
+                hurt: 0.79,
                 victory: 0.99,
                 crouch: 0.76,
-                crouch_punch: 0.77,
-                crouch_kick: 0.73,
-                jump: 0.80,
+                crouch_punch: 0.78,
+                crouch_kick: 0.75,
+                jump: 0.72,
                 jump_punch: 0.65,
-                jump_kick: 0.86,
-                defeat: 0.90
+                jump_kick: 0.68,
+                defeat: 0.90,
+                taunt: 0.78,
+                dizzy: 0.78,
+                land: 1.00
             },
             conmen: {
                 punch_lo: 1.02,
@@ -1428,6 +1451,7 @@ window.FightGame = (function () {
             this.blocking = false;
             this.hurtT = 0;
             this.heliT = 0;
+            this.heliHits = 0;   // hits landed by the current spin, capped by HELI_MAX_HITS
             this.ko = false;
 
             // Guard meter / chip damage / guard break
@@ -2106,7 +2130,7 @@ window.FightGame = (function () {
             f.vy >= 0 ? surfaceBelow(cx, prevY) : { landY: arenaGroundY() - P_H, onPlatform: false };
         if (f.y >= landY) {
             const wasFalling = f.vy;
-            f.y = landY; f.vy = 0; f.grounded = true; f.heliT = 0; f.onPlatform = landOnPlatform;
+            f.y = landY; f.vy = 0; f.grounded = true; f.heliT = 0; f.heliHits = 0; f.onPlatform = landOnPlatform;
             if (f.state === 'jump_kick') { f.state = 'idle'; f.fr = 0; }
             /* Landing now has weight: a dust puff at the feet and a short
                recovery pose. Gated on actually falling fast enough, so
@@ -2604,7 +2628,10 @@ window.FightGame = (function () {
             // frame jump_kick strip (currently just Reiffer) can do this -
             // Conmen's single-frame jump kick just behaves like a normal kick.
             const jkFrames = f.anims.jump_kick;
-            const helicopterCapable = !f.grounded && f.state === 'jump_kick' && jkFrames && jkFrames.length >= 2;
+            const isHeliOwner = f.anims && f.anims._key === HELI_OWNER;
+            const helicopterCapable = isHeliOwner && !f.grounded && f.state === 'jump_kick'
+                                      && jkFrames && jkFrames.length >= 2
+                                      && (f.heliHits || 0) < HELI_MAX_HITS;
             if (helicopterCapable) {
                 f.heliT = Math.min(HELI_MAX_T, f.heliT + HELI_ADD_PER_MASH);
                 f.hitReg = false; // fresh hit chance for this mash
@@ -2696,7 +2723,12 @@ window.FightGame = (function () {
                 f.frT = 0;
                 const n = f.anims.jump_kick.length;
                 f.fr = (f.fr + 1) % Math.max(1, n);
-                f.hitReg = false;
+                if ((f.heliHits || 0) < HELI_MAX_HITS) f.hitReg = false;
+            }
+            // Cap reached: drop out of the spin rather than letting it coast
+            // round harmlessly for the rest of its float time.
+            if ((f.heliHits || 0) >= HELI_MAX_HITS) {
+                f.heliT = 0; f.state = 'jump'; f.fr = 0; f.atkT = 0; f.canW = false;
             }
         } else {
             const fpsMap = { idle: 5, walk: 10, punch_lo: 16, kick_lo: 14, block: 1, jump: 1, crouch: 1, jump_punch: 16, jump_kick: 14, crouch_punch: 16, crouch_kick: 14 };
@@ -2723,6 +2755,11 @@ window.FightGame = (function () {
         if (!hb || attacker.hitReg) return;
         if (aabbOverlap(hb, defender.rect())) {
             attacker.hitReg = true;
+            // Count hits landed by the spin specifically, so HELI_MAX_HITS
+            // can stop it. Only counts while it is actually spinning.
+            if (attacker.heliT > 0 && attacker.state === 'jump_kick') {
+                attacker.heliHits = (attacker.heliHits || 0) + 1;
+            }
             const heavy = HEAVY.has(baseAttackKind(attacker.state));
             const baseDmg = DMG[baseAttackKind(attacker.state)] || 10;
 
